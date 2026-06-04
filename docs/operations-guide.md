@@ -33,19 +33,9 @@ Place the project folder wherever you want to run it from. The recommended locat
 C:\Program Files\VRSIWallBoard\
 ```
 
-The folder should contain `package.json`, `server\`, `client\`, `shared\`.
+The folder should contain `INSTALL.bat`, `package.json`, `server\`, `client\`, `shared\`.
 
-### 1.3 Install dependencies
-
-Open PowerShell **as Administrator** and run:
-
-```powershell
-cd "C:\Program Files\VRSIWallBoard"
-npm install --prefix server
-npm install --prefix client
-```
-
-### 1.4 Configure the environment
+### 1.3 Configure the environment
 
 Copy the production template and fill in your values:
 
@@ -75,37 +65,20 @@ AZURE_TENANT_ID=<your Azure tenant ID>
 AZURE_CLIENT_ID=<your Azure app client ID>
 ```
 
-> **Security:** `ADMIN_TOKEN` and `ENCRYPTION_SECRET` should each be at least 32 random characters. Use PowerShell to generate one:
+> **Security:** `ADMIN_TOKEN` and `ENCRYPTION_SECRET` should each be at least 32 random characters. Generate one in PowerShell:
 > ```powershell
 > -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 40 | ForEach-Object {[char]$_})
 > ```
 
-### 1.5 Build the app
+### 1.4 Run the installer
 
-```powershell
-cd "C:\Program Files\VRSIWallBoard"
-npm run build --prefix client
-npm run build --prefix server
-```
+Double-click **`INSTALL.bat`** in the project folder. It will:
 
-This produces `client\dist\` (the React UI) and `server\dist\` (compiled server).
+- Check Node.js is installed (prints instructions if not)
+- Request Administrator approval (UAC prompt)
+- Install npm dependencies, build the app, and create data directories
 
-### 1.6 Create the data directories
-
-```powershell
-New-Item -ItemType Directory -Force "C:\ProgramData\VRSIWallBoard\data"
-New-Item -ItemType Directory -Force "C:\ProgramData\VRSIWallBoard\backups"
-New-Item -ItemType Directory -Force "C:\ProgramData\VRSIWallBoard\logs"
-```
-
-### 1.7 Start the server
-
-```powershell
-cd "C:\Program Files\VRSIWallBoard"
-npm start
-```
-
-The server starts on `http://localhost:3001`. Verify it is running:
+Verify the server is reachable after install:
 
 ```powershell
 Invoke-RestMethod http://localhost:3001/health
@@ -113,7 +86,11 @@ Invoke-RestMethod http://localhost:3001/health
 
 You should see `"status": "ok"`.
 
-### 1.8 Set up kiosk display (optional)
+### 1.5 Start the server
+
+Double-click **`Start-WallBoard.bat`** to start the server. The terminal window stays open — close it or press `Ctrl+C` to stop.
+
+### 1.6 Set up kiosk display (optional)
 
 To launch the wallboard full-screen on startup, create a shortcut with this target:
 
@@ -129,42 +106,23 @@ To launch the wallboard full-screen on startup, create a shortcut with this targ
 
 Place the shortcut in the Windows Startup folder (`shell:startup`) to auto-launch on login.
 
-### 1.9 Auto-start the server on Windows login (optional)
+### 1.7 Auto-start the server on Windows login (optional)
 
-Create a scheduled task so the Node.js server starts automatically:
-
-```powershell
-$action = New-ScheduledTaskAction -Execute "node" -Argument "dist\index.js" -WorkingDirectory "C:\Program Files\VRSIWallBoard\server"
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-Register-ScheduledTask -TaskName "VRSI WallBoard" -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest
-```
+Double-click **`ENABLE-STARTUP.bat`**. It will request Administrator approval and register a Windows Task Scheduler logon task that starts the server automatically whenever anyone logs in.
 
 ---
 
 ## 2. Uninstall
 
-### 2.1 Stop the server
-
-If running in a terminal window, press `Ctrl+C`.  
-If running as a scheduled task:
-
-```powershell
-Stop-ScheduledTask -TaskName "VRSI WallBoard"
-Unregister-ScheduledTask -TaskName "VRSI WallBoard" -Confirm:$false
-```
-
-### 2.2 Back up data first (recommended)
+### 2.1 Back up data first (recommended)
 
 Before removing anything, back up your data — see [Section 3.1](#31-manual-backup).
 
-### 2.3 Remove the app files
+### 2.2 Run the uninstaller
 
-```powershell
-Remove-Item -Recurse -Force "C:\Program Files\VRSIWallBoard"
-```
+Double-click **`UNINSTALL.bat`**. It will request Administrator approval and then stop the server, remove the scheduled task, and remove the app files.
 
-### 2.4 Remove data and logs (optional — permanent)
+### 2.3 Remove data and logs (optional — permanent)
 
 > **Warning:** This deletes all job data, notes, settings, and logs. Only do this if you are sure you no longer need the data.
 
@@ -172,7 +130,7 @@ Remove-Item -Recurse -Force "C:\Program Files\VRSIWallBoard"
 Remove-Item -Recurse -Force "C:\ProgramData\VRSIWallBoard"
 ```
 
-### 2.5 Remove kiosk startup shortcut (if created)
+### 2.4 Remove kiosk startup shortcut (if created)
 
 Open `shell:startup` in File Explorer and delete the VRSI WallBoard shortcut.
 
@@ -328,8 +286,11 @@ When reporting a problem, include:
 
 | Task | Command / Location |
 |------|--------------------|
-| Start server | `npm start` in app folder |
-| Stop server | `Ctrl+C` in terminal, or stop the scheduled task |
+| Install | Double-click `INSTALL.bat` |
+| Start server | Double-click `Start-WallBoard.bat` |
+| Enable auto-start on login | Double-click `ENABLE-STARTUP.bat` |
+| Uninstall | Double-click `UNINSTALL.bat` |
+| Stop server | `Ctrl+C` in the terminal window |
 | Server health check | `http://localhost:3001/health` |
 | Data directory | `C:\ProgramData\VRSIWallBoard\data\` |
 | Backups directory | `C:\ProgramData\VRSIWallBoard\backups\` |

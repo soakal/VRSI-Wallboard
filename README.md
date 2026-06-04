@@ -21,7 +21,7 @@ npm run dev
 
 Open http://localhost:5173 (or the next free port Vite prints). Vite proxies `/api` to port 3001.
 
-**Dev admin token:** `server/.env` sets `ADMIN_TOKEN`; `client/.env` must match as `VITE_ADMIN_TOKEN` for board API calls.
+**Dev admin token:** `server/.env` sets `ADMIN_TOKEN`. The browser on localhost is trusted automatically — no token needed in the client.
 
 ## Data
 
