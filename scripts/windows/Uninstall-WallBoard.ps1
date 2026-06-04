@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('1', '2', '3')]
     [string]$Choice = ''
 )
@@ -18,7 +18,7 @@ function Remove-AllTasks {
 
 Write-Host ''
 Write-Host '========================================' -ForegroundColor Cyan
-Write-Host '  VRSI WallBoard — Uninstall' -ForegroundColor Cyan
+Write-Host '  VRSI WallBoard  -  Uninstall' -ForegroundColor Cyan
 Write-Host '========================================' -ForegroundColor Cyan
 Write-Host ''
 Write-Host 'Does NOT remove Node.js or this project folder.'

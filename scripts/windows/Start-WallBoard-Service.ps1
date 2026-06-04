@@ -1,4 +1,4 @@
-# Production server — no pause (for Task Scheduler / startup).
+﻿# Production server  -  no pause (for Task Scheduler / startup).
 . "$PSScriptRoot\_common.ps1"
 
 $ErrorActionPreference = 'Stop'

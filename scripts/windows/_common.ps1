@@ -1,4 +1,4 @@
-# Shared helpers for VRSI WallBoard Windows scripts.
+﻿# Shared helpers for VRSI WallBoard Windows scripts.
 $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $script:ServerDir = Join-Path $RepoRoot 'server'
 $script:ClientDir = Join-Path $RepoRoot 'client'
@@ -14,7 +14,7 @@ function Ensure-ServerEnv {
         $example = Join-Path $ServerDir '.env.production.example'
         if (Test-Path $example) {
             Copy-Item $example $envFile
-            Write-Warning "Created server\.env from .env.production.example — edit ADMIN_TOKEN before production use."
+            Write-Warning "Created server\.env from .env.production.example  -  edit ADMIN_TOKEN before production use."
         } else {
             throw "Missing server\.env. Copy server\.env.production.example to server\.env first."
         }
@@ -34,7 +34,7 @@ function Get-AdminTokenFromServerEnv {
 }
 
 function Sync-ClientProductionEnv {
-    # Client no longer uses VITE_ADMIN_TOKEN — the browser on localhost is trusted
+    # Client no longer uses VITE_ADMIN_TOKEN  -  the browser on localhost is trusted
     # by the server without a token. Nothing to sync.
 }
 

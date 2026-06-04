@@ -1,10 +1,10 @@
-. "$PSScriptRoot\_common.ps1"
+﻿. "$PSScriptRoot\_common.ps1"
 $ErrorActionPreference = 'Stop'
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 Write-Host ''
-Write-Host 'VRSI WallBoard — Enable startup at logon' -ForegroundColor Cyan
+Write-Host 'VRSI WallBoard  -  Enable startup at logon' -ForegroundColor Cyan
 Write-Host ''
 
 if (-not (Test-Path (Join-Path $ServerDir 'dist\index.js'))) {

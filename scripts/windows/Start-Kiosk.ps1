@@ -1,11 +1,11 @@
-# Open Edge or Chrome in kiosk mode pointing at the WallBoard.
+﻿# Open Edge or Chrome in kiosk mode pointing at the WallBoard.
 # Start the server first (Start-WallBoard.ps1).
 . "$PSScriptRoot\_common.ps1"
 
 $ErrorActionPreference = 'Stop'
 
 if (-not (Test-WallBoardHealthy)) {
-    Write-Warning "WallBoard is not responding at $WallBoardUrl — start Start-WallBoard.ps1 first."
+    Write-Warning "WallBoard is not responding at $WallBoardUrl  -  start Start-WallBoard.ps1 first."
     Start-Sleep -Seconds 3
 }
 
@@ -20,7 +20,7 @@ $candidates = @(
 
 foreach ($b in $candidates) {
     if (Test-Path $b.Path) {
-        Write-Step "Launching $($b.Name) kiosk → $url"
+        Write-Step "Launching $($b.Name) kiosk -> $url"
         Start-Process -FilePath $b.Path -ArgumentList $b.Args
         exit 0
     }

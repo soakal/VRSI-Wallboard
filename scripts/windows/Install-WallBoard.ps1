@@ -1,4 +1,4 @@
-# One-step installer for a single Windows PC.
+﻿# One-step installer for a single Windows PC.
 param(
     [switch]$WithStartup,
     [switch]$WithBackup,
@@ -30,7 +30,7 @@ function Install-NodeJs {
             $env:Path = (($mp, $up | Where-Object { $_ }) -join ';')
             return $true
         }
-        Write-Warning "  winget $action exited $code — falling back to direct download."
+        Write-Warning "  winget $action exited $code  -  falling back to direct download."
     }
 
     # Fallback: download official LTS MSI from nodejs.org
@@ -94,13 +94,14 @@ Install manually:
     $major = [int]($ver.Split('.')[0])
 
     if ($major -lt 18) {
-        Write-Warning "  Node.js v$ver is too old (18+ required) — upgrading..."
+        Write-Warning "  Node.js v$ver is too old (18+ required)  -  upgrading..."
         $ok = Install-NodeJs -Upgrade
         if (-not $ok) {
             throw "Node.js 18+ required (found v$ver). Upgrade from https://nodejs.org"
         }
-        $env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
-                    [System.Environment]::GetEnvironmentVariable('Path', 'User')
+        $mp = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+        $up = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+        $env:Path = (($mp, $up | Where-Object { $_ }) -join ';')
         $ver   = (node -v) -replace '^v', ''
         $major = [int]($ver.Split('.')[0])
         if ($major -lt 18) {
@@ -175,7 +176,7 @@ function Register-BackupTaskInternal {
 
 Write-Host ''
 Write-Host '========================================' -ForegroundColor Cyan
-Write-Host '  VRSI WallBoard — Install' -ForegroundColor Cyan
+Write-Host '  VRSI WallBoard  -  Install' -ForegroundColor Cyan
 Write-Host '========================================' -ForegroundColor Cyan
 Write-Host ''
 
@@ -215,7 +216,7 @@ if (-not $WithBackup) {
 
 if ($WithBackup) {
     if (-not $isAdmin) {
-        Write-Warning 'Backup schedule needs Administrator — run Enable-Startup.bat or Register-BackupTask.bat as Admin later.'
+        Write-Warning 'Backup schedule needs Administrator  -  run Enable-Startup.bat or Register-BackupTask.bat as Admin later.'
     } else {
         Write-Step 'Registering backup schedule'
         Register-BackupTaskInternal

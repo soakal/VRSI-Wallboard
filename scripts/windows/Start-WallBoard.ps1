@@ -1,4 +1,4 @@
-# Start VRSI WallBoard API + built UI on port 3001 (production).
+﻿# Start VRSI WallBoard API + built UI on port 3001 (production).
 # Keep this window open, or run via Windows Task Scheduler at logon.
 . "$PSScriptRoot\_common.ps1"
 
@@ -15,7 +15,7 @@ if (-not (Test-Path $distIndex)) {
 }
 
 if (-not (Test-Path $clientDist)) {
-    throw 'Missing client\dist\index.html — run Build-Production.ps1 first.'
+    throw 'Missing client\dist\index.html  -  run Build-Production.ps1 first.'
 }
 
 Write-Step "Starting VRSI WallBoard at $WallBoardUrl"
