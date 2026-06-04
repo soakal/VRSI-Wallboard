@@ -8,6 +8,52 @@ param(
 . "$PSScriptRoot\_common.ps1"
 $ErrorActionPreference = 'Stop'
 
+# Maximum Node.js major version supported by better-sqlite3 prebuilt binaries in this release.
+# Node 23+ switched to a new ABI that better-sqlite3 v11.x does not ship prebuilt binaries for.
+# When upgrading better-sqlite3 to a version that supports a newer ABI, raise this cap.
+$NODE_MAX_MAJOR = 22
+
+function Install-NodeMsi {
+    param([string]$Version, [string]$TempLabel = 'nodejs-installer')
+    $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
+        'ARM64' { 'arm64' }
+        'x86'   { 'x86' }
+        default { 'x64' }
+    }
+    $msiUrl = "https://nodejs.org/dist/$Version/node-$Version-$arch.msi"
+    $msi    = "$env:TEMP\$TempLabel.msi"
+    Write-Host "  Downloading Node.js $Version ($arch)..." -ForegroundColor Cyan
+    Invoke-WebRequest -Uri $msiUrl -OutFile $msi -UseBasicParsing -TimeoutSec 300
+    Write-Host '  Running installer (this may take a minute)...' -ForegroundColor Cyan
+    $p = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart ADDLOCAL=ALL" -Wait -PassThru
+    Remove-Item $msi -Force -ErrorAction SilentlyContinue
+    if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+        if ($p.ExitCode -eq 3010) {
+            Write-Warning '  Install succeeded but a restart may be needed for PATH changes to take full effect.'
+        }
+        $mp = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+        $up = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+        $env:Path = (($mp, $up | Where-Object { $_ }) -join ';')
+        return $true
+    }
+    Write-Warning "  MSI installer exited with code $($p.ExitCode)"
+    return $false
+}
+
+function Get-NodeLtsVersion {
+    param([int]$MajorLine = 0)
+    # Fetch the full nodejs.org release index and return the latest LTS version.
+    # If MajorLine > 0, restrict to that major (e.g. 22 returns latest v22.x LTS).
+    $index = Invoke-RestMethod -Uri 'https://nodejs.org/dist/index.json' -TimeoutSec 30 -UseBasicParsing
+    if ($MajorLine -gt 0) {
+        $entry = $index | Where-Object { $_.lts -and $_.lts -ne $false -and $_.version -match "^v$MajorLine\." } | Select-Object -First 1
+    } else {
+        $entry = $index | Where-Object { $_.lts -and $_.lts -ne $false } | Select-Object -First 1
+    }
+    if (-not $entry) { throw "Could not find matching LTS entry in nodejs.org index (MajorLine=$MajorLine)" }
+    return $entry.version
+}
+
 function Install-NodeJs {
     param([switch]$Upgrade)
     $action = if ($Upgrade) { 'upgrade' } else { 'install' }
@@ -35,36 +81,24 @@ function Install-NodeJs {
 
     # Fallback: download official LTS MSI from nodejs.org
     try {
-        Write-Host '  Fetching Node.js LTS version info from nodejs.org...' -ForegroundColor Cyan
-        $index  = Invoke-RestMethod -Uri 'https://nodejs.org/dist/index.json' -TimeoutSec 30 -UseBasicParsing
-        $lts    = $index | Where-Object { $_.lts -and $_.lts -ne $false } | Select-Object -First 1
-        if (-not $lts) { throw 'Could not find LTS entry in nodejs.org index' }
-        $ver  = $lts.version   # e.g. "v20.14.0"
-        $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
-            'ARM64' { 'arm64' }
-            'x86'   { 'x86' }
-            default { 'x64' }
-        }
-        $msiUrl = "https://nodejs.org/dist/$ver/node-$ver-$arch.msi"
-        $msi    = "$env:TEMP\nodejs-lts-installer.msi"
-        Write-Host "  Downloading Node.js $ver..." -ForegroundColor Cyan
-        Invoke-WebRequest -Uri $msiUrl -OutFile $msi -UseBasicParsing -TimeoutSec 300
-        Write-Host '  Running installer (this may take a minute)...' -ForegroundColor Cyan
-        $p = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart ADDLOCAL=ALL" -Wait -PassThru
-        Remove-Item $msi -Force -ErrorAction SilentlyContinue
-        if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
-            if ($p.ExitCode -eq 3010) {
-                Write-Warning '  Install succeeded but a restart may be needed for PATH changes to take full effect.'
-            }
-            $mp = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
-            $up = [System.Environment]::GetEnvironmentVariable('Path', 'User')
-            $env:Path = (($mp, $up | Where-Object { $_ }) -join ';')
-            return $true
-        }
-        Write-Warning "  MSI installer exited with code $($p.ExitCode)"
-        return $false
+        $ver = Get-NodeLtsVersion
+        return Install-NodeMsi -Version $ver -TempLabel 'nodejs-lts-installer'
     } catch {
         Write-Warning "  Download/install failed: $_"
+        return $false
+    }
+}
+
+function Install-NodeJs22 {
+    # Downloads and installs the latest Node.js 22 LTS directly from nodejs.org.
+    # Used when the installed Node version is newer than $NODE_MAX_MAJOR and winget
+    # would not downgrade it.
+    Write-Host "  Installing Node.js 22 LTS (required for native module compatibility)..." -ForegroundColor Yellow
+    try {
+        $ver = Get-NodeLtsVersion -MajorLine 22
+        return Install-NodeMsi -Version $ver -TempLabel 'nodejs-22-installer'
+    } catch {
+        Write-Warning "  Failed to install Node.js 22: $_"
         return $false
     }
 }
@@ -106,6 +140,23 @@ Install manually:
         $major = [int]($ver.Split('.')[0])
         if ($major -lt 18) {
             throw "Upgrade did not complete. Please upgrade Node.js manually from https://nodejs.org"
+        }
+    }
+
+    if ($major -gt $NODE_MAX_MAJOR) {
+        Write-Warning "  Node.js v$ver is too new  -  better-sqlite3 prebuilt binaries require Node $NODE_MAX_MAJOR or earlier."
+        Write-Warning "  Replacing with Node.js 22 LTS (winget does not downgrade automatically)..."
+        $ok = Install-NodeJs22
+        if (-not $ok) {
+            throw "Node.js 22 LTS required. Install manually from https://nodejs.org/en/download (choose 22.x LTS)."
+        }
+        $mp = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+        $up = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+        $env:Path = (($mp, $up | Where-Object { $_ }) -join ';')
+        $ver   = (node -v) -replace '^v', ''
+        $major = [int]($ver.Split('.')[0])
+        if ($major -gt $NODE_MAX_MAJOR) {
+            throw "Node.js 22 install did not take effect (still v$ver). Please install Node.js 22.x manually from https://nodejs.org"
         }
     }
 
@@ -198,6 +249,12 @@ if (-not $SkipBuild -and $serverBuilt -and $clientBuilt) {
     # for this machine's Node.js version. Skip all TypeScript compilation.
     Write-Step 'Pre-built release detected - installing server dependencies'
     Push-Location $ServerDir
+    # Remove any stale better-sqlite3 build from a prior failed attempt before reinstalling.
+    $bsq3 = Join-Path $ServerDir 'node_modules\better-sqlite3'
+    if (Test-Path $bsq3) {
+        Write-Host '  Removing stale better-sqlite3 build...' -ForegroundColor DarkGray
+        Remove-Item $bsq3 -Recurse -Force -ErrorAction SilentlyContinue
+    }
     npm install
     if ($LASTEXITCODE -ne 0) { throw 'server npm install failed' }
     Pop-Location
