@@ -189,7 +189,19 @@ Write-Step 'Creating data folders'
 Write-Step 'Configuring server'
 $token = Set-ServerEnvProduction
 
-if (-not $SkipBuild) {
+$serverBuilt = Test-Path (Join-Path $ServerDir 'dist\index.js')
+$clientBuilt = Test-Path (Join-Path $ClientDir 'dist\index.html')
+
+if (-not $SkipBuild -and $serverBuilt -and $clientBuilt) {
+    # Release package: pre-built dist/ is already present.
+    # Only run npm install so native modules (better-sqlite3) are compiled
+    # for this machine's Node.js version. Skip all TypeScript compilation.
+    Write-Step 'Pre-built release detected - installing server dependencies'
+    Push-Location $ServerDir
+    npm install
+    if ($LASTEXITCODE -ne 0) { throw 'server npm install failed' }
+    Pop-Location
+} elseif (-not $SkipBuild) {
     Write-Step 'Installing and building (first time may take a few minutes)'
     & (Join-Path $PSScriptRoot 'Build-Production.ps1')
 }
