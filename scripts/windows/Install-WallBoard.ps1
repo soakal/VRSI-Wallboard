@@ -9,9 +9,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Maximum Node.js major version supported by better-sqlite3 prebuilt binaries in this release.
-# Node 23+ switched to a new ABI that better-sqlite3 v11.x does not ship prebuilt binaries for.
-# When upgrading better-sqlite3 to a version that supports a newer ABI, raise this cap.
-$NODE_MAX_MAJOR = 22
+# better-sqlite3 v12.x declares engines: "20.x || 22.x || 23.x || 24.x || 25.x || 26.x"
+# When upgrading better-sqlite3, check its engines field and update this cap accordingly.
+$NODE_MAX_MAJOR = 26
 
 function Install-NodeMsi {
     param([string]$Version, [string]$TempLabel = 'nodejs-installer')
@@ -219,7 +219,7 @@ function Register-BackupTaskInternal {
     if ($existing) { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false }
     $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`""
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
-    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddHours(2) -RepetitionInterval (New-TimeSpan -Hours 6) -RepetitionDuration ([TimeSpan]::MaxValue)
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddHours(2) -RepetitionInterval (New-TimeSpan -Hours 6) -RepetitionDuration ([TimeSpan]::FromDays(3650))
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -Description 'VRSI WallBoard SQLite backup' | Out-Null
     Write-Host "  Registered: backup every 6 hours" -ForegroundColor Green
