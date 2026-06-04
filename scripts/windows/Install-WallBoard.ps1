@@ -266,7 +266,7 @@ if (-not $SkipBuild -and $serverBuilt -and $clientBuilt) {
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $WithStartup) {
-    $r = Read-Host 'Start WallBoard automatically when you log in to Windows? [Y/N]'
+    $r = Read-Host 'Start WallBoard server silently at login (open http://localhost:3001 in any browser)? [Y/N]'
     $WithStartup = ($r -eq 'Y' -or $r -eq 'y')
 }
 
@@ -302,13 +302,14 @@ Write-Host '  Board:       http://localhost:3001/board'
 Write-Host '  IT report:   Ctrl+M in the app'
 Write-Host ''
 if ($WithStartup) {
-    Write-Host '  After next logon (or reboot), server + kiosk start automatically.' -ForegroundColor Cyan
-    Write-Host '  To start NOW without rebooting:'
+    Write-Host '  Server starts silently after next logon. Open http://localhost:3001 in any browser.' -ForegroundColor Cyan
+    Write-Host '  To start NOW without logging out:'
 } else {
     Write-Host '  To start now:'
 }
 Write-Host '    scripts\windows\Start-WallBoard-Service.bat'
-Write-Host '    scripts\windows\Start-Kiosk.bat'
+Write-Host ''
+Write-Host '  Then open  http://localhost:3001  in any browser.' -ForegroundColor Cyan
 Write-Host ''
 Write-Host '  Save this token for support (board API):' -ForegroundColor DarkGray
 Write-Host "  $token" -ForegroundColor DarkGray
