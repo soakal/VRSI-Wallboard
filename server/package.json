@@ -8,6 +8,9 @@
     "build": "tsc",
     "start": "node dist/index.js"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@azure/msal-node": "^2.16.2",
     "@vrsi/wallboard-shared": "file:../shared",

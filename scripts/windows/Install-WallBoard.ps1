@@ -127,18 +127,18 @@ Install manually:
     $ver   = (node -v) -replace '^v', ''
     $major = [int]($ver.Split('.')[0])
 
-    if ($major -lt 18) {
-        Write-Warning "  Node.js v$ver is too old (18+ required)  -  upgrading..."
+    if ($major -lt 20) {
+        Write-Warning "  Node.js v$ver is too old (20+ required)  -  upgrading..."
         $ok = Install-NodeJs -Upgrade
         if (-not $ok) {
-            throw "Node.js 18+ required (found v$ver). Upgrade from https://nodejs.org"
+            throw "Node.js 20+ required (found v$ver). Upgrade from https://nodejs.org"
         }
         $mp = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
         $up = [System.Environment]::GetEnvironmentVariable('Path', 'User')
         $env:Path = (($mp, $up | Where-Object { $_ }) -join ';')
         $ver   = (node -v) -replace '^v', ''
         $major = [int]($ver.Split('.')[0])
-        if ($major -lt 18) {
+        if ($major -lt 20) {
             throw "Upgrade did not complete. Please upgrade Node.js manually from https://nodejs.org"
         }
     }
