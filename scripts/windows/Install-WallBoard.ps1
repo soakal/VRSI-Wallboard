@@ -72,7 +72,6 @@ function Set-ServerEnvProduction {
     foreach ($k in $keys.Keys) { $out.Add("$k=$($keys[$k])") }
 
     $out | Set-Content -Path $envFile -Encoding utf8
-    "VITE_ADMIN_TOKEN=$token" | Set-Content -Path (Join-Path $ClientDir '.env.production') -Encoding utf8
     Write-Host "  server\.env configured (ADMIN_TOKEN set)" -ForegroundColor Green
     return $token
 }

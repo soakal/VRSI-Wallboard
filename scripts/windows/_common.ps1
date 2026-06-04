@@ -34,14 +34,8 @@ function Get-AdminTokenFromServerEnv {
 }
 
 function Sync-ClientProductionEnv {
-    $token = Get-AdminTokenFromServerEnv
-    if (-not $token -or $token -match 'REPLACE_WITH') {
-        Write-Warning 'Set ADMIN_TOKEN in server\.env before building the client.'
-        return
-    }
-    $dest = Join-Path $ClientDir '.env.production'
-    "VITE_ADMIN_TOKEN=$token" | Set-Content -Path $dest -Encoding utf8
-    Write-Step "Wrote client\.env.production (VITE_ADMIN_TOKEN for build)"
+    # Client no longer uses VITE_ADMIN_TOKEN — the browser on localhost is trusted
+    # by the server without a token. Nothing to sync.
 }
 
 function Test-WallBoardHealthy {

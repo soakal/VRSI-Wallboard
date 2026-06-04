@@ -1,12 +1,24 @@
-# Install dependencies and build client + server for production.
+# Install dependencies and build shared + client + server for production.
 # Run from repo root or anywhere; requires Node.js 18+.
 . "$PSScriptRoot\_common.ps1"
 
 $ErrorActionPreference = 'Stop'
 
+$SharedDir = Join-Path $RepoRoot 'shared'
+
 Write-Step "Repo: $RepoRoot"
 Ensure-ServerEnv | Out-Null
-Sync-ClientProductionEnv
+
+# shared must be built first — client and server both import from shared/dist/
+Write-Step 'Installing shared dependencies'
+Push-Location $SharedDir
+npm install
+if ($LASTEXITCODE -ne 0) { throw 'shared npm install failed' }
+
+Write-Step 'Building shared types'
+npm run build
+if ($LASTEXITCODE -ne 0) { throw 'shared build failed' }
+Pop-Location
 
 Write-Step 'Installing server dependencies'
 Push-Location $ServerDir
