@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
 import multer from 'multer'
 import {
   parseXlsm,
@@ -30,6 +30,7 @@ boardRouter.use(requireAdminToken)
 // ---------------------------------------------------------------------------
 interface PresenceEntry { userName: string; expiresAt: number }
 const presenceStore = new Map<string, Map<string, PresenceEntry>>()
+const PRESENCE_MAX_LEN = 128
 
 function cleanPresence() {
   const now = Date.now()
@@ -41,22 +42,32 @@ function cleanPresence() {
   }
 }
 
+// Prune stale presence entries every 60 seconds so the map never grows unbounded.
+setInterval(cleanPresence, 60_000).unref()
+
 boardRouter.get('/presence', (_req: Request, res: Response) => {
   cleanPresence()
   const result: Record<string, { userId: string; userName: string }[]> = {}
   for (const [job, editors] of presenceStore.entries()) {
     result[job] = Array.from(editors.entries()).map(([userId, { userName }]) => ({ userId, userName }))
   }
-  res.json(result)
+  res.json({ data: result })
 })
 
 boardRouter.post('/presence/:jobNumber', (req: Request, res: Response) => {
   const { userId, userName } = req.body as { userId?: string; userName?: string }
-  if (!userId || !userName) { res.status(400).json({ error: 'userId and userName required' }); return }
-  const job = req.params.jobNumber
+  if (!userId || !userName) {
+    res.status(400).json({ error: { code: 'missing_fields', message: 'userId and userName required' } })
+    return
+  }
+  if (userId.length > PRESENCE_MAX_LEN || userName.length > PRESENCE_MAX_LEN) {
+    res.status(400).json({ error: { code: 'field_too_long', message: 'userId and userName must be 128 characters or fewer' } })
+    return
+  }
+  const job = req.params.jobNumber.slice(0, 64)
   if (!presenceStore.has(job)) presenceStore.set(job, new Map())
   presenceStore.get(job)!.set(userId, { userName, expiresAt: Date.now() + 30000 })
-  res.json({ ok: true })
+  res.json({ data: { ok: true } })
 })
 
 boardRouter.delete('/presence/:jobNumber', (req: Request, res: Response) => {
@@ -66,7 +77,7 @@ boardRouter.delete('/presence/:jobNumber', (req: Request, res: Response) => {
     editors?.delete(userId)
     if (editors?.size === 0) presenceStore.delete(req.params.jobNumber)
   }
-  res.json({ ok: true })
+  res.json({ data: { ok: true } })
 })
 
 const upload = multer({
@@ -79,6 +90,8 @@ const upload = multer({
 // so any LAN client can POST arbitrary objects). Coerce known fields to safe
 // shapes and reject rows missing a usable jobNumber.
 // ---------------------------------------------------------------------------
+const MAX_IMPORT_ROWS = 10_000
+
 function validateJobsArray(raw: unknown[]): {
   jobs: Job[]
   errors: string[]
@@ -126,7 +139,7 @@ function validateJobsArray(raw: unknown[]): {
 // ---------------------------------------------------------------------------
 // POST /import
 // ---------------------------------------------------------------------------
-boardRouter.post('/import', upload.single('file'), async (req: Request, res: Response) => {
+boardRouter.post('/import', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     let jobs: Job[]
     let sourceFile: string
@@ -157,19 +170,22 @@ boardRouter.post('/import', upload.single('file'), async (req: Request, res: Res
         result.importedBinderPrinted,
       )
     } else if (Array.isArray(req.body.jobs)) {
+      if (req.body.jobs.length > MAX_IMPORT_ROWS) {
+        res.status(400).json({ error: { code: 'too_many_rows', message: `Import limited to ${MAX_IMPORT_ROWS} rows` } })
+        return
+      }
       const { jobs: validated, errors: jsonErrors, importedStatuses } = validateJobsArray(req.body.jobs)
       jobs = validated
       rowErrors = jsonErrors
       skipped = jsonErrors.length
-      // Only hard-reject if there are NO valid rows at all
       if (jobs.length === 0 && jsonErrors.length > 0) {
-        res.status(400).json({ error: 'No valid jobs in import', rowErrors: jsonErrors })
+        res.status(400).json({ error: { code: 'no_valid_jobs', message: 'No valid jobs in import' }, rowErrors: jsonErrors })
         return
       }
       sourceFile = 'manual-import'
       applyResult = await applyBoardImport(jobs, sourceFile, importedStatuses, {})
     } else {
-      res.status(400).json({ error: 'No file or jobs array provided' })
+      res.status(400).json({ error: { code: 'missing_input', message: 'No file or jobs array provided' } })
       return
     }
 
@@ -202,102 +218,104 @@ boardRouter.post('/import', upload.single('file'), async (req: Request, res: Res
         : rowErrors
 
     res.json({
-      imported: jobs.length,
-      shippedApplied,
-      readyToShipApplied,
-      inProgressApplied,
-      notesImported,
-      binderPrintedApplied,
-      skipped,
-      warnings,
-      rowErrors: rowErrorsOut,
-      rowErrorsTotal: rowErrors.length,
+      data: {
+        imported: jobs.length,
+        shippedApplied,
+        readyToShipApplied,
+        inProgressApplied,
+        notesImported,
+        binderPrintedApplied,
+        skipped,
+        warnings,
+        rowErrors: rowErrorsOut,
+        rowErrorsTotal: rowErrors.length,
+      },
     })
   } catch (err: unknown) {
     logger.error('Board import failed', { error: (err as Error).message })
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })
 
 // ---------------------------------------------------------------------------
 // GET /jobs
 // ---------------------------------------------------------------------------
-boardRouter.get('/jobs', async (_req: Request, res: Response) => {
+boardRouter.get('/jobs', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const jobs = getMergedJobs()
-    res.json(jobs)
+    res.json({ data: jobs })
   } catch (err: unknown) {
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })
 
 // ---------------------------------------------------------------------------
 // GET /config
 // ---------------------------------------------------------------------------
-boardRouter.get('/config', async (_req: Request, res: Response) => {
+boardRouter.get('/config', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const config = getBoardConfig()
-    res.json(config)
+    res.json({ data: config })
   } catch (err: unknown) {
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })
 
 // ---------------------------------------------------------------------------
 // POST /config
 // ---------------------------------------------------------------------------
-boardRouter.post('/config', async (req: Request, res: Response) => {
+boardRouter.post('/config', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const updated = saveBoardConfig(req.body)
-    res.json(updated)
+    res.json({ data: updated })
   } catch (err: unknown) {
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })
 
 // ---------------------------------------------------------------------------
 // GET /users
 // ---------------------------------------------------------------------------
-boardRouter.get('/users', async (_req: Request, res: Response) => {
+boardRouter.get('/users', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const cfg = getBoardConfig()
     const users = getDerivedUsers(cfg)
-    res.json(users)
+    res.json({ data: users })
   } catch (err: unknown) {
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })
 
 // ---------------------------------------------------------------------------
 // PATCH /jobs/:jobNumber/status
 // ---------------------------------------------------------------------------
-boardRouter.patch('/jobs/:jobNumber/status', async (req: Request, res: Response) => {
+boardRouter.patch('/jobs/:jobNumber/status', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { status, actor } = req.body as { status: string; actor?: Actor }
 
-    if (!STATUS_ORDER.includes(status as never)) {
-      res.status(400).json({ error: 'Invalid status' })
+    if (!(STATUS_ORDER as readonly string[]).includes(status)) {
+      res.status(400).json({ error: { code: 'invalid_status', message: 'Invalid status' } })
       return
     }
 
     if (!getMergedJobs().some((j) => j.jobNumber === req.params.jobNumber)) {
-      res.status(404).json({ error: 'Job not found' })
+      res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } })
       return
     }
 
     await setJobStatus(req.params.jobNumber, status as (typeof STATUS_ORDER)[number], actor)
 
     const job = getMergedJobs().find((j) => j.jobNumber === req.params.jobNumber)
-    res.json(job)
+    res.json({ data: job })
   } catch (err: unknown) {
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })
 
 // ---------------------------------------------------------------------------
 // PATCH /jobs/:jobNumber/ship-date
 // ---------------------------------------------------------------------------
-boardRouter.patch('/jobs/:jobNumber/ship-date', async (req: Request, res: Response) => {
+boardRouter.patch('/jobs/:jobNumber/ship-date', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { shipDateOverride, shipDateOverrideNote, actor } = req.body as {
       shipDateOverride?: string | null
@@ -306,7 +324,7 @@ boardRouter.patch('/jobs/:jobNumber/ship-date', async (req: Request, res: Respon
     }
 
     if (!getMergedJobs().some((j) => j.jobNumber === req.params.jobNumber)) {
-      res.status(404).json({ error: 'Job not found' })
+      res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } })
       return
     }
 
@@ -318,116 +336,116 @@ boardRouter.patch('/jobs/:jobNumber/ship-date', async (req: Request, res: Respon
     )
 
     const job = getMergedJobs().find((j) => j.jobNumber === req.params.jobNumber)
-    res.json(job)
+    res.json({ data: job })
   } catch (err: unknown) {
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })
 
 // ---------------------------------------------------------------------------
 // PATCH /jobs/:jobNumber/binder-printed
 // ---------------------------------------------------------------------------
-boardRouter.patch('/jobs/:jobNumber/binder-printed', async (req: Request, res: Response) => {
+boardRouter.patch('/jobs/:jobNumber/binder-printed', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { binderPrinted, actor } = req.body as { binderPrinted?: boolean; actor?: Actor }
 
     if (typeof binderPrinted !== 'boolean') {
-      res.status(400).json({ error: 'binderPrinted (boolean) required' })
+      res.status(400).json({ error: { code: 'missing_fields', message: 'binderPrinted (boolean) required' } })
       return
     }
 
     if (!getMergedJobs().some((j) => j.jobNumber === req.params.jobNumber)) {
-      res.status(404).json({ error: 'Job not found' })
+      res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } })
       return
     }
 
     await setJobBinderPrinted(req.params.jobNumber, binderPrinted, actor)
 
     const job = getMergedJobs().find((j) => j.jobNumber === req.params.jobNumber)
-    res.json(job)
+    res.json({ data: job })
   } catch (err: unknown) {
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })
 
 // ---------------------------------------------------------------------------
 // POST /jobs/:jobNumber/notes
 // ---------------------------------------------------------------------------
-boardRouter.post('/jobs/:jobNumber/notes', async (req: Request, res: Response) => {
+boardRouter.post('/jobs/:jobNumber/notes', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { text, actor } = req.body as { text?: string; actor?: Actor }
 
     if (!text || !actor) {
-      res.status(400).json({ error: 'text and actor required' })
+      res.status(400).json({ error: { code: 'missing_fields', message: 'text and actor required' } })
       return
     }
     if (text.length > 5000) {
-      res.status(400).json({ error: 'Note text exceeds maximum length of 5000 characters' })
+      res.status(400).json({ error: { code: 'note_too_long', message: 'Note text exceeds maximum length of 5000 characters' } })
       return
     }
 
     if (!getMergedJobs().some((j) => j.jobNumber === req.params.jobNumber)) {
-      res.status(404).json({ error: 'Job not found' })
+      res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } })
       return
     }
 
     const note = await addNote(req.params.jobNumber, text, actor)
-    res.status(201).json(note)
+    res.status(201).json({ data: note })
   } catch (err: unknown) {
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })
 
 // ---------------------------------------------------------------------------
 // PATCH /jobs/:jobNumber/notes/:noteId — author only
 // ---------------------------------------------------------------------------
-boardRouter.patch('/jobs/:jobNumber/notes/:noteId', async (req: Request, res: Response) => {
+boardRouter.patch('/jobs/:jobNumber/notes/:noteId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { text, actor } = req.body as { text?: string; actor?: Actor }
     if (!text || !actor) {
-      res.status(400).json({ error: 'text and actor required' })
+      res.status(400).json({ error: { code: 'missing_fields', message: 'text and actor required' } })
       return
     }
     if (text.length > 5000) {
-      res.status(400).json({ error: 'Note text exceeds maximum length of 5000 characters' })
+      res.status(400).json({ error: { code: 'note_too_long', message: 'Note text exceeds maximum length of 5000 characters' } })
       return
     }
     if (!getMergedJobs().some((j) => j.jobNumber === req.params.jobNumber)) {
-      res.status(404).json({ error: 'Job not found' })
+      res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } })
       return
     }
     const result = await updateNote(req.params.jobNumber, req.params.noteId, text, actor)
     if (!result.ok) {
-      res.status(403).json({ error: result.error })
+      res.status(403).json({ error: { code: 'forbidden', message: result.error ?? 'Forbidden' } })
       return
     }
-    res.json(result.note)
+    res.json({ data: result.note })
   } catch (err: unknown) {
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })
 
 // ---------------------------------------------------------------------------
 // DELETE /jobs/:jobNumber/notes/:noteId — author only
 // ---------------------------------------------------------------------------
-boardRouter.delete('/jobs/:jobNumber/notes/:noteId', async (req: Request, res: Response) => {
+boardRouter.delete('/jobs/:jobNumber/notes/:noteId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { actor } = req.body as { actor?: Actor }
     if (!actor) {
-      res.status(400).json({ error: 'actor required' })
+      res.status(400).json({ error: { code: 'missing_fields', message: 'actor required' } })
       return
     }
     if (!getMergedJobs().some((j) => j.jobNumber === req.params.jobNumber)) {
-      res.status(404).json({ error: 'Job not found' })
+      res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } })
       return
     }
     const result = await deleteNote(req.params.jobNumber, req.params.noteId, actor)
     if (!result.ok) {
-      res.status(403).json({ error: result.error })
+      res.status(403).json({ error: { code: 'forbidden', message: result.error ?? 'Forbidden' } })
       return
     }
-    res.json({ ok: true })
+    res.json({ data: { ok: true } })
   } catch (err: unknown) {
-    res.status(500).json({ error: (err as Error).message })
+    next(err)
   }
 })

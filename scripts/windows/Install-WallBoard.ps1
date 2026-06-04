@@ -8,22 +8,106 @@ param(
 . "$PSScriptRoot\_common.ps1"
 $ErrorActionPreference = 'Stop'
 
+function Install-NodeJs {
+    param([switch]$Upgrade)
+    $action = if ($Upgrade) { 'upgrade' } else { 'install' }
+    Write-Host "  Attempting automatic Node.js LTS $action..." -ForegroundColor Yellow
+
+    # Primary: winget (built into Windows 10 1809+ and all Windows 11)
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Host '  Using winget...' -ForegroundColor Cyan
+        if ($Upgrade) {
+            winget upgrade OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements
+        } else {
+            winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements
+        }
+        $code = $LASTEXITCODE
+        # 0 = success; -1978335135 (0x8A150049) = already installed (treat as success)
+        if ($code -eq 0 -or $code -eq -1978335135) {
+            $mp = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+            $up = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+            $env:Path = (($mp, $up | Where-Object { $_ }) -join ';')
+            return $true
+        }
+        Write-Warning "  winget $action exited $code — falling back to direct download."
+    }
+
+    # Fallback: download official LTS MSI from nodejs.org
+    try {
+        Write-Host '  Fetching Node.js LTS version info from nodejs.org...' -ForegroundColor Cyan
+        $index  = Invoke-RestMethod -Uri 'https://nodejs.org/dist/index.json' -TimeoutSec 30 -UseBasicParsing
+        $lts    = $index | Where-Object { $_.lts -and $_.lts -ne $false } | Select-Object -First 1
+        if (-not $lts) { throw 'Could not find LTS entry in nodejs.org index' }
+        $ver  = $lts.version   # e.g. "v20.14.0"
+        $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
+            'ARM64' { 'arm64' }
+            'x86'   { 'x86' }
+            default { 'x64' }
+        }
+        $msiUrl = "https://nodejs.org/dist/$ver/node-$ver-$arch.msi"
+        $msi    = "$env:TEMP\nodejs-lts-installer.msi"
+        Write-Host "  Downloading Node.js $ver..." -ForegroundColor Cyan
+        Invoke-WebRequest -Uri $msiUrl -OutFile $msi -UseBasicParsing -TimeoutSec 300
+        Write-Host '  Running installer (this may take a minute)...' -ForegroundColor Cyan
+        $p = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart ADDLOCAL=ALL" -Wait -PassThru
+        Remove-Item $msi -Force -ErrorAction SilentlyContinue
+        if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+            if ($p.ExitCode -eq 3010) {
+                Write-Warning '  Install succeeded but a restart may be needed for PATH changes to take full effect.'
+            }
+            $mp = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+            $up = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+            $env:Path = (($mp, $up | Where-Object { $_ }) -join ';')
+            return $true
+        }
+        Write-Warning "  MSI installer exited with code $($p.ExitCode)"
+        return $false
+    } catch {
+        Write-Warning "  Download/install failed: $_"
+        return $false
+    }
+}
+
 function Test-NodeJs {
     $node = Get-Command node -ErrorAction SilentlyContinue
-    if (-not $node) {
-        throw @"
-Node.js is not installed.
 
-1. Download LTS from https://nodejs.org
-2. Run the installer (check "Add to PATH")
-3. Close this window, open a NEW Command Prompt, and run Install again.
+    if (-not $node) {
+        $ok = Install-NodeJs
+        if (-not $ok) {
+            throw @"
+Automatic Node.js install failed.
+
+Install manually:
+  1. Go to https://nodejs.org and download the LTS installer.
+  2. Run it (leave "Add to PATH" checked).
+  3. Close this window and run INSTALL.bat again.
 "@
+        }
+        $node = Get-Command node -ErrorAction SilentlyContinue
+        if (-not $node) {
+            throw "Node.js was installed but 'node' is not in PATH yet. Close this window and run INSTALL.bat again."
+        }
     }
-    $ver = (node -v) -replace '^v', ''
+
+    $ver   = (node -v) -replace '^v', ''
     $major = [int]($ver.Split('.')[0])
+
     if ($major -lt 18) {
-        throw "Node.js 18+ required (found v$ver). Upgrade from https://nodejs.org"
+        Write-Warning "  Node.js v$ver is too old (18+ required) — upgrading..."
+        $ok = Install-NodeJs -Upgrade
+        if (-not $ok) {
+            throw "Node.js 18+ required (found v$ver). Upgrade from https://nodejs.org"
+        }
+        $env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+                    [System.Environment]::GetEnvironmentVariable('Path', 'User')
+        $ver   = (node -v) -replace '^v', ''
+        $major = [int]($ver.Split('.')[0])
+        if ($major -lt 18) {
+            throw "Upgrade did not complete. Please upgrade Node.js manually from https://nodejs.org"
+        }
     }
+
     Write-Host "  Node.js v$ver" -ForegroundColor Green
 }
 

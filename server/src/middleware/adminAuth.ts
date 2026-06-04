@@ -7,13 +7,16 @@ function isLocalhost(req: Request): boolean {
   return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 }
 
+// Kiosk threat model: the server binds to 127.0.0.1, so only local processes
+// can reach it. TRUST_LOCALHOST=true (default) allows the kiosk browser through
+// without a token. Set TRUST_LOCALHOST=false before any LAN exposure or if a
+// reverse proxy is placed in front (which would forward its own loopback address).
+const trustLocalhost = process.env.TRUST_LOCALHOST !== 'false';
+
 let warnedOpen = false;
 
 export function requireAdminToken(req: Request, res: Response, next: NextFunction): void {
-  // Requests from the kiosk's own browser are always on localhost — allow through.
-  // The server binds to 127.0.0.1 so only local connections can arrive anyway,
-  // but this guard is kept as explicit defense-in-depth.
-  if (isLocalhost(req)) {
+  if (trustLocalhost && isLocalhost(req)) {
     next();
     return;
   }

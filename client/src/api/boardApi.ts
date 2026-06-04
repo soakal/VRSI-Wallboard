@@ -8,21 +8,16 @@ import type {
   Actor
 } from '@vrsi/wallboard-shared';
 import { boardHeaders } from './boardHeaders';
+import { unwrap } from './http';
 
 export async function getBoardJobs(): Promise<BoardJob[]> {
   const response = await fetch('/api/board/jobs', { headers: boardHeaders() });
-  if (!response.ok) {
-    throw new Error(`Failed to get board jobs: ${response.statusText}`);
-  }
-  return response.json();
+  return unwrap<BoardJob[]>(response);
 }
 
 export async function getBoardConfig(): Promise<BoardConfig> {
   const response = await fetch('/api/board/config', { headers: boardHeaders() });
-  if (!response.ok) {
-    throw new Error(`Failed to get board config: ${response.statusText}`);
-  }
-  return response.json();
+  return unwrap<BoardConfig>(response);
 }
 
 export async function updateBoardConfig(partial: Partial<BoardConfig>): Promise<BoardConfig> {
@@ -31,45 +26,45 @@ export async function updateBoardConfig(partial: Partial<BoardConfig>): Promise<
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(partial)
   });
-  if (!response.ok) {
-    throw new Error(`Failed to update board config: ${response.statusText}`);
-  }
-  return response.json();
+  return unwrap<BoardConfig>(response);
 }
 
 export async function getBoardUsers(): Promise<BoardUser[]> {
   const response = await fetch('/api/board/users', { headers: boardHeaders() });
-  if (!response.ok) {
-    throw new Error(`Failed to get board users: ${response.statusText}`);
-  }
-  return response.json();
+  return unwrap<BoardUser[]>(response);
 }
 
-export async function importJobsJson(jobs: Job[]): Promise<{ imported: number; shippedApplied: number; readyToShipApplied: number; notesImported: number; skipped: number; warnings: string[]; rowErrors: string[] }> {
+export interface ImportResult {
+  imported: number;
+  shippedApplied: number;
+  readyToShipApplied: number;
+  inProgressApplied: number;
+  notesImported: number;
+  binderPrintedApplied: number;
+  skipped: number;
+  warnings: string[];
+  rowErrors: string[];
+  rowErrorsTotal: number;
+}
+
+export async function importJobsJson(jobs: Job[]): Promise<ImportResult> {
   const response = await fetch('/api/board/import', {
     method: 'POST',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ jobs })
   });
-  if (!response.ok) {
-    throw new Error(`Failed to import jobs: ${response.statusText}`);
-  }
-  return response.json();
+  return unwrap<ImportResult>(response);
 }
 
-export async function importJobsFile(file: File): Promise<{ imported: number; shippedApplied: number; readyToShipApplied: number; notesImported: number; skipped: number; warnings: string[]; rowErrors: string[] }> {
+export async function importJobsFile(file: File): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('file', file);
-
   const response = await fetch('/api/board/import', {
     method: 'POST',
     headers: boardHeaders(),
     body: formData
   });
-  if (!response.ok) {
-    throw new Error(`Failed to import jobs file: ${response.statusText}`);
-  }
-  return response.json();
+  return unwrap<ImportResult>(response);
 }
 
 export async function setJobStatus(
@@ -82,10 +77,7 @@ export async function setJobStatus(
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ status, actor })
   });
-  if (!response.ok) {
-    throw new Error(`Failed to set job status: ${response.statusText}`);
-  }
-  return response.json();
+  return unwrap<BoardJob>(response);
 }
 
 export async function setJobShipDate(
@@ -99,10 +91,7 @@ export async function setJobShipDate(
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ shipDateOverride, shipDateOverrideNote, actor })
   });
-  if (!response.ok) {
-    throw new Error(`Failed to set job ship date: ${response.statusText}`);
-  }
-  return response.json();
+  return unwrap<BoardJob>(response);
 }
 
 export async function setJobBinderPrinted(
@@ -115,10 +104,7 @@ export async function setJobBinderPrinted(
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ binderPrinted, actor })
   });
-  if (!response.ok) {
-    throw new Error(`Failed to set binder printed: ${response.statusText}`);
-  }
-  return response.json();
+  return unwrap<BoardJob>(response);
 }
 
 export async function addJobNote(
@@ -131,18 +117,14 @@ export async function addJobNote(
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ text, actor })
   });
-  if (!response.ok) {
-    throw new Error(`Failed to add job note: ${response.statusText}`);
-  }
-  return response.json();
+  return unwrap<JobNote>(response);
 }
 
 export type PresenceMap = Record<string, { userId: string; userName: string }[]>
 
 export async function getPresence(): Promise<PresenceMap> {
   const response = await fetch('/api/board/presence', { headers: boardHeaders() });
-  if (!response.ok) throw new Error('Failed to get presence');
-  return response.json();
+  return unwrap<PresenceMap>(response);
 }
 
 export async function claimPresence(jobNumber: string, userId: string, userName: string): Promise<void> {
@@ -161,17 +143,6 @@ export async function releasePresence(jobNumber: string, userId: string): Promis
   });
 }
 
-async function boardNoteError(response: Response, fallback: string): Promise<never> {
-  let message = fallback
-  try {
-    const body = (await response.json()) as { error?: string }
-    if (body.error) message = body.error
-  } catch {
-    /* ignore */
-  }
-  throw new Error(message)
-}
-
 export async function updateJobNote(
   jobNumber: string,
   noteId: string,
@@ -182,11 +153,8 @@ export async function updateJobNote(
     method: 'PATCH',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ text, actor }),
-  })
-  if (!response.ok) {
-    await boardNoteError(response, 'Failed to update note')
-  }
-  return response.json()
+  });
+  return unwrap<JobNote>(response);
 }
 
 export async function deleteJobNote(
@@ -199,7 +167,5 @@ export async function deleteJobNote(
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ actor })
   });
-  if (!response.ok) {
-    await boardNoteError(response, 'Failed to delete note')
-  }
+  await unwrap<{ ok: true }>(response);
 }

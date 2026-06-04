@@ -88,7 +88,7 @@ eventsRouter.get(
       try {
         const boardJobs = getMergedJobs();
         const boardConfig = getBoardConfig();
-        const statusColors: Record<string, string> = boardConfig.statusColors as Record<string, string>;
+        const { statusColors } = boardConfig;
         const statusLabels: Record<string, string> = {
           none: 'Not Started', in_progress: 'In Progress',
           ready_to_ship: 'Ready to Ship', shipped: 'Shipped',

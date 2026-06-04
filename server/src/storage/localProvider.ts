@@ -412,10 +412,21 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     const files = fs
       .readdirSync(destination)
       .filter((f) => f.startsWith('wallboard-') && f.endsWith('.db'))
-      .map((f) => ({ name: f, full: path.join(destination, f), mtime: fs.statSync(path.join(destination, f)).mtimeMs }))
+      .flatMap((f) => {
+        try {
+          const full = path.join(destination, f);
+          return [{ name: f, full, mtime: fs.statSync(full).mtimeMs }];
+        } catch {
+          return [];
+        }
+      })
       .sort((a, b) => b.mtime - a.mtime);
     for (const old of files.slice(keep)) {
-      fs.unlinkSync(old.full);
+      try {
+        fs.unlinkSync(old.full);
+      } catch {
+        // File may be locked or already removed — skip silently.
+      }
     }
   }
 

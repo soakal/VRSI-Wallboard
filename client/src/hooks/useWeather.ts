@@ -56,19 +56,30 @@ async function fetchWeather(
   const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
   if (!res.ok) throw new Error('Failed to fetch weather');
 
-  const json = await res.json();
+  const json = await res.json() as Record<string, unknown>;
 
-  const rawTemp: number = json.current.temperature_2m;
-  const currentCode: number = json.current.weather_code;
+  if (
+    typeof json.current !== 'object' || json.current === null ||
+    typeof json.daily !== 'object' || json.daily === null
+  ) {
+    throw new Error('Unexpected weather response shape');
+  }
+
+  const current = json.current as Record<string, number>;
+  const daily = json.daily as Record<string, unknown[]>;
+
+  const rawTemp: number = current.temperature_2m;
+  const currentCode: number = current.weather_code;
   const { condition, conditionEmoji } = interpretWeatherCode(currentCode);
 
   const currentTemp =
     tempUnit === 'F' ? celsiusToFahrenheit(rawTemp) : Math.round(rawTemp);
 
-  const dates: string[] = json.daily.time;
-  const highs: number[] = json.daily.temperature_2m_max;
-  const lows: number[] = json.daily.temperature_2m_min;
-  const sunsets: string[] = json.daily.sunset;
+  const dates = daily.time as string[];
+  const highs = daily.temperature_2m_max as number[];
+  const lows = daily.temperature_2m_min as number[];
+  const sunsets = daily.sunset as string[];
+  const codes = daily.weather_code as number[];
 
   const forecast: WeatherForecastDay[] = dates.map((dateStr, i) => {
     const dayLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
@@ -78,7 +89,7 @@ async function fetchWeather(
       tempUnit === 'F' ? celsiusToFahrenheit(highs[i]) : Math.round(highs[i]);
     const lo =
       tempUnit === 'F' ? celsiusToFahrenheit(lows[i]) : Math.round(lows[i]);
-    return { day: dayLabel, date: dateStr, code: json.daily.weather_code[i], hi, lo };
+    return { day: dayLabel, date: dateStr, code: codes[i], hi, lo };
   });
 
   const sunsetIso = sunsets[0] ?? '';

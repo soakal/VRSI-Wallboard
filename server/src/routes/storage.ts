@@ -72,7 +72,7 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
 
   const backupDir = path.resolve(resolveBackupDir());
   const basename = path.basename(file);
-  if (!/^wallboard.*\.db$/.test(basename)) {
+  if (!/^wallboard[\w.-]*\.db$/.test(basename)) {
     res.status(400).json({ error: { code: 'invalid', message: 'Invalid backup file name' } });
     return;
   }
