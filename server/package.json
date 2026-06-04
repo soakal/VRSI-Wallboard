@@ -1,0 +1,35 @@
+{
+  "name": "vrsi-wallboard-server",
+  "version": "0.1.0",
+  "description": "VRSI WallBoard API — local standalone",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^2.16.2",
+    "@vrsi/wallboard-shared": "file:../shared",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "winston": "^3.13.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.11",
+    "@types/node": "^20.14.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.15.6",
+    "typescript": "^5.5.2"
+  }
+}

@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  user-select: none;
+  background-color: #0f1117;
+}
+
+@media (min-width: 768px) {
+  body {
+    overflow: hidden;
+  }
+}
+
+/* React Big Calendar dark mode overrides */
+.rbc-calendar {
+  background-color: transparent;
+}
+
+.rbc-header {
+  background-color: #161b22;
+  border-color: #30363d;
+  padding: 12px 3px;
+  color: #c9d1d9;
+}
+
+.rbc-today {
+  background-color: #1c2128;
+}
+
+.rbc-current-time-indicator {
+  background-color: #da3633;
+  height: 2px;
+}
+
+.rbc-time-slot {
+  color: #8b949e;
+}
+
+.rbc-event {
+  background-color: #3b82f6;
+  border: none;
+  color: white;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.rbc-event-label {
+  color: #8b949e;
+}
+
+.rbc-toolbar {
+  color: #c9d1d9;
+}
+
+.rbc-toolbar button {
+  color: #c9d1d9;
+  background-color: transparent;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 6px 12px;
+  margin: 0 2px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.rbc-toolbar button:hover {
+  background-color: #21262d;
+}
+
+.rbc-toolbar button.rbc-active {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.rbc-month-view,
+.rbc-time-view {
+  background-color: #0d1117;
+  border-color: #30363d;
+}
+
+.rbc-month-row {
+  border-color: #30363d;
+}
+
+.rbc-date-cell {
+  padding: 8px 4px;
+  text-align: right;
+  color: #8b949e;
+}
+
+.rbc-off-range-bg {
+  background-color: #0d1117;
+}
+
+.rbc-off-range {
+  color: #484f58;
+}
+
+/* Hide scrollbars globally */
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  scrollbar-width: none;
+}
+
+/* Show scrollbar on the board job list */
+#board-scroll::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+#board-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#board-scroll::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+#board-scroll::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+#board-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
