@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getConfig, updateConfig, AppConfig, UiConfig } from '../services/configService.js';
 import { isAuthenticated } from '../auth/tokenRefresher.js';
 import { logger } from '../utils/logger.js';
+import { requireAdminToken } from '../middleware/adminAuth.js';
 
 export const configRouter = Router();
 
@@ -146,6 +147,7 @@ configRouter.get(
 
 configRouter.post(
   '/',
+  requireAdminToken,
   (req: Request, res: Response, next: NextFunction): void => {
     try {
       logger.debug('POST /api/config');

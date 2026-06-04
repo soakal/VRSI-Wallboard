@@ -63,22 +63,19 @@ app.use(
   })
 );
 
-// In production CORS_ORIGIN is required (enforced by validateEnv); never fall
-// back to '*' there. Outside production '*' is allowed for local dev convenience.
-const corsOrigin =
-  process.env.CORS_ORIGIN ??
-  (process.env.NODE_ENV === 'production' ? false : '*');
+// Default to the kiosk's own origin in all modes — never '*'.
+const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:3001';
 
 app.use(
   cors({
     origin: corsOrigin,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Token'],
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(auditApiMiddleware);
 
 // API routes
@@ -166,9 +163,12 @@ async function bootstrap(): Promise<void> {
     );
   }
 
-  const httpServer = app.listen(port, () => {
-    logger.info(`Server listening on port ${port}`, {
+  // Bind to localhost only — the kiosk is a local machine; LAN access is not needed.
+  const bindHost = process.env.BIND_HOST ?? '127.0.0.1';
+  const httpServer = app.listen(port, bindHost, () => {
+    logger.info(`Server listening on ${bindHost}:${port}`, {
       port,
+      host: bindHost,
       env: process.env.NODE_ENV ?? 'development',
       authenticated,
     });

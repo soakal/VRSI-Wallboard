@@ -7,8 +7,10 @@ import { isPathInsideDir } from '../lib/pathSafety.js';
 import { logger } from '../utils/logger.js';
 import { getPersistence, reloadPersistence } from '../storage/factory.js';
 import { runBackup, type BackupTrigger } from '../services/backupService.js';
+import { requireAdminToken } from '../middleware/adminAuth.js';
 
 export const storageRouter = Router();
+storageRouter.use(requireAdminToken);
 
 storageRouter.get('/status', async (_req: Request, res: Response) => {
   const store = getPersistence();
@@ -69,7 +71,12 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
   }
 
   const backupDir = path.resolve(resolveBackupDir());
-  const source = path.resolve(backupDir, path.basename(file));
+  const basename = path.basename(file);
+  if (!/^wallboard.*\.db$/.test(basename)) {
+    res.status(400).json({ error: { code: 'invalid', message: 'Invalid backup file name' } });
+    return;
+  }
+  const source = path.resolve(backupDir, basename);
   if (!isPathInsideDir(source, backupDir)) {
     res.status(400).json({ error: { code: 'invalid', message: 'Invalid backup file path' } });
     return;

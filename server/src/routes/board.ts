@@ -361,6 +361,10 @@ boardRouter.post('/jobs/:jobNumber/notes', async (req: Request, res: Response) =
       res.status(400).json({ error: 'text and actor required' })
       return
     }
+    if (text.length > 5000) {
+      res.status(400).json({ error: 'Note text exceeds maximum length of 5000 characters' })
+      return
+    }
 
     if (!getMergedJobs().some((j) => j.jobNumber === req.params.jobNumber)) {
       res.status(404).json({ error: 'Job not found' })
@@ -382,6 +386,10 @@ boardRouter.patch('/jobs/:jobNumber/notes/:noteId', async (req: Request, res: Re
     const { text, actor } = req.body as { text?: string; actor?: Actor }
     if (!text || !actor) {
       res.status(400).json({ error: 'text and actor required' })
+      return
+    }
+    if (text.length > 5000) {
+      res.status(400).json({ error: 'Note text exceeds maximum length of 5000 characters' })
       return
     }
     if (!getMergedJobs().some((j) => j.jobNumber === req.params.jobNumber)) {
