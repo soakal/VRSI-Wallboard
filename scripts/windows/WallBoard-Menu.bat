@@ -16,6 +16,7 @@ echo  RUN
 echo   4  Start server (keep window open)
 echo   5  Start kiosk browser
 echo   S  Stop server
+echo   P  Update (pull + rebuild + restart)
 echo   9  Open http://localhost:3001
 echo   M  IT Report (open board + Ctrl+M hint)
 echo.
@@ -42,6 +43,7 @@ if /i "%CHOICE%"=="3" call "%~dp0Build-Production.bat" & goto menu
 if /i "%CHOICE%"=="4" call "%~dp0Start-WallBoard.bat" & goto menu
 if /i "%CHOICE%"=="5" call "%~dp0Start-Kiosk.bat" & goto menu
 if /i "%CHOICE%"=="S" call "%~dp0Stop-WallBoard.bat" & goto menu
+if /i "%CHOICE%"=="P" call "%~dp0Update-WallBoard.bat" & goto menu
 if /i "%CHOICE%"=="6" call "%~dp0Backup-Now.bat" & goto menu
 if /i "%CHOICE%"=="L" call "%~dp0List-Backups.bat" & goto menu
 if /i "%CHOICE%"=="F" call "%~dp0Open-Backups-Folder.bat" & goto menu
