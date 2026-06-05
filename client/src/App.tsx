@@ -12,6 +12,7 @@ import FileBrowserPanel from './components/FileBrowserPanel';
 import MonitoringPanel from './components/MonitoringPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useBackupOnClose } from './hooks/useBackupOnClose';
+import { useUpdateCheck } from './hooks/useUpdateCheck';
 
 const BoardLayout = lazy(() => import('./components/board/BoardLayout'));
 const JobListView = lazy(() => import('./components/board/JobListView'));
@@ -23,6 +24,8 @@ function AppInner() {
   const location = useLocation();
 
   useBackupOnClose();
+  const updateInfo = useUpdateCheck();
+  const [updateDismissed, setUpdateDismissed] = useState(false);
 
   // Auth — always polling
   const { isAuthenticated, needsReauth, isLoading: authLoading } = useAuthStatus(true);
@@ -179,8 +182,38 @@ function AppInner() {
     return () => clearTimeout(timer);
   }, []);
 
+  const showUpdateBanner = updateInfo.updateAvailable && !updateDismissed;
+
   return (
     <>
+      {showUpdateBanner && (
+        <div className="fixed top-0 left-0 right-0 z-[9999] flex items-center justify-between gap-3 bg-blue-600 px-4 py-2 text-sm text-white shadow-lg">
+          <span>
+            Update available: <strong>{updateInfo.releaseName || updateInfo.latestVersion}</strong>
+            {' '}— you are on v{updateInfo.currentVersion}. Run{' '}
+            <code className="bg-blue-800/60 px-1 rounded">git pull &amp;&amp; npm run build</code>
+            {' '}then restart to update.
+            {updateInfo.releaseUrl && (
+              <a
+                href={updateInfo.releaseUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-2 underline hover:text-blue-200"
+              >
+                Release notes
+              </a>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={() => setUpdateDismissed(true)}
+            className="flex-shrink-0 rounded px-2 py-0.5 text-xs hover:bg-blue-700 transition-colors"
+            aria-label="Dismiss update notification"
+          >
+            ✕ Dismiss
+          </button>
+        </div>
+      )}
       <Routes>
         <Route
           path="/"

@@ -14,6 +14,7 @@ import { configRouter } from './routes/config.js';
 import { sharepointRouter } from './routes/sharepoint.js';
 import { boardRouter } from './routes/board.js';
 import { storageRouter } from './routes/storage.js';
+import { updateRouter } from './routes/update.js';
 import { getPersistence } from './storage/factory.js';
 import { resolveDataDir, resolveLogsDir, resolveBackupDir } from './lib/paths.js';
 import { auditApiMiddleware } from './middleware/auditMiddleware.js';
@@ -97,6 +98,7 @@ app.use('/api/config', configRouter);
 app.use('/api/sharepoint', sharepointRouter);
 app.use('/api/board', boardRouter);
 app.use('/api/storage', storageRouter);
+app.use('/api/update', updateRouter);
 
 // Simple health route (outside configRouter to avoid auth dependency)
 app.get('/health', (_req: Request, res: Response) => {
