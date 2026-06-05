@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { listEvents, GraphEvent } from '../graph/events.js';
+import { listEvents } from '../graph/events.js';
 import { listCalendars, GraphCalendar } from '../graph/calendars.js';
 import { isAuthenticated } from '../auth/tokenRefresher.js';
 import { getConfig } from '../services/configService.js';

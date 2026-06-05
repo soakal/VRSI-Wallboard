@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useImportJobs } from '../../hooks/useBoard'
+import type { ImportResult } from '../../api/boardApi'
 
 export default function ImportView() {
   const importJobs = useImportJobs()
@@ -16,16 +17,8 @@ export default function ImportView() {
     importJobs.mutate(selectedFile)
   }
 
-  const importResult = importJobs.data as {
-    imported: number
-    shippedApplied: number
-    readyToShipApplied?: number
-    notesImported?: number
-    skipped: number
-    warnings: string[]
-    rowErrors: string[]
-  } | undefined
-  const importError = importJobs.error as Error | null
+  const importResult: ImportResult | undefined = importJobs.data
+  const importError = importJobs.error
 
   return (
     <div className="max-w-lg px-4 py-6">

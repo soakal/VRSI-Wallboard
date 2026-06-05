@@ -46,6 +46,3 @@ export function logNetworkRequest(
   logAudit('network_request', detail, url.split('?')[0], success);
 }
 
-export function logFileRead(path: string, detail?: string): void {
-  logAudit('file_read', detail ?? 'Read data store', path, true);
-}

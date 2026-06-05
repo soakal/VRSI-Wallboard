@@ -34,10 +34,6 @@ export function statusLabel(status: JobStatus): string {
   }
 }
 
-export function statusIndex(status: JobStatus): number {
-  return STATUS_ORDER.indexOf(status)
-}
-
 /** Stable hue from a string — used for customer name bubbles. */
 export function customerBubbleColor(name: string): string {
   let hash = 0
@@ -46,16 +42,6 @@ export function customerBubbleColor(name: string): string {
   }
   const hue = Math.abs(hash) % 360
   return `hsl(${hue}, 52%, 42%)`
-}
-
-/** Neutral bubble for PM / Materials Manager labels. */
-export function personBubbleColor(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  const hue = (Math.abs(hash) % 60) + 200
-  return `hsl(${hue}, 35%, 38%)`
 }
 
 /**
@@ -69,12 +55,6 @@ export function isSpareJob(job: BoardJob, config: BoardConfig): boolean {
 }
 
 export type BoardTab = 'project' | 'spare-parts' | 'archive'
-
-export function boardRouteForTab(tab: BoardTab): string {
-  if (tab === 'spare-parts') return '/board/spare-parts'
-  if (tab === 'archive') return '/board/archive'
-  return '/board'
-}
 
 /** Same rules as JobListView — keeps header counts and lists in sync. */
 export function filterJobsForTab(
