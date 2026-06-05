@@ -434,7 +434,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     return listBackupFilesOnDisk();
   }
 
-  async restore(source: string): Promise<Result<{ preRestoreFile?: string }>> {
+  async restore(source: string): Promise<Result<{ preRestoreFile?: string; conflicts: number }>> {
     if (!fs.existsSync(source)) return err('not_found', `Backup not found: ${source}`);
     const dest = dbPath(this.dataDir);
     const backupDir = resolveBackupDir();
@@ -442,14 +442,8 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const preRestoreFile = path.join(backupDir, `wallboard-pre-restore-${stamp}.db`);
 
-    let preSnapshotDone = false;
     try {
       await this.db.backup(preRestoreFile);
-      preSnapshotDone = true;
-      this.db.pragma('wal_checkpoint(FULL)');
-      this.db.close();
-
-      removeWalSidecars(dest);
 
       let srcDb: Database.Database;
       try {
@@ -460,43 +454,193 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         throw new Error(`${openErr}${hint}`);
       }
 
+      let conflicts = 0;
       try {
-        await srcDb.backup(dest);
+        conflicts = this._mergeFromBackup(srcDb, source);
       } finally {
         srcDb.close();
       }
 
-      removeWalSidecars(dest);
-
-      this.db = new Database(dest);
-      this.db.pragma('journal_mode = WAL');
-      this.logAudit('restore', `Restored from ${source}`, source, true);
-      return ok({ preRestoreFile });
+      this.logAudit('restore', `Merged from backup ${source} (${conflicts} conflict(s))`, source, true);
+      return ok({ preRestoreFile, conflicts });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       logger.error('Database restore failed', { source, dest, error: message });
-
-      try {
-        removeWalSidecars(dest);
-        if (preSnapshotDone && fs.existsSync(preRestoreFile)) {
-          const rollback = new Database(preRestoreFile, { readonly: true });
-          try {
-            await rollback.backup(dest);
-          } finally {
-            rollback.close();
-          }
-          removeWalSidecars(dest);
-        }
-        this.db = new Database(dest);
-        this.db.pragma('journal_mode = WAL');
-        this.logAudit('restore', `Restore failed: ${message}`, source, false);
-      } catch (recoverErr) {
-        logger.error('Could not reopen database after failed restore — restart the server', {
-          error: recoverErr,
-        });
-      }
+      this.logAudit('restore', `Restore failed: ${message}`, source, false);
       return err('restore_failed', message);
     }
+  }
+
+  /**
+   * Merge board_state, notes, and jobs from a backup database into the live database.
+   * Rules (§7):
+   *   board_state — backup-only record → insert; same version → skip; one side newer → take it;
+   *                 both differ → newest-updatedAt wins, log conflict.
+   *   notes       — backup note not in live → insert; exists in both → take newer updatedAt.
+   *   jobs        — backup job not in live → insert; exists in both → skip (jobs come from XLSM).
+   *   jobs_import_meta — take the row with newer imported_at.
+   *   config      — skip (preserve current user settings).
+   * Returns the number of conflicts auto-resolved (for the caller to surface to the user).
+   */
+  private _mergeFromBackup(srcDb: Database.Database, sourcePath: string): number {
+    let conflicts = 0;
+    const now = new Date().toISOString();
+
+    const tx = this.db.transaction(() => {
+      // ── Jobs ────────────────────────────────────────────────────────────────
+      const srcJobs = srcDb
+        .prepare('SELECT * FROM jobs')
+        .all() as Array<Record<string, unknown>>;
+
+      const insJob = this.db.prepare(
+        `INSERT OR IGNORE INTO jobs
+           (job_number, pm, customer, materials_manager, pabs_complete,
+            ship_to_pm, ship_to_customer, imported_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const j of srcJobs) {
+        insJob.run(
+          j.job_number, j.pm, j.customer, j.materials_manager,
+          j.pabs_complete, j.ship_to_pm, j.ship_to_customer, j.imported_at
+        );
+      }
+
+      // ── jobs_import_meta ────────────────────────────────────────────────────
+      const srcMeta = srcDb
+        .prepare('SELECT * FROM jobs_import_meta WHERE id = 1')
+        .get() as Record<string, unknown> | undefined;
+      if (srcMeta) {
+        const liveMeta = this.db
+          .prepare('SELECT imported_at FROM jobs_import_meta WHERE id = 1')
+          .get() as { imported_at: string } | undefined;
+        if (!liveMeta || String(srcMeta.imported_at) > String(liveMeta.imported_at)) {
+          this.db
+            .prepare(
+              `INSERT INTO jobs_import_meta (id, imported_at, source_file, new_job_numbers)
+               VALUES (1, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 imported_at = excluded.imported_at,
+                 source_file = excluded.source_file,
+                 new_job_numbers = excluded.new_job_numbers`
+            )
+            .run(srcMeta.imported_at, srcMeta.source_file, srcMeta.new_job_numbers);
+        }
+      }
+
+      // ── Board state ─────────────────────────────────────────────────────────
+      type StateRow = {
+        job_number: string; status: string; ship_date_override: string | null;
+        ship_date_override_note: string | null; binder_printed: number;
+        version: number; updated_at: string; updated_by: string | null;
+      };
+      const srcStates = srcDb.prepare('SELECT * FROM board_state').all() as StateRow[];
+      const liveStates = new Map(
+        (this.db.prepare('SELECT * FROM board_state').all() as StateRow[]).map(
+          (r) => [r.job_number, r]
+        )
+      );
+
+      const upsertState = this.db.prepare(
+        `INSERT INTO board_state
+           (job_number, status, ship_date_override, ship_date_override_note,
+            binder_printed, version, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(job_number) DO UPDATE SET
+           status = excluded.status,
+           ship_date_override = excluded.ship_date_override,
+           ship_date_override_note = excluded.ship_date_override_note,
+           binder_printed = excluded.binder_printed,
+           version = excluded.version,
+           updated_at = excluded.updated_at,
+           updated_by = excluded.updated_by`
+      );
+
+      for (const src of srcStates) {
+        const live = liveStates.get(src.job_number);
+        if (!live) {
+          // New record in backup — insert it.
+          upsertState.run(
+            src.job_number, src.status, src.ship_date_override,
+            src.ship_date_override_note, src.binder_printed,
+            src.version, src.updated_at, src.updated_by
+          );
+          continue;
+        }
+        if (src.version === live.version) continue; // identical — skip
+
+        const srcNewer = src.updated_at > live.updated_at;
+        const bothModified = src.version !== live.version &&
+          Math.abs(
+            new Date(src.updated_at).getTime() - new Date(live.updated_at).getTime()
+          ) < 60_000; // within 1 minute = likely concurrent edits
+
+        if (bothModified) {
+          conflicts++;
+          this.logAudit(
+            'conflict',
+            `Restore conflict on job ${src.job_number}: ` +
+              `backup v${src.version} (${src.updated_at}) vs live v${live.version} (${live.updated_at}) — ` +
+              `took ${srcNewer ? 'backup' : 'live'} (newer updatedAt)`,
+            sourcePath
+          );
+        }
+
+        if (srcNewer) {
+          upsertState.run(
+            src.job_number, src.status, src.ship_date_override,
+            src.ship_date_override_note, src.binder_printed,
+            src.version, src.updated_at, src.updated_by
+          );
+        }
+        // else: live is newer — keep as-is.
+      }
+
+      // ── Notes ───────────────────────────────────────────────────────────────
+      type NoteRow = {
+        id: string; job_number: string; text: string; author_id: string;
+        author_name: string; created_at: string; updated_at: string | null;
+        is_ops_schedule: number;
+      };
+      const srcNotes = srcDb.prepare('SELECT * FROM notes').all() as NoteRow[];
+      const liveNoteIds = new Set(
+        (this.db.prepare('SELECT id FROM notes').all() as Array<{ id: string }>).map((r) => r.id)
+      );
+
+      const insNote = this.db.prepare(
+        `INSERT OR IGNORE INTO notes
+           (id, job_number, text, author_id, author_name, created_at, updated_at, is_ops_schedule)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      const updNote = this.db.prepare(
+        `UPDATE notes SET text = ?, updated_at = ? WHERE id = ? AND (updated_at IS NULL OR updated_at < ?)`
+      );
+
+      for (const n of srcNotes) {
+        if (!liveNoteIds.has(n.id)) {
+          insNote.run(
+            n.id, n.job_number, n.text, n.author_id,
+            n.author_name, n.created_at, n.updated_at ?? null, n.is_ops_schedule
+          );
+        } else if (n.updated_at) {
+          // Take backup note text only if backup is newer.
+          updNote.run(n.text, n.updated_at, n.id, n.updated_at);
+        }
+      }
+
+      // Stamp merge time in audit (outside the transaction — logAudit opens its own write).
+    });
+
+    tx();
+
+    // Write the merge-complete audit entry outside the transaction so it is committed separately.
+    this.logAudit(
+      'restore',
+      `Merge complete: ${conflicts} conflict(s) auto-resolved (newest-wins). Pre-restore snapshot saved.`,
+      sourcePath,
+      true
+    );
+
+    return conflicts;
   }
 
   getAuditLog(limit = 200): Array<Record<string, unknown>> {

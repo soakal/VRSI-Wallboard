@@ -510,6 +510,7 @@ export function mergeImportedOpsScheduleNotes(importedNotes: Record<string, stri
       state[jobNumber] = {
         ...existing,
         notes: [...userNotes, opsNote],
+        version: (existing.version ?? 0) + 1,
         updatedAt: now,
       }
       changed = true
@@ -558,7 +559,8 @@ export async function applyBoardImport(
 
     for (const [jobNumber, status] of Object.entries(importedStatuses)) {
       const existing = state[jobNumber] ?? emptyJobState()
-      state[jobNumber] = { ...existing, status, updatedAt: now }
+      if (existing.status === status) continue
+      state[jobNumber] = { ...existing, status, version: (existing.version ?? 0) + 1, updatedAt: now }
       if (status === 'shipped') shippedApplied++
       else if (status === 'ready_to_ship') readyToShipApplied++
       else if (status === 'in_progress') inProgressApplied++
@@ -569,7 +571,8 @@ export async function applyBoardImport(
       const job = jobByNumber.get(jobNumber)
       if (job && isSpareJob(job, config)) continue
       const existing = state[jobNumber] ?? emptyJobState()
-      state[jobNumber] = { ...existing, binderPrinted: printed, updatedAt: now }
+      if (existing.binderPrinted === printed) continue
+      state[jobNumber] = { ...existing, binderPrinted: printed, version: (existing.version ?? 0) + 1, updatedAt: now }
       if (printed) binderPrintedApplied++
     }
 
@@ -594,6 +597,7 @@ export async function applyBoardImport(
       state[jobNumber] = {
         ...existing,
         notes: [...userNotes, opsNote],
+        version: (existing.version ?? 0) + 1,
         updatedAt: now,
       }
       notesImported++
@@ -621,6 +625,7 @@ type JobStateEntry = {
   shipDateOverride: string | null
   shipDateOverrideNote: string | null
   binderPrinted: boolean
+  version?: number
   notes: JobNote[]
   updatedAt: string
   updatedBy?: string
@@ -639,6 +644,7 @@ export function getBoardStateFile(): Record<string, JobStateEntry> {
       shipDateOverride: v.shipDateOverride,
       shipDateOverrideNote: v.shipDateOverrideNote ?? null,
       binderPrinted: v.binderPrinted,
+      version: v.version,
       notes: v.notes,
       updatedAt: v.updatedAt,
       ...(v.updatedBy ? { updatedBy: v.updatedBy } : {}),
@@ -683,6 +689,7 @@ export function setJobBinderPrinted(
     state[jobNumber] = {
       ...existing,
       binderPrinted,
+      version: (existing.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
       updatedBy: actor?.name,
     }
@@ -704,6 +711,7 @@ export function setJobStatus(jobNumber: string, status: JobStatus, actor?: Actor
     state[jobNumber] = {
       ...existing,
       status,
+      version: (existing.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
       updatedBy: actor?.name,
     }
@@ -736,6 +744,7 @@ export function setShipDateOverride(
           : note !== undefined
             ? (note ?? '').trim() || null
             : (existing.shipDateOverrideNote ?? null),
+      version: (existing.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
       updatedBy: actor?.name,
     }
@@ -766,6 +775,7 @@ export function addNote(jobNumber: string, text: string, actor: Actor): Promise<
     state[jobNumber] = {
       ...existing,
       notes: [...existing.notes, note],
+      version: (existing.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
     }
     writeBoardState(state)
@@ -804,6 +814,7 @@ export function updateNote(
     state[jobNumber] = {
       ...existing,
       notes: existing.notes.map((n) => (n.id === noteId ? updated : n)),
+      version: (existing.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
     }
     writeBoardState(state)
@@ -829,6 +840,7 @@ export function deleteNote(jobNumber: string, noteId: string, actor: Actor): Pro
     state[jobNumber] = {
       ...existing,
       notes: existing.notes.filter((n) => n.id !== noteId),
+      version: (existing.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
     }
     writeBoardState(state)

@@ -6,8 +6,8 @@
 
 ## Current State
 
-- Last completed task: Release folder renamed to `VRSI WallBoard`, Opus review fixed 3 issues (casing, stale comment, hardcoded literal)
-- Next task: None pending — project is in a clean release state
+- Last completed task: Codex 4-issue fix — build failure, restore merge, version increment, Node docs
+- Next task: None pending
 - Blockers: None
 
 ## Active Plan
@@ -24,6 +24,7 @@
 - [x] v0.1.0 GitHub release created (title: "VRSI Wallboard")
 - [x] Release folder renamed from `release\` → `VRSI WallBoard\`
 - [x] Opus review of rename — 3 findings fixed
+- [x] Codex 4-issue fix (build, restore merge, version, Node docs)
 - [ ] Full StorageProvider method implementations (deferred)
 - [ ] SharePoint provider (deferred)
 - [ ] Audit log UI panel (deferred)
@@ -53,9 +54,13 @@
 
 ## Files Modified This Session
 
-- `scripts/windows/Package-Release.ps1` — `$ReleaseDir` renamed to `VRSI WallBoard`, header comment fixed, Write-Host line now uses `Split-Path $ReleaseDir -Leaf`
-- `.gitignore` — `release/` → `VRSI WallBoard/`
-- `scripts/windows/README.md` — updated Package-Release.ps1 description
+- `client/tsconfig.node.json` — added `"outDir": ".tsbuild-node"` so vite.config compiled output no longer lands beside source
+- `.gitignore` — added `client/.tsbuild-node/`, `client/vite.config.js`, `client/vite.config.d.ts`, `shared/src/*.js`, `shared/src/*.d.ts`
+- Deleted from git/disk: `client/vite.config.js`, `client/vite.config.d.ts`, `shared/src/paths.js`, `shared/src/result.js`
+- `server/src/services/boardService.ts` — added `version?: number` to local `JobStateEntry`; pass version through `getBoardStateFile()`; increment version in all 6 mutators and in import functions (only on actual change)
+- `server/src/storage/localProvider.ts` — replaced overwrite `restore()` with merge-based restore (`_mergeFromBackup`); board_state/notes/jobs merged per §7; conflicts logged to audit_log; pre-restore snapshot kept; config skipped
+- `VRSI-WALLBOARD-RULES.md` — Node.js 18+ → 20+ in §1
+- `docs/operations-guide.md` — Node.js 18 → 20 in two places
 
 ## Known Issues Status (§10)
 

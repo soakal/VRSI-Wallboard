@@ -2,7 +2,7 @@
 
 **Covers:** Install · Uninstall · Backup & Restore · Sending Logs for Support  
 **Platform:** Windows 10 / 11 (64-bit)  
-**Requires:** Node.js 18 or newer
+**Requires:** Node.js 20 or newer
 
 ---
 
@@ -21,7 +21,7 @@
 
 | Requirement | Check / Download |
 |-------------|-----------------|
-| Node.js 18+ | `node --version` in PowerShell; download at nodejs.org |
+| Node.js 20+ | `node --version` in PowerShell; download at nodejs.org |
 | npm 9+ | bundled with Node — `npm --version` |
 | Chrome or Edge | For kiosk display |
 

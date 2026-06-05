@@ -68,7 +68,7 @@ NORTH_STAR      = A job board + calendar display that works standalone on
                   with a single config switch — no rewrite required
 TARGET_USERS    = VRSI enterprise staff on Windows machines
 STACK           = React 18 + Vite + TypeScript (frontend)
-                  Node.js 18+ + Express + TypeScript (backend)
+                  Node.js 20+ + Express + TypeScript (backend)
                   SQLite (local) → SharePoint Lists (collaborative)
 DEPLOY_TARGET   = Windows-native (Node.js process + browser kiosk mode)
 STORAGE_MODE    = Local | NetworkShare | SharePoint  ← CONFIRM EACH SESSION
