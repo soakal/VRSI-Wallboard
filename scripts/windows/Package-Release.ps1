@@ -1,10 +1,10 @@
-# Builds the project and creates a self-contained release folder.
-# Copy the release\ folder to any Windows PC and run INSTALL.bat there.
+# Builds the project and creates a self-contained VRSI WallBoard\ folder.
+# Copy the VRSI WallBoard\ folder to any Windows PC and run INSTALL.bat there.
 . "$PSScriptRoot\_common.ps1"
 $ErrorActionPreference = 'Stop'
 
 $SharedDir  = Join-Path $RepoRoot 'shared'
-$ReleaseDir = Join-Path $RepoRoot 'VRSI Wallboard'
+$ReleaseDir = Join-Path $RepoRoot 'VRSI WallBoard'
 
 Write-Host ''
 Write-Host '==========================================' -ForegroundColor Cyan
@@ -91,7 +91,7 @@ Write-Host "  Server   : $serverSize MB  (dist/)"
 Write-Host "  Client   : $clientSize MB  (dist/)"
 Write-Host ''
 Write-Host '  To deploy to a new PC:' -ForegroundColor Cyan
-Write-Host '    1. Copy the entire  VRSI Wallboard\  folder to the target PC'
+Write-Host "    1. Copy the entire  $(Split-Path $ReleaseDir -Leaf)\  folder to the target PC"
 Write-Host '    2. On the target PC, double-click  INSTALL.bat'
 Write-Host '    3. Node.js will be installed automatically if needed'
 Write-Host ''
