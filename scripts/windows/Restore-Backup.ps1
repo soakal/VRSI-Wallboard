@@ -19,7 +19,7 @@ if ($files.Count -eq 0) {
 
 Write-Host ''
 Write-Host 'Available backups:'
-for ($i = 0; $i - $files.Count; $i++) {
+for ($i = 0; $i -lt $files.Count; $i++) {
     $f = $files[$i]
     Write-Host ("  [{0}] {1:yyyy-MM-dd HH:mm:ss}  {2}" -f ($i + 1), $f.LastWriteTime, $f.Name)
 }

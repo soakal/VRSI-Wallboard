@@ -1,4 +1,4 @@
-# VRSI WallBoard — Windows kiosk scripts
+# VRSI WallBoard -- Windows kiosk scripts
 
 ## Easiest (project root)
 
@@ -8,53 +8,47 @@
 | **`ENABLE-STARTUP.bat`** | Register server + kiosk at Windows logon (Admin) |
 | **`UNINSTALL.bat`** | Simple uninstall menu (keep or delete data) |
 
-## More scripts in `scripts\windows\`
+## scripts\windows\ -- all actions
 
-From `scripts\windows\` or repo root **`Start-WallBoard.bat`** (opens menu):
+Open `WallBoard-Menu.bat` for an interactive menu, or run individual scripts:
 
 | Batch file | What it does |
 |------------|----------------|
+| **`WallBoard-Menu.bat`** | Interactive menu for all actions |
 | **`Install-WallBoard.bat`** | Same as root INSTALL.bat |
-| **`WallBoard-Menu.bat`** | Menu for all actions |
-| **`Setup-FirstTime.bat`** | Legacy — use Install-WallBoard.bat instead |
-| **`Install-DataDirs.bat`** | Create `ProgramData` folders |
-| **`Build-Production.bat`** | npm install + build |
-| **`Start-WallBoard.bat`** | Run server on port 3001 |
-| **`Start-Kiosk.bat`** | Fullscreen browser |
-| **`Backup-Now.bat`** | Run backup |
-| **`List-Backups.bat`** | List `wallboard-*.db` files |
-| **`Open-Backups-Folder.bat`** | Open backup folder in Explorer |
-| **`Restore-Backup.bat`** | Restore a backup (stop server first) |
+| **`Build-Production.bat`** | npm install + build client, server, shared |
+| **`Update-WallBoard.bat`** | Pull latest code, rebuild, restart server + browser |
+| **`Start-WallBoard.bat`** | Run server on port 3001 (foreground window) |
+| **`Start-WallBoard-Service.bat`** | Run server silently (Task Scheduler mode) |
+| **`Start-Kiosk.bat`** | Fullscreen Edge/Chrome browser |
 | **`Stop-WallBoard.bat`** | Stop server on port 3001 |
+| **`Backup-Now.bat`** | Run a backup immediately |
+| **`List-Backups.bat`** | List wallboard-*.db backup files |
+| **`Open-Backups-Folder.bat`** | Open backup folder in Explorer |
+| **`Restore-Backup.bat`** | Restore a backup (stops server first) |
 | **`Register-BackupTask.bat`** | Schedule backups every 6h (Admin) |
 | **`Unregister-BackupTask.bat`** | Remove backup schedule (Admin) |
-| **`Register-StartupTasks.bat`** | Start at logon (Admin) |
+| **`Register-StartupTasks.bat`** | Start server + kiosk at logon (Admin) |
 | **`Uninstall-WallBoard.bat`** | Remove tasks + optional data delete |
-
-PowerShell `.ps1` files are still used behind the scenes.
+| **`Open-IT-Report.bat`** | Open System monitor panel in browser |
+| **`Install-DataDirs.bat`** | Create ProgramData folders only |
+| **`Setup-FirstTime.bat`** | Legacy -- use Install-WallBoard.bat instead |
 
 ## One-time setup (kiosk PC)
 
-1. Install **Node.js 18+**
+**Recommended:** double-click `INSTALL.bat` in the project root -- it handles everything.
+
+Manual path:
+1. Install **Node.js 20+**
 2. Copy this project folder to the PC (e.g. `C:\VRSIWallBoard`)
 3. In PowerShell:
 
 ```powershell
 cd "C:\path\to\VRSI Wallboard"
-
-# Data folders
-.\scripts\windows\Install-DataDirs.ps1
-
-# Config — edit ADMIN_TOKEN before going live
-copy server\.env.production.example server\.env
-notepad server\.env
-
-# Optional: copy existing database from dev machine
-# copy \\dev-pc\share\wallboard.db C:\ProgramData\VRSIWallBoard\data\wallboard.db
-
-# Build
-.\scripts\windows\Build-Production.ps1
+.\scripts\windows\Install-WallBoard.ps1
 ```
+
+This creates data folders, generates a random `ADMIN_TOKEN` in `server\.env`, builds the project, and optionally registers startup and backup tasks.
 
 ## Run manually
 
@@ -62,6 +56,14 @@ notepad server\.env
 .\scripts\windows\Start-WallBoard.ps1    # API + UI on http://localhost:3001
 .\scripts\windows\Start-Kiosk.ps1        # Fullscreen browser
 ```
+
+## Updating to a new version
+
+```powershell
+.\scripts\windows\Update-WallBoard.bat   # or choose P from WallBoard-Menu
+```
+
+Pulls latest code from GitHub, rebuilds, restarts the server, and refreshes the kiosk browser.
 
 ## Automated backups (Administrator)
 
@@ -78,14 +80,28 @@ Backups go to `C:\ProgramData\VRSIWallBoard\backups\` (or `BACKUP_DIR` in `.env`
 .\scripts\windows\Register-StartupTasks.ps1
 ```
 
-## Files
+## PowerShell scripts reference
 
 | Script | Purpose |
 |--------|---------|
+| `_common.ps1` | Shared helpers and variables (sourced by all scripts) |
+| `Install-WallBoard.ps1` | Full install: dirs + env + build + optional tasks |
 | `Install-DataDirs.ps1` | Create `ProgramData\VRSIWallBoard\` folders |
-| `Build-Production.ps1` | `npm install` + build client & server |
-| `Start-WallBoard.ps1` | Run production server |
-| `Start-Kiosk.ps1` | Edge/Chrome kiosk mode |
-| `Invoke-WallBoardBackup.ps1` | POST `/api/storage/backup` |
-| `Register-BackupTask.ps1` | Task Scheduler every 6 hours |
-| `Register-StartupTasks.ps1` | Server + kiosk at user logon |
+| `Build-Production.ps1` | `npm install` + build shared, client, server |
+| `Update-WallBoard.ps1` | Pull + rebuild + restart server + reload browser |
+| `Package-Release.ps1` | Build and bundle release\ folder for deployment |
+| `Start-WallBoard.ps1` | Run production server (foreground) |
+| `Start-WallBoard-Service.ps1` | Run server silently (Task Scheduler / startup) |
+| `Start-Kiosk.ps1` | Launch Edge/Chrome in kiosk mode |
+| `Start-KioskAfterDelay.ps1` | Kiosk launch with a startup delay |
+| `Stop-WallBoard.ps1` | Stop server on port 3001 |
+| `Invoke-WallBoardBackup.ps1` | Trigger backup via API |
+| `Register-BackupTask.ps1` | Task Scheduler backup every 6h |
+| `Unregister-BackupTask.ps1` | Remove backup task |
+| `Register-StartupTasks.ps1` | Register server + kiosk at logon |
+| `_Register-Startup.ps1` | Internal -- called by Register-StartupTasks.ps1 |
+| `Enable-Startup.ps1` | Enable startup tasks |
+| `List-Backups.ps1` | List backup files |
+| `Open-Backups-Folder.ps1` | Open backup folder in Explorer |
+| `Restore-Backup.ps1` | Interactive backup restore |
+| `Uninstall-WallBoard.ps1` | Remove tasks + optional data delete |
