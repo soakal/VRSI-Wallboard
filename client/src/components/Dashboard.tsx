@@ -226,8 +226,16 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Status bar — desktop only (keyboard hints + display mode) */}
       <footer className="hidden md:flex flex-shrink-0 items-center justify-between border-t border-white/5 bg-black/20 px-5 py-1.5">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <DisplayModePicker mode={displayMode} onChange={onSetDisplayMode} />
+          <a
+            href="/api/board/export/ship-dates.ics"
+            download="vrsi-ship-dates.ics"
+            className="text-[11px] text-slate-600 hover:text-slate-400 transition-colors"
+            title="Download ship dates as .ics to import into Outlook or any calendar app"
+          >
+            ↓ Export Ship Dates
+          </a>
         </div>
         <div className="flex items-center gap-4 text-[11px] text-slate-600">
           <button

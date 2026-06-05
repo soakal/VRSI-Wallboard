@@ -15,13 +15,64 @@ import {
   addNote,
   updateNote,
   deleteNote,
+  formatJobPmLabel,
 } from '../services/boardService.js'
+import { buildIcs } from '../utils/icsGenerator.js'
 import { STATUS_ORDER } from '@vrsi/wallboard-shared'
 import type { Job, JobStatus, Actor } from '@vrsi/wallboard-shared'
 import { logger } from '../utils/logger.js'
 import { requireAdminToken } from '../middleware/adminAuth.js'
 
 export const boardRouter = Router()
+
+// ---------------------------------------------------------------------------
+// GET /export/ship-dates.ics  — public, no admin token needed
+// Ship dates are already visible on the wallboard display; this is a
+// read-only download so a plain browser <a href> can trigger it without
+// custom auth headers.
+// ---------------------------------------------------------------------------
+boardRouter.get('/export/ship-dates.ics', (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const jobs = getMergedJobs()
+    const events = jobs
+      // Only YYYY-MM-DD dates produce valid all-day events. A ship-date override
+      // is stored unvalidated, so guard against empty/malformed strings here —
+      // otherwise one bad date would make new Date(...).toISOString() throw and
+      // fail the entire export.
+      .filter(
+        j =>
+          j.status !== 'shipped' &&
+          typeof j.effectiveShipDate === 'string' &&
+          /^\d{4}-\d{2}-\d{2}$/.test(j.effectiveShipDate),
+      )
+      .map(j => {
+        const dateStr = j.effectiveShipDate as string
+        const dtstart = dateStr.replace(/-/g, '')
+        const d = new Date(`${dateStr}T00:00:00Z`)
+        d.setUTCDate(d.getUTCDate() + 1)
+        const dtend = d.toISOString().slice(0, 10).replace(/-/g, '')
+        const customer = typeof j.customer === 'string' ? j.customer.trim() : ''
+        const pmLabel = formatJobPmLabel(typeof j.pm === 'string' ? j.pm : String(j.pm ?? ''))
+        const subjectParts = [`#${j.jobNumber}`]
+        if (customer) subjectParts.push(customer)
+        subjectParts.push(pmLabel)
+        return {
+          uid: `${j.jobNumber}@vrsi-wallboard`,
+          dtstart,
+          dtend,
+          summary: subjectParts.join(' · '),
+          description: `Status: ${j.status}`,
+        }
+      })
+    const ics = buildIcs(events)
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="vrsi-ship-dates.ics"')
+    res.send(ics)
+  } catch (err: unknown) {
+    next(err)
+  }
+})
+
 boardRouter.use(requireAdminToken)
 
 // ---------------------------------------------------------------------------
