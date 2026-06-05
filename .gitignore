@@ -15,5 +15,5 @@ VRSI WallBoard/
 client/.tsbuild-node/
 client/vite.config.js
 client/vite.config.d.ts
-shared/src/*.js
-shared/src/*.d.ts
+shared/src/**/*.js
+shared/src/**/*.d.ts

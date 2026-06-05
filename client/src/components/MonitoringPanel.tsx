@@ -4,6 +4,7 @@ import {
   fetchBackups,
   fetchSecurityReport,
   restoreBackup,
+  RestoreConflictError,
   runBackupNow,
   type AuditEntry,
   type BackupFile,
@@ -114,7 +115,17 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
       await restoreBackup(b.file);
       window.location.reload();
     } catch (err) {
-      setBackupError(err instanceof Error ? err.message : 'Restore failed');
+      if (err instanceof RestoreConflictError) {
+        const sample = err.conflicts
+          .slice(0, 3)
+          .map((c) => `${c.jobNumber} (backup v${c.backup.version}, live v${c.live.version})`)
+          .join('; ');
+        setBackupError(
+          `${err.message}${sample ? ` Conflicts: ${sample}.` : ''} Use the Activity log for details.`
+        );
+      } else {
+        setBackupError(err instanceof Error ? err.message : 'Restore failed');
+      }
     } finally {
       setBackupBusy(false);
     }

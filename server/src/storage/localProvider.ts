@@ -8,7 +8,7 @@ import { logger } from '../utils/logger.js';
 import { ok, err, type Result } from '../lib/result.js';
 import type { BoardConfig, ImportResult, Job, JobNote, JobStatus } from '@vrsi/wallboard-shared';
 import { DEFAULT_BOARD_CONFIG as DEFAULT_BC } from '@vrsi/wallboard-shared';
-import type { StorageMode, StorageProvider } from './storageTypes.js';
+import type { RestoreConflict, RestoreResult, StorageMode, StorageProvider } from './storageTypes.js';
 import { SCHEMA_SQL } from './schema.js';
 import type { BoardPersistence, JobStateEntry, JobsFile } from './boardPersistence.js';
 import { migrateJsonToSqliteIfNeeded } from './migrate.js';
@@ -434,7 +434,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     return listBackupFilesOnDisk();
   }
 
-  async restore(source: string): Promise<Result<{ preRestoreFile?: string; conflicts: number }>> {
+  async restore(source: string): Promise<Result<RestoreResult>> {
     if (!fs.existsSync(source)) return err('not_found', `Backup not found: ${source}`);
     const dest = dbPath(this.dataDir);
     const backupDir = resolveBackupDir();
@@ -454,14 +454,14 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         throw new Error(`${openErr}${hint}`);
       }
 
-      let conflicts = 0;
+      let conflicts: RestoreConflict[] = [];
       try {
         conflicts = this._mergeFromBackup(srcDb, source);
       } finally {
         srcDb.close();
       }
 
-      this.logAudit('restore', `Merged from backup ${source} (${conflicts} conflict(s))`, source, true);
+      this.logAudit('restore', `Merged from backup ${source}`, source, true);
       return ok({ preRestoreFile, conflicts });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -475,16 +475,33 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
    * Merge board_state, notes, and jobs from a backup database into the live database.
    * Rules (§7):
    *   board_state — backup-only record → insert; same version → skip; one side newer → take it;
-   *                 both differ → newest-updatedAt wins, log conflict.
+   *                 both differ within the conflict window → block restore for user resolution.
    *   notes       — backup note not in live → insert; exists in both → take newer updatedAt.
    *   jobs        — backup job not in live → insert; exists in both → skip (jobs come from XLSM).
    *   jobs_import_meta — take the row with newer imported_at.
    *   config      — skip (preserve current user settings).
-   * Returns the number of conflicts auto-resolved (for the caller to surface to the user).
+   * Returns conflicts that blocked the merge. When conflicts exist, no data is merged.
    */
-  private _mergeFromBackup(srcDb: Database.Database, sourcePath: string): number {
-    let conflicts = 0;
-    const now = new Date().toISOString();
+  private _mergeFromBackup(srcDb: Database.Database, sourcePath: string): RestoreConflict[] {
+    const conflicts = this._findRestoreConflicts(srcDb);
+    if (conflicts.length > 0) {
+      for (const conflict of conflicts) {
+        this.logAudit(
+          'conflict',
+          `Restore conflict on job ${conflict.jobNumber}: ` +
+            `backup v${conflict.backup.version} (${conflict.backup.updatedAt}) vs ` +
+            `live v${conflict.live.version} (${conflict.live.updatedAt}) — user resolution required`,
+          sourcePath
+        );
+      }
+      this.logAudit(
+        'restore',
+        `Restore blocked: ${conflicts.length} conflict(s) require user resolution.`,
+        sourcePath,
+        false
+      );
+      return conflicts;
+    }
 
     const tx = this.db.transaction(() => {
       // ── Jobs ────────────────────────────────────────────────────────────────
@@ -569,22 +586,6 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         if (src.version === live.version) continue; // identical — skip
 
         const srcNewer = src.updated_at > live.updated_at;
-        const bothModified = src.version !== live.version &&
-          Math.abs(
-            new Date(src.updated_at).getTime() - new Date(live.updated_at).getTime()
-          ) < 60_000; // within 1 minute = likely concurrent edits
-
-        if (bothModified) {
-          conflicts++;
-          this.logAudit(
-            'conflict',
-            `Restore conflict on job ${src.job_number}: ` +
-              `backup v${src.version} (${src.updated_at}) vs live v${live.version} (${live.updated_at}) — ` +
-              `took ${srcNewer ? 'backup' : 'live'} (newer updatedAt)`,
-            sourcePath
-          );
-        }
-
         if (srcNewer) {
           upsertState.run(
             src.job_number, src.status, src.ship_date_override,
@@ -635,11 +636,50 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     // Write the merge-complete audit entry outside the transaction so it is committed separately.
     this.logAudit(
       'restore',
-      `Merge complete: ${conflicts} conflict(s) auto-resolved (newest-wins). Pre-restore snapshot saved.`,
+      'Merge complete. Pre-restore snapshot saved.',
       sourcePath,
       true
     );
 
+    return conflicts;
+  }
+
+  private _findRestoreConflicts(srcDb: Database.Database): RestoreConflict[] {
+    type StateRow = {
+      job_number: string; status: string; ship_date_override: string | null;
+      ship_date_override_note: string | null; binder_printed: number;
+      version: number; updated_at: string; updated_by: string | null;
+    };
+    const srcStates = srcDb.prepare('SELECT * FROM board_state').all() as StateRow[];
+    const liveStates = new Map(
+      (this.db.prepare('SELECT * FROM board_state').all() as StateRow[]).map(
+        (r) => [r.job_number, r]
+      )
+    );
+
+    const conflicts: RestoreConflict[] = [];
+    for (const src of srcStates) {
+      const live = liveStates.get(src.job_number);
+      if (!live || src.version === live.version) continue;
+      const backupTime = new Date(src.updated_at).getTime();
+      const liveTime = new Date(live.updated_at).getTime();
+      if (!Number.isFinite(backupTime) || !Number.isFinite(liveTime)) continue;
+      const bothModified = Math.abs(backupTime - liveTime) < 60_000;
+      if (!bothModified) continue;
+      conflicts.push({
+        jobNumber: src.job_number,
+        backup: {
+          version: src.version,
+          updatedAt: src.updated_at,
+          status: src.status,
+        },
+        live: {
+          version: live.version,
+          updatedAt: live.updated_at,
+          status: live.status,
+        },
+      });
+    }
     return conflicts;
   }
 

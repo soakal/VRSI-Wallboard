@@ -18,6 +18,25 @@ export interface BackupFileInfo {
   createdAt: string;
 }
 
+export interface RestoreConflict {
+  jobNumber: string;
+  backup: {
+    version: number;
+    updatedAt: string;
+    status: string;
+  };
+  live: {
+    version: number;
+    updatedAt: string;
+    status: string;
+  };
+}
+
+export interface RestoreResult {
+  preRestoreFile?: string;
+  conflicts: RestoreConflict[];
+}
+
 export interface StorageProvider {
   getJob(jobNumber: string): Promise<Result<BoardJob>>;
   listJobs(filter?: JobFilter): Promise<Result<BoardJob[]>>;
@@ -34,6 +53,6 @@ export interface StorageProvider {
     options?: { trigger?: 'manual' | 'scheduled' | 'browser_close' | 'server_shutdown' }
   ): Promise<Result<BackupFileInfo>>;
   listBackups(): BackupFileInfo[];
-  restore(source: string): Promise<Result<{ preRestoreFile?: string }>>;
+  restore(source: string): Promise<Result<RestoreResult>>;
   getStatus(): Promise<Result<{ mode: StorageMode; healthy: boolean; dbPath: string }>>;
 }

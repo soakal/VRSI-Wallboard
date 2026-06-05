@@ -103,10 +103,25 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
     res.status(500).json({ error: result.error });
     return;
   }
+  if (result.data.conflicts.length > 0) {
+    res.status(409).json({
+      error: {
+        code: 'restore_conflict',
+        message: `${result.data.conflicts.length} restore conflict(s) require user resolution. Live data was not changed.`,
+      },
+      data: {
+        restoredFrom: source,
+        preRestoreFile: result.data.preRestoreFile ?? null,
+        conflicts: result.data.conflicts,
+      },
+    });
+    return;
+  }
   res.json({
     data: {
       restoredFrom: source,
       preRestoreFile: result.data.preRestoreFile ?? null,
+      conflicts: [],
       message: 'Database restored. Reload the page to see updated data.',
     },
   });

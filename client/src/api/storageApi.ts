@@ -50,6 +50,32 @@ export interface BackupsResponse {
   backups: BackupFile[];
 }
 
+export interface RestoreConflict {
+  jobNumber: string;
+  backup: {
+    version: number;
+    updatedAt: string;
+    status: string;
+  };
+  live: {
+    version: number;
+    updatedAt: string;
+    status: string;
+  };
+}
+
+export class RestoreConflictError extends Error {
+  conflicts: RestoreConflict[];
+  preRestoreFile: string | null;
+
+  constructor(message: string, conflicts: RestoreConflict[], preRestoreFile: string | null) {
+    super(message);
+    this.name = 'RestoreConflictError';
+    this.conflicts = conflicts;
+    this.preRestoreFile = preRestoreFile;
+  }
+}
+
 export async function fetchBackups(): Promise<BackupsResponse> {
   const res = await fetch('/api/storage/backups');
   if (!res.ok) throw new Error('Failed to list backups');
@@ -64,7 +90,7 @@ export async function runBackupNow(): Promise<{ file: string; path: string; size
   return json.data;
 }
 
-export async function restoreBackup(file: string): Promise<{ preRestoreFile: string | null }> {
+export async function restoreBackup(file: string): Promise<{ preRestoreFile: string | null; conflicts: RestoreConflict[] }> {
   const res = await fetch('/api/storage/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -73,6 +99,7 @@ export async function restoreBackup(file: string): Promise<{ preRestoreFile: str
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as {
       error?: { message?: string; code?: string } | string;
+      data?: { conflicts?: RestoreConflict[]; preRestoreFile?: string | null };
     };
     const e = err.error;
     const msg =
@@ -81,8 +108,11 @@ export async function restoreBackup(file: string): Promise<{ preRestoreFile: str
         : typeof e === 'string'
           ? e
           : 'Restore failed';
+    if (typeof e === 'object' && e?.code === 'restore_conflict') {
+      throw new RestoreConflictError(msg, err.data?.conflicts ?? [], err.data?.preRestoreFile ?? null);
+    }
     throw new Error(msg);
   }
-  const json = (await res.json()) as { data: { preRestoreFile: string | null } };
+  const json = (await res.json()) as { data: { preRestoreFile: string | null; conflicts: RestoreConflict[] } };
   return json.data;
 }

@@ -6,7 +6,7 @@
 
 ## Current State
 
-- Last completed task: Codex 4-issue fix — build failure, restore merge, version increment, Node docs
+- Last completed task: Restore conflict blocking + shared artifact cleanup
 - Next task: None pending
 - Blockers: None
 
@@ -25,6 +25,7 @@
 - [x] Release folder renamed from `release\` → `VRSI WallBoard\`
 - [x] Opus review of rename — 3 findings fixed
 - [x] Codex 4-issue fix (build, restore merge, version, Node docs)
+- [x] Restore conflict blocking + shared artifact cleanup
 - [ ] Full StorageProvider method implementations (deferred)
 - [ ] SharePoint provider (deferred)
 - [ ] Audit log UI panel (deferred)
@@ -61,6 +62,15 @@
 - `server/src/storage/localProvider.ts` — replaced overwrite `restore()` with merge-based restore (`_mergeFromBackup`); board_state/notes/jobs merged per §7; conflicts logged to audit_log; pre-restore snapshot kept; config skipped
 - `VRSI-WALLBOARD-RULES.md` — Node.js 18+ → 20+ in §1
 - `docs/operations-guide.md` — Node.js 18 → 20 in two places
+- `shared/src/index.ts` — removed Node-only `paths.ts` export from the shared browser-facing barrel
+- `shared/src/storage/types.js`, `shared/src/types/board.js` — deleted stale generated artifacts from source tree
+- `.gitignore` — changed shared generated-file ignores to cover nested `shared/src/**/*.js` and `shared/src/**/*.d.ts`
+- `server/src/storage/storageTypes.ts` — added restore conflict/result types and updated `restore()` return shape
+- `shared/src/storage/types.ts` — mirrored restore conflict/result types in the shared StorageProvider contract
+- `server/src/storage/localProvider.ts` — restore now detects close-timestamp version conflicts before merge, logs them, and blocks data changes for user resolution instead of auto-resolving
+- `server/src/routes/storage.ts` — returns `409 restore_conflict` with conflict details when restore is blocked
+- `client/src/api/storageApi.ts` — added typed restore conflict error handling
+- `client/src/components/MonitoringPanel.tsx` — Backup tab reports restore conflicts with sample job/version details
 
 ## Known Issues Status (§10)
 
