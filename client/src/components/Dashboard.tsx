@@ -227,7 +227,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <a
             href="/api/board/export/ship-dates.ics"
             download="vrsi-ship-dates.ics"
-            className="text-xs text-slate-400 hover:text-white transition-colors"
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
             title="Download ship dates as .ics to import into Outlook or any calendar app"
           >
             ↓ Export Ship Dates
@@ -273,7 +273,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <a
             href="/api/board/export/ship-dates.ics"
             download="vrsi-ship-dates.ics"
-            className="text-xs text-slate-400 hover:text-white transition-colors"
+            className="flex items-center bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors text-xs font-medium"
             title="Download ship dates as .ics to import into Outlook or any calendar app"
           >
             ↓ Export
