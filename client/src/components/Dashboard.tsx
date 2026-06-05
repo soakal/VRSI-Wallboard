@@ -233,35 +233,35 @@ const Dashboard: React.FC<DashboardProps> = ({
             ↓ Export Ship Dates
           </a>
         </div>
-        <div className="flex items-center gap-4 text-xs text-slate-400">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onOpenSettings}
-            className="hover:text-white transition-colors"
-            title="Open Settings"
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+            title="Open Settings (Ctrl+S)"
           >
-            Ctrl+S Settings
+            ⚙ Settings
           </button>
-          <span className="text-slate-600">|</span>
           <button
             type="button"
             onClick={onOpenFiles}
-            className="hover:text-white transition-colors"
-            title="Open Files"
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+            title="Open Files (Ctrl+F)"
           >
-            Ctrl+F Files
+            Files
           </button>
-          <span className="text-slate-600">|</span>
           <button
             type="button"
             onClick={() => setIsMonitoringOpen(true)}
-            className="hover:text-white transition-colors"
-            title="IT safety report and activity log"
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+            title="System monitor (Ctrl+M)"
           >
-            Ctrl+M System
+            System
           </button>
-          <span className="text-slate-600">|</span>
-          <Link to="/board" className="hover:text-white transition-colors">
+          <Link
+            to="/board"
+            className="rounded-md px-2.5 py-1 text-xs font-semibold text-white bg-blue-600/70 border border-blue-500/40 hover:bg-blue-600 transition-colors"
+          >
             Projects
           </Link>
         </div>
