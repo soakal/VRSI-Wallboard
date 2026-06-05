@@ -4,7 +4,7 @@
 $ErrorActionPreference = 'Stop'
 
 $SharedDir  = Join-Path $RepoRoot 'shared'
-$ReleaseDir = Join-Path $RepoRoot 'release'
+$ReleaseDir = Join-Path $RepoRoot 'VRSI Wallboard'
 
 Write-Host ''
 Write-Host '==========================================' -ForegroundColor Cyan
@@ -91,7 +91,7 @@ Write-Host "  Server   : $serverSize MB  (dist/)"
 Write-Host "  Client   : $clientSize MB  (dist/)"
 Write-Host ''
 Write-Host '  To deploy to a new PC:' -ForegroundColor Cyan
-Write-Host '    1. Copy the entire  release\  folder to the target PC'
+Write-Host '    1. Copy the entire  VRSI Wallboard\  folder to the target PC'
 Write-Host '    2. On the target PC, double-click  INSTALL.bat'
 Write-Host '    3. Node.js will be installed automatically if needed'
 Write-Host ''

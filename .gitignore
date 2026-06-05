@@ -11,4 +11,4 @@ backups/
 *.tsbuildinfo
 *.migrated
 server/data/
-release/
+VRSI Wallboard/

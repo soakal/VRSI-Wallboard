@@ -89,7 +89,7 @@ Backups go to `C:\ProgramData\VRSIWallBoard\backups\` (or `BACKUP_DIR` in `.env`
 | `Install-DataDirs.ps1` | Create `ProgramData\VRSIWallBoard\` folders |
 | `Build-Production.ps1` | `npm install` + build shared, client, server |
 | `Update-WallBoard.ps1` | Pull + rebuild + restart server + reload browser |
-| `Package-Release.ps1` | Build and bundle release\ folder for deployment |
+| `Package-Release.ps1` | Build and bundle `VRSI Wallboard\` folder for deployment |
 | `Start-WallBoard.ps1` | Run production server (foreground) |
 | `Start-WallBoard-Service.ps1` | Run server silently (Task Scheduler / startup) |
 | `Start-Kiosk.ps1` | Launch Edge/Chrome in kiosk mode |
