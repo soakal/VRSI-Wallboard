@@ -41,6 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const navigate = useNavigate();
   const setIsMonitoringOpen = useAppStore((s) => s.setIsMonitoringOpen);
+  const setDisplayMode = useAppStore((s) => s.setDisplayMode);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [sunsetIso, setSunsetIso] = useState<string | null>(null);
   const [isDimmed, setIsDimmed] = useState(false);
@@ -223,7 +224,22 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Status bar — desktop only (keyboard hints + export) */}
       <footer className="hidden md:flex flex-shrink-0 items-center justify-between border-t border-white/5 bg-black/20 px-5 py-1.5">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {(['day', 'week', 'month'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setDisplayMode(m)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium border transition-colors ${
+                displayMode === m
+                  ? 'text-white bg-blue-600/70 border-blue-500/40 hover:bg-blue-600'
+                  : 'text-slate-300 bg-white/5 border-white/10 hover:bg-white/10 hover:text-white'
+              }`}
+              title={`${m.charAt(0).toUpperCase() + m.slice(1)} view (${m.charAt(0).toUpperCase()})`}
+            >
+              {m.charAt(0).toUpperCase() + m.slice(1)}
+            </button>
+          ))}
           <a
             href="/api/board/export/ship-dates.ics"
             download="vrsi-ship-dates.ics"
@@ -270,14 +286,20 @@ const Dashboard: React.FC<DashboardProps> = ({
       {/* Mobile bottom nav bar */}
       <div className="md:hidden flex flex-shrink-0 items-center justify-between px-3 py-2 bg-[#13171f] border-t border-slate-800">
         <div className="flex gap-1">
-          <a
-            href="/api/board/export/ship-dates.ics"
-            download="vrsi-ship-dates.ics"
-            className="flex items-center bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors text-xs font-medium"
-            title="Download ship dates as .ics to import into Outlook or any calendar app"
-          >
-            ↓ Export
-          </a>
+          {(['day', 'week', 'month'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setDisplayMode(m)}
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                displayMode === m
+                  ? 'bg-blue-600/70 text-white'
+                  : 'bg-slate-700/60 hover:bg-slate-600 text-slate-200'
+              }`}
+            >
+              {m.charAt(0).toUpperCase() + m.slice(1)}
+            </button>
+          ))}
         </div>
         <div className="flex items-center gap-1.5">
           <Link to="/board" className="flex items-center bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors text-xs font-medium">
