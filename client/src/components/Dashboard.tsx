@@ -4,7 +4,6 @@ import type { CalendarEvent, AppConfig, SharePointFile } from "../types/index";
 import Clock from "./Clock";
 import NextEventBadge from "./NextEventBadge";
 import WeatherWidget from "./WeatherWidget";
-import { DisplayModePicker } from "./DisplayModePicker";
 import CalendarView from "./CalendarView";
 import AgendaRail from "./AgendaRail";
 import RecentFilesWidget from "./RecentFilesWidget";
@@ -21,7 +20,6 @@ interface DashboardProps {
   calendarError?: boolean;
   needsReauth?: boolean;
   displayMode: 'day' | 'week' | 'month';
-  onSetDisplayMode: (mode: 'day' | 'week' | 'month') => void;
   onOpenSettings: () => void;
   onOpenFiles: () => void;
 }
@@ -38,7 +36,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   calendarError = false,
   needsReauth = false,
   displayMode,
-  onSetDisplayMode,
   onOpenSettings,
   onOpenFiles,
 }) => {
@@ -224,48 +221,47 @@ const Dashboard: React.FC<DashboardProps> = ({
         )}
       </div>
 
-      {/* Status bar — desktop only (keyboard hints + display mode) */}
+      {/* Status bar — desktop only (keyboard hints + export) */}
       <footer className="hidden md:flex flex-shrink-0 items-center justify-between border-t border-white/5 bg-black/20 px-5 py-1.5">
         <div className="flex items-center gap-3">
-          <DisplayModePicker mode={displayMode} onChange={onSetDisplayMode} />
           <a
             href="/api/board/export/ship-dates.ics"
             download="vrsi-ship-dates.ics"
-            className="text-[11px] text-slate-600 hover:text-slate-400 transition-colors"
+            className="text-xs text-slate-400 hover:text-white transition-colors"
             title="Download ship dates as .ics to import into Outlook or any calendar app"
           >
             ↓ Export Ship Dates
           </a>
         </div>
-        <div className="flex items-center gap-4 text-[11px] text-slate-600">
+        <div className="flex items-center gap-4 text-xs text-slate-400">
           <button
             type="button"
             onClick={onOpenSettings}
-            className="hover:text-slate-400 transition-colors"
+            className="hover:text-white transition-colors"
             title="Open Settings"
           >
             Ctrl+S Settings
           </button>
-          <span>|</span>
+          <span className="text-slate-600">|</span>
           <button
             type="button"
             onClick={onOpenFiles}
-            className="hover:text-slate-400 transition-colors"
+            className="hover:text-white transition-colors"
             title="Open Files"
           >
             Ctrl+F Files
           </button>
-          <span>|</span>
+          <span className="text-slate-600">|</span>
           <button
             type="button"
             onClick={() => setIsMonitoringOpen(true)}
-            className="hover:text-slate-400 transition-colors"
+            className="hover:text-white transition-colors"
             title="IT safety report and activity log"
           >
             Ctrl+M System
           </button>
-          <span>|</span>
-          <Link to="/board" className="hover:text-slate-400 transition-colors">
+          <span className="text-slate-600">|</span>
+          <Link to="/board" className="hover:text-white transition-colors">
             Projects
           </Link>
         </div>
@@ -274,7 +270,14 @@ const Dashboard: React.FC<DashboardProps> = ({
       {/* Mobile bottom nav bar */}
       <div className="md:hidden flex flex-shrink-0 items-center justify-between px-3 py-2 bg-[#13171f] border-t border-slate-800">
         <div className="flex gap-1">
-          <DisplayModePicker mode={displayMode} onChange={onSetDisplayMode} />
+          <a
+            href="/api/board/export/ship-dates.ics"
+            download="vrsi-ship-dates.ics"
+            className="text-xs text-slate-400 hover:text-white transition-colors"
+            title="Download ship dates as .ics to import into Outlook or any calendar app"
+          >
+            ↓ Export
+          </a>
         </div>
         <div className="flex items-center gap-1.5">
           <Link to="/board" className="flex items-center bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors text-xs font-medium">

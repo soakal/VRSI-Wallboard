@@ -161,8 +161,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
             <SectionHeader label="Display" isOpen={openSections.display} onToggle={() => toggleSection("display")} />
             {openSections.display && (
               <div className="mt-2 space-y-0.5">
-                <SelectField label="Calendar view" value={local.displayMode} onChange={(v) => set("displayMode", v as AppConfig["displayMode"])}
-                  options={[{ value: "day", label: "Day" },{ value: "week", label: "Week" },{ value: "month", label: "Month" }]} />
+                <div className="mb-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium text-white">Calendar view</span>
+                      <p className="text-[11px] text-slate-400 mt-0.5">How the dashboard calendar is shown</p>
+                    </div>
+                    <select value={local.displayMode} onChange={(e) => set("displayMode", e.target.value as AppConfig["displayMode"])}
+                      className="rounded-lg bg-white/5 border border-white/10 text-sm text-slate-200 px-2 py-1.5 focus:outline-none focus:border-blue-500/50 hover:border-white/20 transition-colors min-w-0">
+                      <option value="day" className="bg-[#1e2536]">Day</option>
+                      <option value="week" className="bg-[#1e2536]">Week</option>
+                      <option value="month" className="bg-[#1e2536]">Month</option>
+                    </select>
+                  </div>
+                </div>
                 <SelectField label="Timezone" value={local.timezone} onChange={(v) => set("timezone", v)} options={timezoneOptions} />
                 <Toggle checked={local.showWeekends} onChange={(v) => set("showWeekends", v)} label="Show weekends" />
                 <SelectField label="Day start" value={String(local.startHour)} onChange={(v) => set("startHour", Number(v))} options={hourOptions.slice(0, 20)} />

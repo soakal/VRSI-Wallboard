@@ -104,6 +104,13 @@ function AppInner() {
     setConfig(config);
   }, [config, setConfig]);
 
+  // Drive the live calendar view from the persisted Calendar View setting.
+  // The setting lives in config.displayMode (edited in the Settings panel);
+  // keep the store's displayMode in sync so saving the setting takes effect live.
+  useEffect(() => {
+    setDisplayMode(config.displayMode);
+  }, [config.displayMode, setDisplayMode]);
+
   // Apply dark class to document root
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -189,7 +196,6 @@ function AppInner() {
                 calendarError={calendarError}
                 needsReauth={needsReauth}
                 displayMode={displayMode}
-                onSetDisplayMode={setDisplayMode}
                 onOpenSettings={() => setIsSettingsOpen(true)}
                 onOpenFiles={() => setIsFilesOpen(true)}
               />
