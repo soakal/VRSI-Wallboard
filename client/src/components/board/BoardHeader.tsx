@@ -7,7 +7,7 @@ export function BoardHeader() {
   const { jobs } = useBoardJobs()
   const { config } = useBoardConfig()
   const { users } = useBoardUsers()
-  const { activeUser, setActiveUser, setIsMonitoringOpen } = useAppStore()
+  const { activeUser, setActiveUser } = useAppStore()
 
   const projectJobs = filterJobsForTab(jobs, 'project', config)
   const spareJobs = filterJobsForTab(jobs, 'spare-parts', config)
@@ -51,14 +51,6 @@ export function BoardHeader() {
             ))}
           </select>
 
-          <button
-            type="button"
-            onClick={() => setIsMonitoringOpen(true)}
-            className="text-slate-500 hover:text-slate-300 text-xs transition-colors border border-slate-700 rounded px-2 py-1"
-            title="Backups, IT report, activity log (Ctrl+M)"
-          >
-            System
-          </button>
         </div>
       </div>
 
