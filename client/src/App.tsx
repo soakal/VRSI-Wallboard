@@ -191,8 +191,8 @@ function AppInner() {
           <span>
             Update available: <strong>{updateInfo.releaseName || updateInfo.latestVersion}</strong>
             {' '}— you are on v{updateInfo.currentVersion}. Run{' '}
-            <code className="bg-blue-800/60 px-1 rounded">git pull &amp;&amp; npm run build</code>
-            {' '}then restart to update.
+            <code className="bg-blue-800/60 px-1 rounded">Update-WallBoard.bat</code>
+            {' '}from the scripts\windows folder to update.
             {updateInfo.releaseUrl && (
               <a
                 href={updateInfo.releaseUrl}
