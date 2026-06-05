@@ -1,4 +1,4 @@
-import { NavLink, Link } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useBoardJobs, useBoardConfig, useBoardUsers } from '../../hooks/useBoard'
 import { useAppStore } from '../../store/appStore'
 import { tabColor, filterJobsForTab } from './boardColors'
@@ -59,12 +59,6 @@ export function BoardHeader() {
           >
             System
           </button>
-          <Link
-            to="/"
-            className="text-slate-500 hover:text-slate-300 text-sm transition-colors"
-          >
-            &larr; Calendar
-          </Link>
         </div>
       </div>
 
