@@ -222,24 +222,19 @@ const Dashboard: React.FC<DashboardProps> = ({
         )}
       </div>
 
-      {/* Status bar — desktop only (keyboard hints + export) */}
+      {/* Status bar — desktop only */}
       <footer className="hidden md:flex flex-shrink-0 items-center justify-between border-t border-white/5 bg-black/20 px-5 py-1.5">
         <div className="flex items-center gap-2">
-          {(['day', 'week', 'month'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setDisplayMode(m)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium border transition-colors ${
-                displayMode === m
-                  ? 'text-white bg-blue-600/70 border-blue-500/40 hover:bg-blue-600'
-                  : 'text-slate-300 bg-white/5 border-white/10 hover:bg-white/10 hover:text-white'
-              }`}
-              title={`${m.charAt(0).toUpperCase() + m.slice(1)} view (${m.charAt(0).toUpperCase()})`}
-            >
-              {m.charAt(0).toUpperCase() + m.slice(1)}
-            </button>
-          ))}
+          <select
+            value={displayMode}
+            onChange={(e) => setDisplayMode(e.target.value as 'day' | 'week' | 'month')}
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-[#1a1f2e] border border-white/10 hover:border-white/20 focus:outline-none transition-colors cursor-pointer"
+            title="Switch calendar view (D/W/M)"
+          >
+            <option value="day">Day</option>
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+          </select>
           <a
             href="/api/board/export/ship-dates.ics"
             download="vrsi-ship-dates.ics"
@@ -274,9 +269,12 @@ const Dashboard: React.FC<DashboardProps> = ({
           >
             System
           </button>
+          <span className="rounded-md px-2.5 py-1 text-xs font-semibold text-white bg-blue-600/70 border border-blue-500/40">
+            Calendar
+          </span>
           <Link
             to="/board"
-            className="rounded-md px-2.5 py-1 text-xs font-semibold text-white bg-blue-600/70 border border-blue-500/40 hover:bg-blue-600 transition-colors"
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
           >
             Projects
           </Link>
@@ -285,23 +283,21 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Mobile bottom nav bar */}
       <div className="md:hidden flex flex-shrink-0 items-center justify-between px-3 py-2 bg-[#13171f] border-t border-slate-800">
-        <div className="flex gap-1">
-          {(['day', 'week', 'month'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setDisplayMode(m)}
-              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                displayMode === m
-                  ? 'bg-blue-600/70 text-white'
-                  : 'bg-slate-700/60 hover:bg-slate-600 text-slate-200'
-              }`}
-            >
-              {m.charAt(0).toUpperCase() + m.slice(1)}
-            </button>
-          ))}
+        <div className="flex gap-1.5">
+          <select
+            value={displayMode}
+            onChange={(e) => setDisplayMode(e.target.value as 'day' | 'week' | 'month')}
+            className="bg-slate-700/60 border border-slate-600 text-slate-200 px-2 py-1.5 rounded text-xs font-medium focus:outline-none cursor-pointer"
+          >
+            <option value="day">Day</option>
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+          </select>
         </div>
         <div className="flex items-center gap-1.5">
+          <span className="flex items-center bg-blue-600/70 text-white px-3 py-1.5 rounded text-xs font-semibold border border-blue-500/40">
+            Calendar
+          </span>
           <Link to="/board" className="flex items-center bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors text-xs font-medium">
             Projects
           </Link>

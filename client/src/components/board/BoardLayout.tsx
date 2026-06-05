@@ -26,37 +26,40 @@ export function BoardLayout() {
 
       {/* Status bar — mirrors the calendar footer */}
       <footer className="hidden md:flex flex-shrink-0 items-center justify-end border-t border-white/5 bg-black/20 px-5 py-1.5">
-        <div className="flex items-center gap-4 text-[11px] text-slate-600">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setIsSettingsOpen(true)}
-            className="hover:text-slate-400 transition-colors"
-            title="Open Settings"
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+            title="Open Settings (Ctrl+S)"
           >
-            Ctrl+S Settings
+            ⚙ Settings
           </button>
-          <span>|</span>
           <button
             type="button"
             onClick={() => setIsFilesOpen(true)}
-            className="hover:text-slate-400 transition-colors"
-            title="Open Files"
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+            title="Open Files (Ctrl+F)"
           >
-            Ctrl+F Files
+            Files
           </button>
-          <span>|</span>
           <button
             type="button"
             onClick={() => setIsMonitoringOpen(true)}
-            className="hover:text-slate-400 transition-colors"
-            title="IT safety report and activity log"
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+            title="IT safety report and activity log (Ctrl+M)"
           >
-            Ctrl+M System
+            System
           </button>
-          <span>|</span>
-          <Link to="/" className="hover:text-slate-400 transition-colors">
+          <Link
+            to="/"
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+          >
             Calendar
           </Link>
+          <span className="rounded-md px-2.5 py-1 text-xs font-semibold text-white bg-blue-600/70 border border-blue-500/40">
+            Projects
+          </span>
         </div>
       </footer>
     </div>
