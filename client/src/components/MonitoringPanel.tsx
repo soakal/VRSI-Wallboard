@@ -106,7 +106,7 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
   const handleRestore = async (b: BackupFile) => {
     const mb = (b.sizeBytes / (1024 * 1024)).toFixed(2);
     const ok = window.confirm(
-      `Restore from this backup?\n\n${b.file}\n${new Date(b.createdAt).toLocaleString()}\n${mb} MB\n\nYour current database will be saved as a pre-restore backup first. The page will reload.\n\nTip: If restore fails, try again or pick a wallboard-pre-restore-*.db file (saved right before the last restore attempt).`
+      `Restore from this backup?\n\n${b.file}\n${new Date(b.createdAt).toLocaleString()}\n${mb} MB\n\nYour current database will be saved as a pre-restore backup first. If no conflicts are found, the restore runs and the page reloads. If conflicting edits are detected, the restore is blocked and nothing changes.\n\nTip: If restore fails, try again or pick a wallboard-pre-restore-*.db file (saved right before the last restore attempt).`
     );
     if (!ok) return;
     setBackupBusy(true);

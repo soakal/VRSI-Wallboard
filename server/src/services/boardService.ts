@@ -44,6 +44,13 @@ function runExclusive<T>(fn: () => T): Promise<T> {
   return run
 }
 
+/** Run fn under the board write lock. Use for operations (e.g. restore) that must not race board mutations. */
+export function withBoardWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+  // runExclusive chains on the shared queue; we flatten the nested Promise here.
+  const outer: Promise<Promise<T>> = runExclusive(fn)
+  return outer.then((inner) => inner)
+}
+
 // ---------------------------------------------------------------------------
 // Spreadsheet status helpers
 // ---------------------------------------------------------------------------

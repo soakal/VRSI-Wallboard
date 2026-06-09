@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { listBackupFilesOnDisk } from '../lib/backupFiles.js';
-import { removeWalSidecars } from '../lib/dbSidecars.js';
 import { dbPath, resolveBackupDir, resolveDataDir, resolveLogsDir } from '../lib/paths.js';
 import { logger } from '../utils/logger.js';
 import { ok, err, type Result } from '../lib/result.js';
@@ -15,6 +14,11 @@ import { migrateJsonToSqliteIfNeeded } from './migrate.js';
 
 const CONFIG_APP_KEY = 'app_config';
 const CONFIG_BOARD_KEY = 'board_config';
+
+/** Convert an ISO-8601 string to a millisecond epoch. Returns NaN for blank or unparseable values. */
+function isoToEpoch(value: string): number {
+  return new Date(value).getTime();
+}
 
 export class LocalStorageProvider implements StorageProvider, BoardPersistence {
   private db: Database.Database;
@@ -409,7 +413,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
   }
 
   pruneBackups(destination: string, keep = 28): void {
-    const files = fs
+    const allFiles = fs
       .readdirSync(destination)
       .filter((f) => f.startsWith('wallboard-') && f.endsWith('.db'))
       .flatMap((f) => {
@@ -421,7 +425,22 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         }
       })
       .sort((a, b) => b.mtime - a.mtime);
-    for (const old of files.slice(keep)) {
+
+    // Pre-restore snapshots are excluded from the regular 28-file pool.
+    const preRestoreFiles = allFiles.filter((f) => f.name.startsWith('wallboard-pre-restore-'));
+    const regularFiles = allFiles.filter((f) => !f.name.startsWith('wallboard-pre-restore-'));
+
+    // Keep newest `keep` regular backups; delete older ones.
+    for (const old of regularFiles.slice(keep)) {
+      try {
+        fs.unlinkSync(old.full);
+      } catch {
+        // File may be locked or already removed — skip silently.
+      }
+    }
+
+    // Keep newest 3 pre-restore snapshots; delete older ones.
+    for (const old of preRestoreFiles.slice(3)) {
       try {
         fs.unlinkSync(old.full);
       } catch {
@@ -437,72 +456,78 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
   async restore(source: string): Promise<Result<RestoreResult>> {
     if (!fs.existsSync(source)) return err('not_found', `Backup not found: ${source}`);
     const dest = dbPath(this.dataDir);
-    const backupDir = resolveBackupDir();
-    fs.mkdirSync(backupDir, { recursive: true });
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const preRestoreFile = path.join(backupDir, `wallboard-pre-restore-${stamp}.db`);
+
+    let srcDb: Database.Database;
+    try {
+      srcDb = new Database(source, { readonly: true, fileMustExist: true });
+    } catch (openErr) {
+      const hint =
+        ' Close the backup file if it is open in another app (e.g. Cursor or Excel), then try again.';
+      const message = `${openErr}${hint}`;
+      logger.error('Database restore failed (open error)', { source, dest, error: message });
+      this.logAudit('restore', `Restore failed: ${message}`, source, false);
+      return err('restore_failed', message);
+    }
 
     try {
+      // Check for conflicts BEFORE creating the pre-restore snapshot.
+      const conflicts = this._findRestoreConflicts(srcDb);
+      if (conflicts.length > 0) {
+        this._logConflicts(conflicts, source);
+        this.logAudit(
+          'restore',
+          `Restore blocked: ${conflicts.length} conflict(s) require user resolution.`,
+          source,
+          false
+        );
+        return ok({ conflicts });
+      }
+
+      // No conflicts — create the pre-restore snapshot, then merge.
+      const backupDir = resolveBackupDir();
+      fs.mkdirSync(backupDir, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const preRestoreFile = path.join(backupDir, `wallboard-pre-restore-${stamp}.db`);
+
       await this.db.backup(preRestoreFile);
 
-      let srcDb: Database.Database;
-      try {
-        srcDb = new Database(source, { readonly: true, fileMustExist: true });
-      } catch (openErr) {
-        const hint =
-          ' Close the backup file if it is open in another app (e.g. Cursor or Excel), then try again.';
-        throw new Error(`${openErr}${hint}`);
-      }
-
-      let conflicts: RestoreConflict[] = [];
-      try {
-        conflicts = this._mergeFromBackup(srcDb, source);
-      } finally {
-        srcDb.close();
-      }
+      this._mergeFromBackup(srcDb, source);
 
       this.logAudit('restore', `Merged from backup ${source}`, source, true);
-      return ok({ preRestoreFile, conflicts });
+      return ok({ preRestoreFile, conflicts: [] });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       logger.error('Database restore failed', { source, dest, error: message });
       this.logAudit('restore', `Restore failed: ${message}`, source, false);
       return err('restore_failed', message);
+    } finally {
+      srcDb.close();
+    }
+  }
+
+  private _logConflicts(conflicts: RestoreConflict[], sourcePath: string): void {
+    for (const conflict of conflicts) {
+      this.logAudit(
+        'conflict',
+        `Restore conflict on job ${conflict.jobNumber}: ` +
+          `backup v${conflict.backup.version} (${conflict.backup.updatedAt}) vs ` +
+          `live v${conflict.live.version} (${conflict.live.updatedAt}) — user resolution required`,
+        sourcePath
+      );
     }
   }
 
   /**
    * Merge board_state, notes, and jobs from a backup database into the live database.
    * Rules (§7):
-   *   board_state — backup-only record → insert; same version → skip; one side newer → take it;
-   *                 both differ within the conflict window → block restore for user resolution.
+   *   board_state — backup-only record → insert; same version → skip; one side newer → take it.
    *   notes       — backup note not in live → insert; exists in both → take newer updatedAt.
    *   jobs        — backup job not in live → insert; exists in both → skip (jobs come from XLSM).
    *   jobs_import_meta — take the row with newer imported_at.
    *   config      — skip (preserve current user settings).
-   * Returns conflicts that blocked the merge. When conflicts exist, no data is merged.
+   * Caller must run _findRestoreConflicts before calling this; conflicts must be empty.
    */
-  private _mergeFromBackup(srcDb: Database.Database, sourcePath: string): RestoreConflict[] {
-    const conflicts = this._findRestoreConflicts(srcDb);
-    if (conflicts.length > 0) {
-      for (const conflict of conflicts) {
-        this.logAudit(
-          'conflict',
-          `Restore conflict on job ${conflict.jobNumber}: ` +
-            `backup v${conflict.backup.version} (${conflict.backup.updatedAt}) vs ` +
-            `live v${conflict.live.version} (${conflict.live.updatedAt}) — user resolution required`,
-          sourcePath
-        );
-      }
-      this.logAudit(
-        'restore',
-        `Restore blocked: ${conflicts.length} conflict(s) require user resolution.`,
-        sourcePath,
-        false
-      );
-      return conflicts;
-    }
-
+  private _mergeFromBackup(srcDb: Database.Database, _sourcePath: string): void {
     const tx = this.db.transaction(() => {
       // ── Jobs ────────────────────────────────────────────────────────────────
       const srcJobs = srcDb
@@ -530,7 +555,11 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         const liveMeta = this.db
           .prepare('SELECT imported_at FROM jobs_import_meta WHERE id = 1')
           .get() as { imported_at: string } | undefined;
-        if (!liveMeta || String(srcMeta.imported_at) > String(liveMeta.imported_at)) {
+        const srcTime = isoToEpoch(String(srcMeta.imported_at ?? ''));
+        const liveTime = liveMeta ? isoToEpoch(liveMeta.imported_at) : NaN;
+        // Use src only when both are parseable and src is newer, or live is missing/unparseable.
+        const srcWins = Number.isFinite(srcTime) && (!Number.isFinite(liveTime) || srcTime > liveTime);
+        if (!liveMeta || srcWins) {
           this.db
             .prepare(
               `INSERT INTO jobs_import_meta (id, imported_at, source_file, new_job_numbers)
@@ -585,8 +614,11 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         }
         if (src.version === live.version) continue; // identical — skip
 
-        const srcNewer = src.updated_at > live.updated_at;
-        if (srcNewer) {
+        const srcEpoch = isoToEpoch(src.updated_at);
+        const liveEpoch = isoToEpoch(live.updated_at);
+        // If either timestamp is non-finite, keep live (defensive; conflicts should block before here).
+        if (!Number.isFinite(srcEpoch) || !Number.isFinite(liveEpoch)) continue;
+        if (srcEpoch > liveEpoch) {
           upsertState.run(
             src.job_number, src.status, src.ship_date_override,
             src.ship_date_override_note, src.binder_printed,
@@ -627,21 +659,9 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
           updNote.run(n.text, n.updated_at, n.id, n.updated_at);
         }
       }
-
-      // Stamp merge time in audit (outside the transaction — logAudit opens its own write).
     });
 
     tx();
-
-    // Write the merge-complete audit entry outside the transaction so it is committed separately.
-    this.logAudit(
-      'restore',
-      'Merge complete. Pre-restore snapshot saved.',
-      sourcePath,
-      true
-    );
-
-    return conflicts;
   }
 
   private _findRestoreConflicts(srcDb: Database.Database): RestoreConflict[] {
@@ -661,9 +681,17 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     for (const src of srcStates) {
       const live = liveStates.get(src.job_number);
       if (!live || src.version === live.version) continue;
-      const backupTime = new Date(src.updated_at).getTime();
-      const liveTime = new Date(live.updated_at).getTime();
-      if (!Number.isFinite(backupTime) || !Number.isFinite(liveTime)) continue;
+      const backupTime = isoToEpoch(src.updated_at);
+      const liveTime = isoToEpoch(live.updated_at);
+      // If either timestamp is unparseable, ordering is undecidable — block for user resolution.
+      if (!Number.isFinite(backupTime) || !Number.isFinite(liveTime)) {
+        conflicts.push({
+          jobNumber: src.job_number,
+          backup: { version: src.version, updatedAt: src.updated_at, status: src.status },
+          live: { version: live.version, updatedAt: live.updated_at, status: live.status },
+        });
+        continue;
+      }
       const bothModified = Math.abs(backupTime - liveTime) < 60_000;
       if (!bothModified) continue;
       conflicts.push({

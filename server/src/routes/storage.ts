@@ -7,6 +7,7 @@ import { isPathInsideDir } from '../lib/pathSafety.js';
 import { logger } from '../utils/logger.js';
 import { getPersistence, reloadPersistence } from '../storage/factory.js';
 import { runBackup, type BackupTrigger } from '../services/backupService.js';
+import { withBoardWriteLock } from '../services/boardService.js';
 import { requireAdminToken } from '../middleware/adminAuth.js';
 
 export const storageRouter = Router();
@@ -88,7 +89,7 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
 
   let result;
   try {
-    result = await getPersistence().restore(source);
+    result = await withBoardWriteLock(() => getPersistence().restore(source));
   } catch (e) {
     logger.error('Restore route error', { error: e });
     reloadPersistence();
@@ -96,8 +97,6 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
     res.status(500).json({ error: { code: 'restore_failed', message } });
     return;
   }
-
-  reloadPersistence();
 
   if (!result.ok) {
     res.status(500).json({ error: result.error });
@@ -108,11 +107,7 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
       error: {
         code: 'restore_conflict',
         message: `${result.data.conflicts.length} restore conflict(s) require user resolution. Live data was not changed.`,
-      },
-      data: {
-        restoredFrom: source,
-        preRestoreFile: result.data.preRestoreFile ?? null,
-        conflicts: result.data.conflicts,
+        details: { conflicts: result.data.conflicts },
       },
     });
     return;

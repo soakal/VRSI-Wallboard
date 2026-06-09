@@ -1,3 +1,6 @@
+import type { RestoreConflict } from '@vrsi/wallboard-shared';
+export type { RestoreConflict };
+
 export interface AuditEntry {
   id: number;
   timestamp: string;
@@ -50,29 +53,13 @@ export interface BackupsResponse {
   backups: BackupFile[];
 }
 
-export interface RestoreConflict {
-  jobNumber: string;
-  backup: {
-    version: number;
-    updatedAt: string;
-    status: string;
-  };
-  live: {
-    version: number;
-    updatedAt: string;
-    status: string;
-  };
-}
-
 export class RestoreConflictError extends Error {
   conflicts: RestoreConflict[];
-  preRestoreFile: string | null;
 
-  constructor(message: string, conflicts: RestoreConflict[], preRestoreFile: string | null) {
+  constructor(message: string, conflicts: RestoreConflict[]) {
     super(message);
     this.name = 'RestoreConflictError';
     this.conflicts = conflicts;
-    this.preRestoreFile = preRestoreFile;
   }
 }
 
@@ -97,11 +84,10 @@ export async function restoreBackup(file: string): Promise<{ preRestoreFile: str
     body: JSON.stringify({ file }),
   });
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as {
-      error?: { message?: string; code?: string } | string;
-      data?: { conflicts?: RestoreConflict[]; preRestoreFile?: string | null };
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: { message?: string; code?: string; details?: { conflicts?: RestoreConflict[] } } | string;
     };
-    const e = err.error;
+    const e = body.error;
     const msg =
       typeof e === 'object' && e?.message
         ? e.message
@@ -109,7 +95,7 @@ export async function restoreBackup(file: string): Promise<{ preRestoreFile: str
           ? e
           : 'Restore failed';
     if (typeof e === 'object' && e?.code === 'restore_conflict') {
-      throw new RestoreConflictError(msg, err.data?.conflicts ?? [], err.data?.preRestoreFile ?? null);
+      throw new RestoreConflictError(msg, e.details?.conflicts ?? []);
     }
     throw new Error(msg);
   }
