@@ -1,13 +1,13 @@
 # VRSI WallBoard — AI Memory
 
-**Last saved:** 2026-06-05
+**Last saved:** 2026-06-09
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\` (dev: `server/data`)
 
 ## Current State
 
-- Last completed task: Restore conflict blocking + shared artifact cleanup
-- Next task: None pending
+- Last completed task: Fable audit of restore-conflict commit (74bf138) + Sonnet fixes (7 findings)
+- Next task: Decide on deferred HIGH finding — note resurrection on restore (needs soft-delete tombstones, schema change, human approval per §3)
 - Blockers: None
 
 ## Active Plan
@@ -26,6 +26,8 @@
 - [x] Opus review of rename — 3 findings fixed
 - [x] Codex 4-issue fix (build, restore merge, version, Node docs)
 - [x] Restore conflict blocking + shared artifact cleanup
+- [x] Fable audit + Sonnet fix of restore feature (conflict-first snapshot, audit accuracy, 409 error shape, prune pools, epoch timestamp compare, board write lock on restore)
+- [ ] Soft-delete tombstones for notes — fixes note resurrection on restore (HIGH, awaiting human approval — schema change)
 - [ ] Full StorageProvider method implementations (deferred)
 - [ ] SharePoint provider (deferred)
 - [ ] Audit log UI panel (deferred)
@@ -53,7 +55,23 @@
 - Current: `v0.1.0` — tagged and released on GitHub (title: "VRSI Wallboard")
 - Next release process: bump `server/package.json` version → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → create GitHub release → kiosks show update banner within 6h
 
-## Files Modified This Session
+## Audit Findings Deferred (2026-06-09, need human decision)
+
+- **HIGH — note resurrection on restore**: `deleteNote` hard-deletes; restoring an older backup re-inserts deleted notes (`INSERT OR IGNORE` on backup-only note IDs). Proper fix = soft-delete tombstone column on notes (schema + data-model change, §3 approval required). Same mechanism can resurrect jobs removed by newer XLSM import (transient until next import).
+- Same-version-different-content divergence: two DBs at version N with different data merge silently (live wins) — §7 letter says skip; optional hardening.
+- `TRUST_LOCALHOST=false` breaks MonitoringPanel — client has no way to send `X-Admin-Token`. Documented gap, fine for localhost kiosk.
+- `storageApi.ts` uses unguarded `as` casts on `res.json()` file-wide (pre-existing style) — fix file-wide with a narrowing helper someday, not piecemeal.
+
+## Files Modified This Session (2026-06-09)
+
+- `server/src/storage/localProvider.ts` — conflict check now runs BEFORE pre-restore snapshot (blocked restores create no file); "Merged from backup" success audit only on actual merge; `_mergeFromBackup` is pure merge (conflict logging moved to `_logConflicts` + restore()); `isoToEpoch` helper unifies timestamp compare (detection + merge + jobs_import_meta); unparseable timestamps now conflict instead of silently merging; `pruneBackups` keeps 28 regular + 3 pre-restore (separate pools); `srcDb` closed via single `finally` (was leaked on conflict path); removed unused `removeWalSidecars` import
+- `server/src/routes/storage.ts` — 409 now compliant `{ error: { code, message, details: { conflicts } } }` (no top-level data, no restoredFrom); removed success-path `reloadPersistence()` (restore merges in-place now); restore wrapped in `withBoardWriteLock`
+- `server/src/services/boardService.ts` — exported `withBoardWriteLock` (delegates to `runExclusive` queue; promise assimilation holds the lock for async fns)
+- `client/src/api/storageApi.ts` — `RestoreConflict` imported from `@vrsi/wallboard-shared` (re-exported) instead of duplicated; parser reads `error.details.conflicts`; `RestoreConflictError` dropped `preRestoreFile`
+- `client/src/components/MonitoringPanel.tsx` — confirm dialog text: reload only happens when no conflicts; blocked restore changes nothing
+- `AGENTS.md` — added (Codex mirror of CLAUDE.md, committed separately)
+
+## Files Modified Previous Session
 
 - `client/tsconfig.node.json` — added `"outDir": ".tsbuild-node"` so vite.config compiled output no longer lands beside source
 - `.gitignore` — added `client/.tsbuild-node/`, `client/vite.config.js`, `client/vite.config.d.ts`, `shared/src/*.js`, `shared/src/*.d.ts`
