@@ -36,10 +36,15 @@ Fix: Log on as the kiosk user first, then run ENABLE-STARTUP.bat again.
 "@
 }
 
-# -STA is required for Windows Forms (NotifyIcon/ContextMenuStrip use STA COM).
-# -WindowStyle Hidden: no console window appears; the tray icon manages the session.
-$arg      = "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$trayPs1`""
-$action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
+# Launch PowerShell through cmd /c start "" /b so the console host (conhost.exe)
+# is never shown in the taskbar. -WindowStyle Hidden alone is unreliable for an
+# interactive logon task: conhost is created and briefly visible before PowerShell
+# can act on the flag. cmd /c start "" /b detaches into a windowless process
+# immediately; the transient cmd.exe exits before the user sees anything.
+$psExe    = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$psArgs   = "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$trayPs1`""
+$arg      = "/c start `"`" /b `"$psExe`" $psArgs"
+$action   = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument $arg
 $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $triggerUser
 # -ExecutionTimeLimit ([TimeSpan]::Zero) disables the default 72-hour kill  - without it
 # Task Scheduler terminates the tray (and the server it owns) after 3 days.

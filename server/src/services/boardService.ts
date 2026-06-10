@@ -861,7 +861,7 @@ export function deleteNote(jobNumber: string, noteId: string, actor: Actor): Pro
 function deepMergeConfig(base: BoardConfig, override: Partial<BoardConfig>): BoardConfig {
   return {
     spareCarrier: override.spareCarrier ?? base.spareCarrier,
-    superUser: override.superUser || base.superUser,
+    superUser: override.superUser ?? base.superUser,
     statusColors: {
       ...base.statusColors,
       ...(override.statusColors ?? {}),
