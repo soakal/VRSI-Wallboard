@@ -81,7 +81,10 @@ $nodeVer = ''
 try { $nodeVer = (node -v 2>$null) } catch {}
 $commitHash = ''
 try { $commitHash = (git -C $RepoRoot rev-parse --short HEAD 2>$null) } catch {}
+$appVersion = $null
+try { $appVersion = (Get-Content (Join-Path $ServerDir 'package.json') -Raw | ConvertFrom-Json).version } catch {}
 @{
+    version = $appVersion
     built   = (Get-Date -Format 'yyyy-MM-dd HH:mm')
     machine = $env:COMPUTERNAME
     node    = $nodeVer
