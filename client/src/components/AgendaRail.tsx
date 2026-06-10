@@ -27,9 +27,6 @@ function addDays(d: Date, n: number): Date {
   return result;
 }
 
-/** How many days ahead the agenda looks (today + the next 13). */
-const AGENDA_DAYS = 14;
-
 const AgendaRail: React.FC<AgendaRailProps> = ({
   events,
   showWeekends = true,
@@ -45,6 +42,13 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
   const now = new Date();
   const todayStart = startOfDay(now);
 
+  // Agenda covers the current week: today through the end of the week.
+  // Week start matches the calendar (Sunday normally, Monday when weekends
+  // are hidden), so the agenda and the grid roll over on the same day.
+  const weekStartsOn = showWeekends ? 0 : 1;
+  const dayIndexInWeek = (todayStart.getDay() - weekStartsOn + 7) % 7;
+  const daysLeftInWeek = 7 - dayIndexInWeek;
+
   const sortGroup = (group: CalendarEvent[]) =>
     group.sort((a, b) => {
       if (a.isAllDay && !b.isAllDay) return -1;
@@ -53,7 +57,7 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
     });
 
   const sections: { key: string; label: string; events: CalendarEvent[] }[] = [];
-  for (let i = 0; i < AGENDA_DAYS; i++) {
+  for (let i = 0; i < daysLeftInWeek; i++) {
     const dayStart = addDays(todayStart, i);
     const dayEnd = addDays(todayStart, i + 1);
 
@@ -167,7 +171,7 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
         {isEmpty && (
           <div className="flex flex-col items-center justify-center gap-1 py-8 text-center">
             <p className="text-sm font-medium text-slate-400">Nothing on the agenda</p>
-            <p className="text-xs text-slate-600">No events in the next {AGENDA_DAYS} days</p>
+            <p className="text-xs text-slate-600">No events for the rest of this week</p>
           </div>
         )}
 
