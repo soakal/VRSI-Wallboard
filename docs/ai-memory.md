@@ -1,13 +1,13 @@
 # VRSI WallBoard — AI Memory
 
-**Last saved:** 2026-06-09
+**Last saved:** 2026-06-10
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\` (dev: `server/data`)
 
 ## Current State
 
-- Last completed task: Fable audit of restore-conflict commit (74bf138) + Sonnet fixes (7 findings)
-- Next task: Decide on deferred HIGH finding — note resurrection on restore (needs soft-delete tombstones, schema change, human approval per §3)
+- Last completed task: Fable full audit (21 findings, 4 unused files removed, 5 release gaps fixed) + tray icon system (Start-TrayApp.ps1, Restart-WallBoard.ps1, pretty-icon shortcuts). Commit db72963.
+- Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
 - Blockers: None
 
 ## Active Plan
@@ -23,10 +23,13 @@
 - [x] Opus dead-code audit — all findings fixed
 - [x] v0.1.0 GitHub release created (title: "VRSI Wallboard")
 - [x] Release folder renamed from `release\` → `VRSI WallBoard\`
-- [x] Opus review of rename — 3 findings fixed
 - [x] Codex 4-issue fix (build, restore merge, version, Node docs)
 - [x] Restore conflict blocking + shared artifact cleanup
-- [x] Fable audit + Sonnet fix of restore feature (conflict-first snapshot, audit accuracy, 409 error shape, prune pools, epoch timestamp compare, board write lock on restore)
+- [x] Fable audit + Sonnet fix of restore feature
+- [x] **System tray icon** — Start-TrayApp.ps1/bat, blue "W" icon (GDI+), STA guard, named mutex, crash-loop protection, right-click menu, balloon notifications
+- [x] **Restart-WallBoard.ps1/bat** — tray-aware restart with mutex detection and /health poll
+- [x] **Pretty-icon shortcuts** — Install-WallBoard.ps1 creates Start WallBoard.lnk + Restart WallBoard.lnk (imageres.dll icons)
+- [x] **Fable full audit** — 21 findings fixed (security, correctness, dead code); 2 files deleted; release folder verified distribution-ready
 - [ ] Soft-delete tombstones for notes — fixes note resurrection on restore (HIGH, awaiting human approval — schema change)
 - [ ] Full StorageProvider method implementations (deferred)
 - [ ] SharePoint provider (deferred)
@@ -35,60 +38,47 @@
 
 ## Key Decisions Made
 
-- **Local standalone only** for v1 — no SharePoint/NetworkShare providers yet
-- **Footer nav**: both Calendar and Projects pages have matching pill-button footers. Active page is blue (`bg-blue-600/70`), inactive is gray (`bg-white/5`). Day/Week/Month is a `<select>` dropdown (not 3 buttons). Calendar/Projects nav replaced the old top-right links in BoardHeader.
-- **Update check**: server polls `github.com/soakal/VRSI-Wallboard/releases/latest`, caches 6h (success) / 1h (failure). Client checks on mount + every 6h. Banner shows `Update-WallBoard.bat` instructions. Negative caching prevents rate-limit hammering.
-- **Update-WallBoard.ps1**: stops server → git pull --ff-only (with dirty-tree warning) → calls Build-Production.ps1 → restarts server hidden (matches Task Scheduler model) → health checks → kills + relaunches kiosk browser. Menu entry P in WallBoard-Menu.bat.
-- **Restore-Backup.ps1** had loop bug: `$i - $files.Count` → `$i -lt $files.Count` (fixed prior session)
-- **DisplayModePicker.tsx** deleted (orphaned, replaced by select dropdown in Dashboard footer)
-- **boardColors.ts**: removed unused statusIndex, personBubbleColor, boardRouteForTab
-- **auditService.ts**: removed unused logFileRead
-- **events.ts**: removed unused GraphEvent import
-- **ImportView.tsx**: replaced unguarded inline cast with proper ImportResult type from boardApi
-- SheetJS via npm `xlsx` package (not CDN tarball)
-- Dev `DATA_DIR=./server/data`
-- **Release folder**: named `VRSI WallBoard\` (capital B — matches canonical brand). Produced by `Package-Release.ps1`, gitignored. Deploy: copy folder to target PC, run `INSTALL.bat`.
-- **Write-Host deploy instruction** in Package-Release.ps1 uses `$(Split-Path $ReleaseDir -Leaf)\` so it always tracks the `$ReleaseDir` variable — no hardcoded literal.
+- **Tray app is now primary startup** — Task Scheduler task `VRSI WallBoard Tray` (replaces `VRSI WallBoard Server`). Script: `Start-TrayApp.ps1`. Runs with `-STA -WindowStyle Hidden`. `ExecutionTimeLimit([TimeSpan]::Zero)` prevents 72h kill.
+- **Tray icon** — programmatic GDI+ 32x32 blue circle with white "W". Created via `Bitmap.GetHicon()` → `Icon.FromHandle()`. No external icon file needed.
+- **Single-instance mutex** — named `VRSIWallBoardTray`. `Restart-WallBoard.ps1` probes this to detect whether tray is running.
+- **Crash-loop protection** — max 3 auto-restarts in 60 seconds, then error balloon and stops retrying.
+- **Security fixes (Fable audit 2026-06-10)** — `Stop-WallBoardServer` now verifies `ProcessName -eq 'node'` before killing; logon task registered for console user not elevated admin; admin token not printed to console; all `%~dp0` expansions quoted in bat files; `_run.ps1.bat` uses absolute `%SystemRoot%\System32\WindowsPowerShell` path; `Restore-Backup.ps1` stops tray watchdog before restore.
+- **Dead files removed** — `Enable-Startup.bat` (stub), `Start-KioskAfterDelay.ps1` (legacy).
+- **Release folder** — fully synced at commit db72963, 45 scripts, distribution-ready.
+- **Local standalone only** for v1 — no SharePoint/NetworkShare providers yet.
 
 ## Version
 
 - Current: `v0.1.0` — tagged and released on GitHub (title: "VRSI Wallboard")
-- Next release process: bump `server/package.json` version → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → create GitHub release → kiosks show update banner within 6h
+- Latest commit: `db72963` (2026-06-10, Fable audit fixes)
+- Next release: bump `server/package.json` → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → create GitHub release
 
-## Audit Findings Deferred (2026-06-09, need human decision)
+## Files Modified This Session (2026-06-10)
 
-- **HIGH — note resurrection on restore**: `deleteNote` hard-deletes; restoring an older backup re-inserts deleted notes (`INSERT OR IGNORE` on backup-only note IDs). Proper fix = soft-delete tombstone column on notes (schema + data-model change, §3 approval required). Same mechanism can resurrect jobs removed by newer XLSM import (transient until next import).
-- Same-version-different-content divergence: two DBs at version N with different data merge silently (live wins) — §7 letter says skip; optional hardening.
-- `TRUST_LOCALHOST=false` breaks MonitoringPanel — client has no way to send `X-Admin-Token`. Documented gap, fine for localhost kiosk.
-- `storageApi.ts` uses unguarded `as` casts on `res.json()` file-wide (pre-existing style) — fix file-wide with a narrowing helper someday, not piecemeal.
+**New files:**
+- `scripts/windows/Start-TrayApp.ps1` — tray app (server manager + system tray icon)
+- `scripts/windows/Start-TrayApp.bat` — hidden launcher for tray PS1
+- `scripts/windows/Restart-WallBoard.ps1` — tray-aware restart with health poll
+- `scripts/windows/Restart-WallBoard.bat` — wrapper for restart PS1
+- `Start-TrayApp.bat` (repo root) — one-click tray launcher at install root
 
-## Files Modified This Session (2026-06-09)
+**Modified:**
+- `scripts/windows/_Register-Startup.ps1` — registers `VRSI WallBoard Tray` task, removes legacy server task; `ExecutionTimeLimit([TimeSpan]::Zero)`; logon trigger uses console user
+- `scripts/windows/Install-WallBoard.ps1` — shortcut creation (Start WallBoard.lnk + Restart WallBoard.lnk with imageres.dll icons); admin token no longer printed
+- `scripts/windows/Uninstall-WallBoard.ps1` — kills tray process by cmdline match; removes Tray task
+- `scripts/windows/WallBoard-Menu.bat` — added T=Start tray app option
+- `scripts/windows/_common.ps1` — `Stop-WallBoardServer` uses `-State Listen` + verifies ProcessName is `node`
+- `scripts/windows/Package-Release.ps1` — includes Start-TrayApp.bat, copies README.md, adds git hash to release-info.json, removes false $LASTEXITCODE check
+- `INSTALL.bat` — all %~dp0 paths quoted
+- `scripts/windows/Restore-Backup.ps1` — stops tray before restore
+- `scripts/windows/Update-WallBoard.ps1` — tray-aware
+- `scripts/windows/Register-BackupTask.ps1` — finite ExecutionTimeLimit; graceful non-admin exit
+- `scripts/windows/_run.ps1.bat` — absolute powershell.exe path
+- `scripts/windows/Start-WallBoard-Service.bat` — quoted path
 
-- `server/src/storage/localProvider.ts` — conflict check now runs BEFORE pre-restore snapshot (blocked restores create no file); "Merged from backup" success audit only on actual merge; `_mergeFromBackup` is pure merge (conflict logging moved to `_logConflicts` + restore()); `isoToEpoch` helper unifies timestamp compare (detection + merge + jobs_import_meta); unparseable timestamps now conflict instead of silently merging; `pruneBackups` keeps 28 regular + 3 pre-restore (separate pools); `srcDb` closed via single `finally` (was leaked on conflict path); removed unused `removeWalSidecars` import
-- `server/src/routes/storage.ts` — 409 now compliant `{ error: { code, message, details: { conflicts } } }` (no top-level data, no restoredFrom); removed success-path `reloadPersistence()` (restore merges in-place now); restore wrapped in `withBoardWriteLock`
-- `server/src/services/boardService.ts` — exported `withBoardWriteLock` (delegates to `runExclusive` queue; promise assimilation holds the lock for async fns)
-- `client/src/api/storageApi.ts` — `RestoreConflict` imported from `@vrsi/wallboard-shared` (re-exported) instead of duplicated; parser reads `error.details.conflicts`; `RestoreConflictError` dropped `preRestoreFile`
-- `client/src/components/MonitoringPanel.tsx` — confirm dialog text: reload only happens when no conflicts; blocked restore changes nothing
-- `AGENTS.md` — added (Codex mirror of CLAUDE.md, committed separately)
-
-## Files Modified Previous Session
-
-- `client/tsconfig.node.json` — added `"outDir": ".tsbuild-node"` so vite.config compiled output no longer lands beside source
-- `.gitignore` — added `client/.tsbuild-node/`, `client/vite.config.js`, `client/vite.config.d.ts`, `shared/src/*.js`, `shared/src/*.d.ts`
-- Deleted from git/disk: `client/vite.config.js`, `client/vite.config.d.ts`, `shared/src/paths.js`, `shared/src/result.js`
-- `server/src/services/boardService.ts` — added `version?: number` to local `JobStateEntry`; pass version through `getBoardStateFile()`; increment version in all 6 mutators and in import functions (only on actual change)
-- `server/src/storage/localProvider.ts` — replaced overwrite `restore()` with merge-based restore (`_mergeFromBackup`); board_state/notes/jobs merged per §7; conflicts logged to audit_log; pre-restore snapshot kept; config skipped
-- `VRSI-WALLBOARD-RULES.md` — Node.js 18+ → 20+ in §1
-- `docs/operations-guide.md` — Node.js 18 → 20 in two places
-- `shared/src/index.ts` — removed Node-only `paths.ts` export from the shared browser-facing barrel
-- `shared/src/storage/types.js`, `shared/src/types/board.js` — deleted stale generated artifacts from source tree
-- `.gitignore` — changed shared generated-file ignores to cover nested `shared/src/**/*.js` and `shared/src/**/*.d.ts`
-- `server/src/storage/storageTypes.ts` — added restore conflict/result types and updated `restore()` return shape
-- `shared/src/storage/types.ts` — mirrored restore conflict/result types in the shared StorageProvider contract
-- `server/src/storage/localProvider.ts` — restore now detects close-timestamp version conflicts before merge, logs them, and blocks data changes for user resolution instead of auto-resolving
-- `server/src/routes/storage.ts` — returns `409 restore_conflict` with conflict details when restore is blocked
-- `client/src/api/storageApi.ts` — added typed restore conflict error handling
-- `client/src/components/MonitoringPanel.tsx` — Backup tab reports restore conflicts with sample job/version details
+**Deleted:**
+- `scripts/windows/Enable-Startup.bat` (stub, superseded)
+- `scripts/windows/Start-KioskAfterDelay.ps1` (legacy, never called)
 
 ## Known Issues Status (§10)
 
@@ -97,8 +87,13 @@
 - [x] personIdentity.ts deduplication
 - [x] ADMIN_TOKEN gate
 
+## Open Questions
+
+- Soft-delete tombstones for notes: ready to implement when Brian approves schema change
+
 ## Context for Next Session
 
-Run `npm start` at repo root (production build already in place). Health: `GET http://localhost:3001/health`. The app is at v0.1.0 — any new features should bump the version in `server/package.json` and create a new GitHub release tag to trigger the update notification on deployed kiosks.
-
-The `VRSI WallBoard\` folder on disk is the built release artifact (gitignored). Regenerate it with `Package-Release.bat`. Give the folder to users; they run `INSTALL.bat` inside it.
+Run `npm start` at repo root. Health: `GET http://localhost:3001/health`. 
+App is at v0.1.0. Any new features should bump `server/package.json` version and create a new GitHub release tag.
+The `VRSI WallBoard\` folder is fully synced at commit db72963 — ready to copy to any PC and run INSTALL.bat.
+Tray app launches at logon via Task Scheduler task `VRSI WallBoard Tray`. To start manually: double-click `Start-TrayApp.bat` in the install root.
