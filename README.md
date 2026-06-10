@@ -80,6 +80,7 @@ See **`scripts/windows/README.md`** for all scripts.
 
 ## Docs
 
+- `docs/code-guide.md` — **plain-English walkthrough of every part of the code: what it does and why**
 - `VRSI-WALLBOARD-RULES.md` — project standards
 - `VRSI-WallBoard-build-plan.md` — full rebuild plan
 - `docs/operations-guide.md` — install, uninstall, backup, sending logs

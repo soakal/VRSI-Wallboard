@@ -15,6 +15,7 @@
 | `VRSI-WALLBOARD-RULES.md` | Project rules — single source of truth |
 | `VRSI-WallBoard-build-plan.md` | Detailed build plan and task list |
 | `docs/ai-memory.md` | Session memory — read and write every session |
+| `docs/code-guide.md` | Plain-English code walkthrough — keep updated when architecture changes |
 | `docs/operations-guide.md` | Install, uninstall, backup, sending logs |
 | `.env.example` | Environment variable reference for dev |
 | `server\.env.production.example` | Environment variable reference for production |
