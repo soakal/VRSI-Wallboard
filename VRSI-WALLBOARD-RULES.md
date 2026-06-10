@@ -461,4 +461,5 @@ Location: `docs/ai-memory.md`
 |------|-----|-------------|-----|
 | 2026-06-03 | BK | Created NEXUS-RULES.md | First session |
 | 2026-06-04 | BK | Renamed to VRSI-WALLBOARD-RULES.md, integrated full existing app spec, added Windows deployment rules, known issues list, features to preserve, environment variables | Project renamed to VRSI WallBoard; full spec integrated |
+| 2026-06-10 | BK+AI | Added Windows system tray icon (Start-TrayApp.ps1) — server now managed via tray at logon; Task Scheduler task renamed to `VRSI WallBoard Tray`; added Restart-WallBoard.ps1/bat, pretty-icon shortcuts (.lnk) created by installer; Fable security/correctness audit — 21 findings fixed, 2 dead files removed, release folder verified distribution-ready | Tray icon for visibility + control; audit hardened security and correctness |
 

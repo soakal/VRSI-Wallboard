@@ -88,7 +88,23 @@ You should see `"status": "ok"`.
 
 ### 1.5 Start the server
 
-Double-click **`Start-WallBoard.bat`** to start the server. The terminal window stays open — close it or press `Ctrl+C` to stop.
+**Recommended — tray app (server + icon near clock):**
+
+Double-click **`Start-TrayApp.bat`**. A blue **W** icon appears in the taskbar notification area (near the clock). Right-click it for options:
+
+| Menu item | Action |
+|-----------|--------|
+| Open in Browser | Opens `http://localhost:3001` |
+| Restart Server | Stops and restarts Node.js |
+| Stop & Exit | Stops the server and removes the tray icon |
+
+Double-clicking the tray icon also opens the browser.
+
+The tray app auto-restarts the server if it crashes (up to 3 times per 60 seconds), and shows balloon notifications on start, restart, and crash.
+
+**Alternative — console window:**
+
+Double-click **`Start-WallBoard.bat`**. The terminal window stays open — close it or press `Ctrl+C` to stop. No tray icon; useful for debugging.
 
 ### 1.6 Set up kiosk display (optional)
 
@@ -108,7 +124,7 @@ Place the shortcut in the Windows Startup folder (`shell:startup`) to auto-launc
 
 ### 1.7 Auto-start the server on Windows login (optional)
 
-Double-click **`ENABLE-STARTUP.bat`**. It will request Administrator approval and register a Windows Task Scheduler logon task that starts the server automatically whenever anyone logs in.
+Double-click **`ENABLE-STARTUP.bat`**. It will request Administrator approval and register a Windows Task Scheduler logon task (`VRSI WallBoard Tray`) that starts the tray app automatically whenever anyone logs in. The blue W icon will appear near the clock on every login — no console window.
 
 ---
 
@@ -132,7 +148,7 @@ Remove-Item -Recurse -Force "C:\ProgramData\VRSIWallBoard"
 
 ### 2.4 Remove kiosk startup shortcut (if created)
 
-Open `shell:startup` in File Explorer and delete the VRSI WallBoard shortcut.
+If you manually placed a kiosk browser shortcut in the Windows Startup folder, open `shell:startup` in File Explorer and delete it. The `VRSI WallBoard Tray` scheduled task is removed automatically by the uninstaller.
 
 ---
 
