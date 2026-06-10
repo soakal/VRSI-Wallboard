@@ -8,6 +8,9 @@ param(
 . "$PSScriptRoot\_common.ps1"
 $ErrorActionPreference = 'Stop'
 
+# Repo/install root: two levels above scripts\windows (i.e. the folder containing INSTALL.bat)
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+
 # Maximum Node.js major version supported by better-sqlite3 prebuilt binaries in this release.
 # better-sqlite3 v12.x declares engines: "20.x || 22.x || 23.x || 24.x || 25.x || 26.x"
 # When upgrading better-sqlite3, check its engines field and update this cap accordingly.
@@ -212,6 +215,39 @@ function Set-ServerEnvProduction {
     return $token
 }
 
+function New-WallBoardShortcuts {
+    $shell = $null
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+
+        # Shortcut 1: Start WallBoard
+        $sc1 = $shell.CreateShortcut((Join-Path $RepoRoot 'Start WallBoard.lnk'))
+        $sc1.TargetPath      = (Join-Path $PSScriptRoot 'Start-TrayApp.bat')
+        $sc1.WorkingDirectory = $PSScriptRoot
+        $sc1.IconLocation    = "$env:SystemRoot\System32\imageres.dll,109"
+        $sc1.Description     = 'Start the VRSI WallBoard server with tray icon'
+        $sc1.WindowStyle     = 7
+        $sc1.Save()
+
+        # Shortcut 2: Restart WallBoard
+        $sc2 = $shell.CreateShortcut((Join-Path $RepoRoot 'Restart WallBoard.lnk'))
+        $sc2.TargetPath      = (Join-Path $PSScriptRoot 'Restart-WallBoard.bat')
+        $sc2.WorkingDirectory = $PSScriptRoot
+        $sc2.IconLocation    = "$env:SystemRoot\System32\imageres.dll,78"
+        $sc2.Description     = 'Restart the VRSI WallBoard server'
+        $sc2.WindowStyle     = 1
+        $sc2.Save()
+
+        Write-Host '  Created shortcuts: Start WallBoard.lnk, Restart WallBoard.lnk' -ForegroundColor Green
+    } catch {
+        Write-Warning "  Could not create shortcuts: $_"
+    } finally {
+        if ($null -ne $shell) {
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell) | Out-Null
+        }
+    }
+}
+
 function Register-BackupTaskInternal {
     $script = Join-Path $PSScriptRoot 'Invoke-WallBoardBackup.ps1'
     $taskName = 'VRSI WallBoard Backup'
@@ -263,10 +299,13 @@ if (-not $SkipBuild -and $serverBuilt -and $clientBuilt) {
     & (Join-Path $PSScriptRoot 'Build-Production.ps1')
 }
 
+Write-Step 'Creating shortcuts'
+New-WallBoardShortcuts
+
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $WithStartup) {
-    $r = Read-Host 'Start WallBoard server silently at login (open http://localhost:3001 in any browser)? [Y/N]'
+    $r = Read-Host 'Start WallBoard at login with a tray icon near the clock? [Y/N]'
     $WithStartup = ($r -eq 'Y' -or $r -eq 'y')
 }
 
@@ -302,12 +341,17 @@ Write-Host '  Board:       http://localhost:3001/board'
 Write-Host '  IT report:   Ctrl+M in the app'
 Write-Host ''
 if ($WithStartup) {
-    Write-Host '  Server starts silently after next logon. Open http://localhost:3001 in any browser.' -ForegroundColor Cyan
-    Write-Host '  To start NOW without logging out:'
+    Write-Host '  After next logon the tray icon (blue W) will appear near the clock.' -ForegroundColor Cyan
+    Write-Host '  Right-click the tray icon for: Open in Browser / Restart Server / Stop & Exit' -ForegroundColor Cyan
+    Write-Host '  To start NOW without logging out:' -ForegroundColor Cyan
+    Write-Host '    Double-click "Start WallBoard.lnk" in this folder'
+    Write-Host '    (or run scripts\windows\Start-TrayApp.bat directly)'
 } else {
     Write-Host '  To start now:'
+    Write-Host '    Double-click "Start WallBoard.lnk" in this folder  (starts with tray icon)'
+    Write-Host '    Restart: double-click "Restart WallBoard.lnk"'
+    Write-Host '    No-tray alternative: scripts\windows\Start-WallBoard-Service.bat'
 }
-Write-Host '    scripts\windows\Start-WallBoard-Service.bat'
 Write-Host ''
 Write-Host '  Then open  http://localhost:3001  in any browser.' -ForegroundColor Cyan
 Write-Host ''

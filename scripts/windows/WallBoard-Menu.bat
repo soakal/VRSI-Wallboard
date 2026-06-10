@@ -14,6 +14,7 @@ echo   3  Build production
 echo.
 echo  RUN
 echo   4  Start server (keep window open)
+echo   T  Start tray app (server + icon near clock)
 echo   5  Start kiosk browser
 echo   S  Stop server
 echo   P  Update (pull + rebuild + restart)
@@ -34,6 +35,7 @@ echo   X  Uninstall (tasks + optional data)
 echo.
 echo   0  Exit
 echo.
+set "CHOICE="
 set /p CHOICE="Choose: "
 
 if /i "%CHOICE%"=="I" call "%~dp0Install-WallBoard.bat" & goto menu
@@ -41,6 +43,7 @@ if /i "%CHOICE%"=="1" call "%~dp0Setup-FirstTime.bat" & goto menu
 if /i "%CHOICE%"=="2" call "%~dp0Install-DataDirs.bat" & goto menu
 if /i "%CHOICE%"=="3" call "%~dp0Build-Production.bat" & goto menu
 if /i "%CHOICE%"=="4" call "%~dp0Start-WallBoard.bat" & goto menu
+if /i "%CHOICE%"=="T" call "%~dp0Start-TrayApp.bat" & goto menu
 if /i "%CHOICE%"=="5" call "%~dp0Start-Kiosk.bat" & goto menu
 if /i "%CHOICE%"=="S" call "%~dp0Stop-WallBoard.bat" & goto menu
 if /i "%CHOICE%"=="P" call "%~dp0Update-WallBoard.bat" & goto menu

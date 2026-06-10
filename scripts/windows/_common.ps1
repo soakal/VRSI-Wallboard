@@ -77,14 +77,14 @@ function Get-DbPath {
 }
 
 function Stop-WallBoardServer {
-    $conn = Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue | Select-Object -First 1
+    $conn = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $conn) {
         Write-Host 'No process listening on port 3001.'
         return $false
     }
-    $pid = $conn.OwningProcess
-    Write-Step "Stopping process on port 3001 (PID $pid)"
-    Stop-Process -Id $pid -Force -ErrorAction Stop
+    $serverPid = $conn.OwningProcess
+    Write-Step "Stopping process on port 3001 (PID $serverPid)"
+    Stop-Process -Id $serverPid -Force -ErrorAction Stop
     Start-Sleep -Seconds 2
     return $true
 }
