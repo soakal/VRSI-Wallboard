@@ -317,7 +317,7 @@ if (-not $WithBackup) {
 
 if ($WithBackup) {
     if (-not $isAdmin) {
-        Write-Warning 'Backup schedule needs Administrator  -  run Enable-Startup.bat or Register-BackupTask.bat as Admin later.'
+        Write-Warning 'Backup schedule needs Administrator  -  run ENABLE-STARTUP.bat (project root) or scripts\windows\Register-BackupTask.bat as Admin later.'
     } else {
         Write-Step 'Registering backup schedule'
         & (Join-Path $PSScriptRoot 'Register-BackupTask.ps1')
