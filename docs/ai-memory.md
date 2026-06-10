@@ -6,7 +6,7 @@
 
 ## Current State
 
-- Last completed task: v0.6.1 — release-notes link fix (`currentReleaseUrl`), agenda horizon now today → end of NEXT week (current week alone was empty: nearly all ship dates land the following week), full docs audit (READMEs, ops guide §1.5 Updating, Node 18→20 in CLAUDE/AGENTS/build-plan). v0.6.0 — Settings → About & Updates (version display + one-click Update button → `POST /api/update/run` → Update-FromRelease.ps1 downloads latest release zip on kiosks / Update-WallBoard.ps1 -Unattended on git installs); AgendaRail shows the current week (was today+tomorrow only → permanently empty). Before that: v0.5.0 Files toggle; v0.4.0 calendar user picker + per-user agenda + NEW badges + New filter; v0.3.0 multiple super users; v0.2.0 conhost --headless tray launcher.
+- Last completed task: v0.7.0 — agent-audited agenda overhaul: `client/src/lib/agendaFilter.ts` (match PM **or** MM by name; manual users filtered; super by role OR config), stale activeUser resync in App.tsx, agenda covers whole month with amber Past-due sections (chandlerc's Jun 5 jobs case), useEvents fetches monthStart→+45d, Users+Import moved to Settings → Board (gear added to BoardHeader). Before: v0.6.1 release-notes link + docs audit. v0.6.0 — Settings → About & Updates (version display + one-click Update button → `POST /api/update/run` → Update-FromRelease.ps1 downloads latest release zip on kiosks / Update-WallBoard.ps1 -Unattended on git installs); AgendaRail shows the current week (was today+tomorrow only → permanently empty). Before that: v0.5.0 Files toggle; v0.4.0 calendar user picker + per-user agenda + NEW badges + New filter; v0.3.0 multiple super users; v0.2.0 conhost --headless tray launcher.
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
 - Blockers: None — kiosk needs updated `VRSI WallBoard\` folder copied over + ENABLE-STARTUP.bat re-run as Admin to pick up the conhost launcher
 
@@ -92,7 +92,7 @@
 
 ## Version
 
-- Current: `v0.6.1` — tagged and released on GitHub (2026-06-10). Note: v0.5.1 tag exists with no GitHub release (superseded same-day); v0.5.2 was never tagged (folded into v0.6.0).
+- Current: `v0.7.0` — tagged and released on GitHub (2026-06-10). Note: v0.5.1 tag exists with no GitHub release (superseded same-day); v0.5.2 was never tagged (folded into v0.6.0).
 - Next release: bump `server/package.json` (+ root) → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → `gh release create`
 
 ## Files Modified This Session (2026-06-10)
@@ -147,7 +147,8 @@
 ## Context for Next Session
 
 Run `npm start` at repo root. Health: `GET http://localhost:3001/health`.
-App is v0.6.1. `VRSI WallBoard\` folder is distribution-ready.
+App is v0.7.0. `VRSI WallBoard\` folder is distribution-ready.
+Agenda filtering single source of truth: `client/src/lib/agendaFilter.ts` — change it there, nowhere else.
 Kiosk update path: Settings → About & Updates → Update button (or Update-FromRelease.bat); dev machine uses git-based Update-WallBoard.bat.
 Tray starts via Task Scheduler `VRSI WallBoard Tray` → `conhost.exe --headless powershell.exe ... Start-TrayApp.ps1`.
 The tray W icon has no taskbar entry. Right-click to restart/stop.
