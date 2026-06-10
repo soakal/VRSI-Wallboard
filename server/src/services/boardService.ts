@@ -970,17 +970,18 @@ export function formatJobPmLabel(pm: string): string {
 const PERMANENT_SUPER = 'Jon Shantry'
 
 export function getDerivedUsers(config: BoardConfig): BoardUser[] {
-  const jobsFile = loadJobsFile()
-  const jobs = jobsFile?.jobs ?? []
+  const jobs = getMergedJobs()
 
   const makeId = (name: string): string =>
     'u_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
 
-  // Collect unique names per role from job data
+  // Collect unique names per role from non-shipped jobs only.
+  // Users whose only jobs are shipped have no active work and are hidden from the list.
   const pmNames = new Set<string>()
   const materialsNames = new Set<string>()
 
   for (const job of jobs) {
+    if (job.status === 'shipped') continue
     if (job.pm?.trim()) pmNames.add(canonicalPersonName(job.pm.trim()))
     if (job.materialsManager?.trim()) {
       materialsNames.add(canonicalPersonName(job.materialsManager.trim()))
