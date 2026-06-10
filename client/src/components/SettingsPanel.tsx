@@ -88,10 +88,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
     setZipLooking(true);
     setZipStatus(null);
     try {
-      const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`);
-      const data = await res.json();
-      if (data.results?.length) {
-        const { latitude, longitude, name, admin1 } = data.results[0];
+      const res = await fetch(`/api/config/geocode?q=${encodeURIComponent(query)}`);
+      const json = await res.json() as { data?: { results?: { latitude: number; longitude: number; name: string; admin1?: string }[] } };
+      const data = json.data;
+      if (data?.results?.length) {
+        const { latitude, longitude, name, admin1 } = data!.results![0];
         set("weatherLat", latitude);
         set("weatherLon", longitude);
         setZipStatus({ type: "ok", message: `${name}${admin1 ? `, ${admin1}` : ""}` });

@@ -133,6 +133,23 @@ function fromClientConfig(flat: Record<string, unknown>): Partial<AppConfig> {
 }
 
 configRouter.get(
+  '/geocode',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const q = String(req.query.q ?? '').trim();
+      if (!q) { res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'q is required' } }); return; }
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`;
+      const upstream = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!upstream.ok) { res.status(502).json({ error: { code: 'UPSTREAM_ERROR', message: `Geocoding API returned ${upstream.status}` } }); return; }
+      const data = await upstream.json() as unknown;
+      res.json({ data });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+configRouter.get(
   '/',
   (req: Request, res: Response, next: NextFunction): void => {
     try {
