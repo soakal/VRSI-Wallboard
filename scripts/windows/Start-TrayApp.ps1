@@ -1,6 +1,6 @@
 . "$PSScriptRoot\_common.ps1"
 
-# Refresh PATH from registry — Task Scheduler with -NoProfile does not load the
+# Refresh PATH from registry - Task Scheduler with -NoProfile does not load the
 # user profile, so winget/MSI installs that write to User PATH are invisible.
 # Reading both Machine and User PATH from the registry fixes node.exe lookup.
 $_mp = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
@@ -10,7 +10,7 @@ Remove-Variable _mp, _up -ErrorAction SilentlyContinue
 
 $ErrorActionPreference = 'Stop'
 
-# STA guard — NotifyIcon/WinForms requires single-threaded apartment
+# STA guard - NotifyIcon/WinForms requires single-threaded apartment
 if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$PSCommandPath`"" -WindowStyle Hidden
     exit
@@ -28,7 +28,7 @@ Add-Type -AssemblyName System.Drawing
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-# ---- Startup log — writes to ProgramData logs dir for diagnosing hidden-task failures ----
+# ---- Startup log - writes to ProgramData logs dir for diagnosing hidden-task failures ----
 function Write-TrayLog([string]$Level, [string]$Msg) {
     try {
         $logDir = Get-EnvValue 'LOGS_DIR' 'C:\ProgramData\VRSIWallBoard\logs'
@@ -97,9 +97,10 @@ function Show-Balloon {
     $script:Notify.ShowBalloonTip(3000, 'VRSI WallBoard', $Message, $IconType)
 }
 
-# ---- Resolve node.exe — fallback to known install locations if PATH lookup fails ----
+# ---- Resolve node.exe - fallback to known install locations if PATH lookup fails ----
 function Get-NodeExe {
-    $fromPath = (Get-Command node -ErrorAction SilentlyContinue)?.Source
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    $fromPath = if ($nodeCmd) { $nodeCmd.Source } else { $null }
     if ($fromPath) { return $fromPath }
     $x86 = ${env:ProgramFiles(x86)}
     foreach ($candidate in @(
@@ -147,7 +148,7 @@ function Stop-Server {
             }
         }
     }
-    # Note: no sleep here — callers that need the port to free (Restart path) add their own delay
+    # Note: no sleep here - callers that need the port to free (Restart path) add their own delay
 }
 
 # ---- Cleanup: called before closing the app form ----
@@ -179,11 +180,11 @@ if ($existingConn) {
     if ($adoptedProcess -and $adoptedProcess.ProcessName -eq 'node') {
         $script:ServerProcess = $adoptedProcess
     } else {
-        # Port squatter is not a WallBoard server — starting would loop-crash with EADDRINUSE
+        # Port squatter is not a WallBoard server - starting would loop-crash with EADDRINUSE
         $squatter = if ($adoptedProcess) { "$($adoptedProcess.ProcessName) (PID $($adoptedProcess.Id))" } else { "PID $($existingConn.OwningProcess)" }
         Write-TrayLog 'WARN' "Port squatter: $squatter"
         [System.Windows.Forms.MessageBox]::Show(
-            "Port 3001 is already in use by $squatter — this is not a WallBoard server.`n`nFree port 3001 and try again.",
+            "Port 3001 is already in use by $squatter - this is not a WallBoard server.`n`nFree port 3001 and try again.",
             'VRSI WallBoard', 'OK', 'Warning') | Out-Null
         Invoke-Cleanup
         exit 1
@@ -243,7 +244,7 @@ $itemExit = New-Object System.Windows.Forms.ToolStripMenuItem('Stop && Exit')
 $itemExit.add_Click({
     try {
         Stop-Server
-        Invoke-Cleanup   # closes $script:AppForm → exits Application::Run($script:AppForm)
+        Invoke-Cleanup   # closes $script:AppForm -> exits Application::Run($script:AppForm)
     } catch {
         Show-Balloon "Failed to stop server cleanly: $($_.Exception.Message)" ([System.Windows.Forms.ToolTipIcon]::Error)
     }
@@ -261,7 +262,7 @@ $script:Notify.add_DoubleClick({
     Start-Process $WallBoardUrl
 })
 
-# ---- Monitor timer (fires on UI thread — System.Windows.Forms.Timer) ----
+# ---- Monitor timer (fires on UI thread - System.Windows.Forms.Timer) ----
 $script:MonitorTimer          = New-Object System.Windows.Forms.Timer
 $script:MonitorTimer.Interval = 5000
 $script:MonitorTimer.add_Tick({
@@ -299,7 +300,7 @@ $script:MonitorTimer.Start()
 
 Show-Balloon 'WallBoard server running at http://localhost:3001' ([System.Windows.Forms.ToolTipIcon]::Info)
 
-# ---- Hidden host form — keeps the message loop alive without a taskbar button.
+# ---- Hidden host form - keeps the message loop alive without a taskbar button.
 # ShowInTaskbar=false + never Show()ed means no entry appears in the taskbar.
 # Application::Run($form) exits cleanly when $form.Close() is called.
 $script:AppForm                = New-Object System.Windows.Forms.Form

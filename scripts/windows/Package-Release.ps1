@@ -1,4 +1,4 @@
-﻿# Builds the project and creates a self-contained VRSI WallBoard\ folder.
+# Builds the project and creates a self-contained VRSI WallBoard\ folder.
 # Copy the VRSI WallBoard\ folder to any Windows PC and run INSTALL.bat there.
 . "$PSScriptRoot\_common.ps1"
 $ErrorActionPreference = 'Stop'
@@ -55,7 +55,7 @@ Write-Host '  Copying client dist...' -ForegroundColor DarkGray
 New-Dir (Join-Path $ReleaseDir 'client\dist')
 Copy-Item (Join-Path $ClientDir 'dist\*') (Join-Path $ReleaseDir 'client\dist') -Recurse -Force
 
-# 4. All scripts (exclude Package-Release.ps1 — dev-only, not needed on end-user PCs)
+# 4. All scripts (exclude Package-Release.ps1  - dev-only, not needed on end-user PCs)
 Write-Host '  Copying scripts...' -ForegroundColor DarkGray
 New-Dir (Join-Path $ReleaseDir 'scripts\windows')
 Get-ChildItem "$PSScriptRoot\*.ps1" | Where-Object { $_.Name -ne 'Package-Release.ps1' } |

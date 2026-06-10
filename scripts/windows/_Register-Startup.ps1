@@ -6,7 +6,7 @@ $trayPs1 = Join-Path $PSScriptRoot 'Start-TrayApp.ps1'
 $existingTray = Get-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue
 if ($existingTray) { Unregister-ScheduledTask -TaskName 'VRSI WallBoard Tray' -Confirm:$false }
 
-# Remove legacy headless server task — replaced by tray
+# Remove legacy headless server task  - replaced by tray
 $legacyServer = Get-ScheduledTask -TaskName 'VRSI WallBoard Server' -ErrorAction SilentlyContinue
 if ($legacyServer) { Unregister-ScheduledTask -TaskName 'VRSI WallBoard Server' -Confirm:$false }
 
@@ -25,7 +25,7 @@ if ($consoleUser) {
 } else {
     # No interactive console session (e.g. installing over RDP or before first logon).
     # Falling back to $env:USERNAME would register the task for the elevated admin
-    # account — the exact bug this logic was written to prevent.  Require the kiosk
+    # account  - the exact bug this logic was written to prevent.  Require the kiosk
     # user to be interactively logged on, or pass -TriggerUser explicitly.
     throw @"
 Cannot determine the interactive kiosk user (Win32_ComputerSystem.UserName is empty).
@@ -41,7 +41,7 @@ Fix: Log on as the kiosk user first, then run ENABLE-STARTUP.bat again.
 $arg      = "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$trayPs1`""
 $action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
 $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $triggerUser
-# -ExecutionTimeLimit ([TimeSpan]::Zero) disables the default 72-hour kill — without it
+# -ExecutionTimeLimit ([TimeSpan]::Zero) disables the default 72-hour kill  - without it
 # Task Scheduler terminates the tray (and the server it owns) after 3 days.
 $settings   = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
 # Principal must match the trigger user with Interactive logon; without it the task

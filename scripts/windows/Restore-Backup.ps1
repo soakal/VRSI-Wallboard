@@ -122,7 +122,7 @@ if ($restartTray) {
         Start-Process -FilePath $trayBat -WindowStyle Hidden
         Write-Step 'Tray monitor restarted.'
     } else {
-        Write-Warning "Could not find Start-TrayApp.bat at $trayBat — start it manually if needed."
+        Write-Warning "Could not find Start-TrayApp.bat at $trayBat  - start it manually if needed."
     }
     Write-Host 'The tray monitor has been restarted and will launch the server automatically.' -ForegroundColor Cyan
 } else {

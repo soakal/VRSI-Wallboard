@@ -24,7 +24,7 @@ function Stop-TrayApp {
             Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
             $stopped = $true
         } catch {
-            # ignore — process may have already exited
+            # ignore  - process may have already exited
         }
     }
     if ($stopped) {

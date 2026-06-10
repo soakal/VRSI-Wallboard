@@ -1,4 +1,4 @@
-﻿# One-step installer for a single Windows PC.
+# One-step installer for a single Windows PC.
 param(
     [switch]$WithStartup,
     [switch]$WithBackup,
@@ -300,7 +300,7 @@ if (-not $WithStartup) {
 
 if ($WithStartup) {
     if (-not $isAdmin) {
-        Write-Warning 'Startup registration needs Administrator — run ENABLE-STARTUP.bat as Admin after install.'
+        Write-Warning 'Startup registration needs Administrator  - run ENABLE-STARTUP.bat as Admin after install.'
     } else {
         Write-Step 'Registering startup at logon'
         . (Join-Path $PSScriptRoot '_Register-Startup.ps1')
