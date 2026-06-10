@@ -5,6 +5,7 @@ import CalendarSelector from "./CalendarSelector";
 import { useCalendars } from "../hooks/useCalendars";
 import { useUpdateConfig } from "../hooks/useConfig";
 import { useUpdateCheck } from "../hooks/useUpdateCheck";
+import { confirmDiscardUnsaved } from "../store/appStore";
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -73,6 +74,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
   const navigate = useNavigate();
 
   const goTo = (path: string) => {
+    if (!confirmDiscardUnsaved()) return;
     onClose();
     navigate(path);
   };

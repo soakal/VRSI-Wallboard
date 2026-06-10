@@ -2,17 +2,29 @@ import { Outlet, useLocation, Link } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { BoardHeader } from './BoardHeader'
-import { useAppStore } from '../../store/appStore'
+import { useAppStore, confirmDiscardUnsaved } from '../../store/appStore'
 
 export function BoardLayout() {
   const location = useLocation()
   const queryClient = useQueryClient()
   const { setIsSettingsOpen, setIsFilesOpen, setIsMonitoringOpen } = useAppStore()
+  const dirtyCount = useAppStore((s) => Object.keys(s.dirtyJobs).length)
 
   // Refetch board data whenever the user switches Project / Spare / Archive / Import
   useEffect(() => {
     void queryClient.refetchQueries({ queryKey: ['board'] })
   }, [location.pathname, queryClient])
+
+  // Browser refresh/close while a card has un-applied edits → native warning
+  useEffect(() => {
+    if (dirtyCount === 0) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirtyCount])
 
   return (
     <div className="h-screen flex flex-col bg-[#0f1117] text-slate-200">
@@ -53,6 +65,7 @@ export function BoardLayout() {
           </button>
           <Link
             to="/"
+            onClick={(e) => { if (!confirmDiscardUnsaved()) e.preventDefault() }}
             className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
           >
             Calendar

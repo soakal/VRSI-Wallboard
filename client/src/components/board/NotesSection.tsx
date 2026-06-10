@@ -5,6 +5,9 @@ import { JobNote, BoardUser, OPS_SCHEDULE_NOTE_AUTHOR_ID } from '@vrsi/wallboard
 interface Props {
   notes: JobNote[]
   activeUser: BoardUser | null
+  /** Draft lives in JobCard so an unsent note counts as an un-applied change */
+  draft: string
+  onDraftChange: (text: string) => void
   onAddNote: (text: string) => void
   onEditNote: (noteId: string, text: string) => void
   onDeleteNote: (noteId: string) => void
@@ -15,13 +18,14 @@ interface Props {
 export default function NotesSection({
   notes,
   activeUser,
+  draft,
+  onDraftChange,
   onAddNote,
   onEditNote,
   onDeleteNote,
   isSubmitting,
   actionError,
 }: Props) {
-  const [draft, setDraft] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
 
@@ -34,7 +38,7 @@ export default function NotesSection({
     const text = draft.trim()
     if (!text || isSubmitting) return
     onAddNote(text)
-    setDraft('')
+    onDraftChange('')
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -177,7 +181,7 @@ export default function NotesSection({
             rows={3}
             placeholder={`Add a note as ${activeUser.name}...`}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => onDraftChange(e.target.value)}
             onKeyDown={handleKeyDown}
           />
           <div className="flex justify-end">

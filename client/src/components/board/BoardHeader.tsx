@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useBoardJobs, useBoardConfig, useBoardUsers } from '../../hooks/useBoard'
-import { useAppStore } from '../../store/appStore'
+import { useAppStore, confirmDiscardUnsaved } from '../../store/appStore'
 import { tabColor, filterJobsForTab } from './boardColors'
 
 export function BoardHeader() {
@@ -18,10 +18,17 @@ export function BoardHeader() {
   const archiveColor = config.statusColors.shipped
 
   const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    // Switching user remounts the job list — pending edits would be lost
+    if (!confirmDiscardUnsaved()) { e.target.value = activeUser?.id ?? ''; return }
     const id = e.target.value
     if (!id) { setActiveUser(null); return }
     const user = users.find((u) => u.id === id)
     if (user) setActiveUser(user)
+  }
+
+  // Block tab switches while a card has un-applied edits (unless confirmed)
+  const guardNav = (e: React.MouseEvent) => {
+    if (!confirmDiscardUnsaved()) e.preventDefault()
   }
 
   return (
@@ -68,6 +75,7 @@ export function BoardHeader() {
         <NavLink
           to="/board"
           end
+          onClick={guardNav}
           className={({ isActive }) =>
             `px-3 py-2 text-sm font-medium rounded-t transition-colors ${
               isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'
@@ -82,6 +90,7 @@ export function BoardHeader() {
 
         <NavLink
           to="/board/spare-parts"
+          onClick={guardNav}
           className={({ isActive }) =>
             `px-3 py-2 text-sm font-medium rounded-t transition-colors ${
               isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'
@@ -96,6 +105,7 @@ export function BoardHeader() {
 
         <NavLink
           to="/board/archive"
+          onClick={guardNav}
           className={({ isActive }) =>
             `px-3 py-2 text-sm font-medium rounded-t transition-colors ${
               isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'

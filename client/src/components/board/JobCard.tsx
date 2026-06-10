@@ -15,6 +15,7 @@ import {
   usePresence,
 } from '../../hooks/useBoard'
 import { claimPresence, releasePresence } from '../../api/boardApi'
+import { useAppStore } from '../../store/appStore'
 
 interface Props {
   job: BoardJob
@@ -52,6 +53,8 @@ export function JobCard({
   const [pendingBinderPrinted, setPendingBinderPrinted] = useState<boolean>(job.binderPrinted)
   const [pendingShipDate, setPendingShipDate] = useState<string | null>(job.effectiveShipDate)
   const [pendingOverrideNote, setPendingOverrideNote] = useState<string>(job.shipDateOverrideNote ?? '')
+  const [noteDraft, setNoteDraft] = useState('')
+  const setJobDirty = useAppStore((s) => s.setJobDirty)
 
   useEffect(() => { setNotesOpen(job.notes.length > 0) }, [job.notes.length])
   useEffect(() => { setPendingStatus(job.status) }, [job.status])
@@ -75,9 +78,17 @@ export function JobCard({
   const binderDirty = !spareJob && pendingBinderPrinted !== job.binderPrinted
   const dateDirty = pendingOverride !== currentOverride
   const noteDirty = (pendingOverrideNote.trim() || null) !== (job.shipDateOverrideNote?.trim() || null)
-  const isDirty = statusDirty || binderDirty || dateDirty || noteDirty
+  const noteDraftDirty = noteDraft.trim().length > 0
+  const isDirty = statusDirty || binderDirty || dateDirty || noteDirty || noteDraftDirty
   const isSaving =
-    setJobStatus.isPending || setJobShipDate.isPending || setJobBinderPrinted.isPending
+    setJobStatus.isPending || setJobShipDate.isPending || setJobBinderPrinted.isPending ||
+    addJobNote.isPending
+
+  // Report un-applied edits globally so navigation can warn before they are lost
+  useEffect(() => {
+    setJobDirty(job.jobNumber, isDirty)
+    return () => setJobDirty(job.jobNumber, false)
+  }, [isDirty, job.jobNumber, setJobDirty])
 
   const pendingDateOverridden =
     pendingOverride !== null || (dateDirty && pendingShipDate !== job.originalShipDate)
@@ -117,6 +128,12 @@ export function JobCard({
         actor: activeUser,
       })
     }
+    // A typed-but-unsent note counts as a pending change: Apply saves it too,
+    // so one click commits everything on the card at once.
+    if (noteDraftDirty) {
+      handleAddNote(noteDraft.trim())
+      setNoteDraft('')
+    }
     if (userId) releasePresence(job.jobNumber, userId)
   }
 
@@ -125,6 +142,7 @@ export function JobCard({
     setPendingBinderPrinted(job.binderPrinted)
     setPendingShipDate(job.effectiveShipDate)
     setPendingOverrideNote(job.shipDateOverrideNote ?? '')
+    setNoteDraft('')
     if (userId) releasePresence(job.jobNumber, userId)
   }
 
@@ -289,6 +307,8 @@ export function JobCard({
           <NotesSection
             notes={job.notes}
             activeUser={activeUser}
+            draft={noteDraft}
+            onDraftChange={setNoteDraft}
             onAddNote={handleAddNote}
             onEditNote={handleEditNote}
             onDeleteNote={handleDeleteNote}
@@ -307,7 +327,10 @@ export function JobCard({
       )}
 
       {isDirty && (
-        <div className="mt-3 flex items-center justify-end gap-2 border-t border-slate-700/50 pt-3">
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-slate-700/50 pt-3">
+          <span className="mr-auto text-xs text-amber-400">
+            ⚠ Unsaved changes — they will be lost unless you Apply
+          </span>
           <button
             type="button"
             onClick={handleCancel}
@@ -322,7 +345,7 @@ export function JobCard({
             disabled={isSaving || !activeUser}
             className="px-4 py-1 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
           >
-            {isSaving ? 'Applying…' : 'Apply'}
+            {isSaving ? 'Applying…' : 'Apply all'}
           </button>
         </div>
       )}

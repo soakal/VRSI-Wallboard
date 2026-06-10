@@ -11,6 +11,8 @@ interface AppState {
   theme: 'dark' | 'light';
   config: AppConfig | null;
   activeUser: BoardUser | null;
+  /** Job numbers with un-applied edits (pending status/date/note drafts) */
+  dirtyJobs: Record<string, true>;
   setIsAuthenticated: (value: boolean) => void;
   setIsSettingsOpen: (value: boolean) => void;
   setIsFilesOpen: (value: boolean) => void;
@@ -19,6 +21,7 @@ interface AppState {
   setTheme: (theme: 'dark' | 'light') => void;
   setConfig: (config: AppConfig) => void;
   setActiveUser: (user: BoardUser | null) => void;
+  setJobDirty: (jobNumber: string, dirty: boolean) => void;
 }
 
 // Initialize activeUser from localStorage
@@ -49,6 +52,16 @@ export const useAppStore = create<AppState>((set) => ({
   theme: 'dark',
   config: null,
   activeUser: getInitialActiveUser(),
+  dirtyJobs: {},
+  setJobDirty: (jobNumber, dirty) =>
+    set((state) => {
+      const has = !!state.dirtyJobs[jobNumber];
+      if (dirty === has) return {};
+      const next = { ...state.dirtyJobs };
+      if (dirty) next[jobNumber] = true;
+      else delete next[jobNumber];
+      return { dirtyJobs: next };
+    }),
   setIsAuthenticated: (value) => set({ isAuthenticated: value }),
   setIsSettingsOpen: (value) => set({ isSettingsOpen: value }),
   setIsFilesOpen: (value) => set({ isFilesOpen: value }),
@@ -73,3 +86,16 @@ export const useAppStore = create<AppState>((set) => ({
     set({ activeUser: user });
   }
 }));
+
+/**
+ * Returns true when it is OK to navigate away. When any job card has
+ * un-applied edits, asks the user to confirm losing them first.
+ */
+export function confirmDiscardUnsaved(): boolean {
+  const count = Object.keys(useAppStore.getState().dirtyJobs).length;
+  if (count === 0) return true;
+  return window.confirm(
+    `You have unsaved changes on ${count} job${count === 1 ? '' : 's'} that you have not applied.\n\n` +
+      'If you leave now those changes will NOT be saved. Leave anyway?',
+  );
+}
