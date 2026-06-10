@@ -38,7 +38,7 @@ Everything below must exist in the new app. Zero feature loss.
 | Client state | Zustand | ✅ Yes | Auth, display mode, active user |
 | Routing | react-router-dom v6 | ✅ Yes | SPA routing already clean |
 | Calendar UI | react-big-calendar + date-fns | ✅ Yes | Keep exact rendering logic |
-| Backend | Node.js 18+ + Express + TypeScript | ✅ Yes | Clean, familiar |
+| Backend | Node.js 20+ + Express + TypeScript | ✅ Yes | Clean, familiar |
 | Auth | @azure/msal-node + Microsoft Graph | ✅ Yes | Already working |
 | Logging | Winston | ✅ Yes | Keep structured logging |
 | Security | helmet + cors | ✅ Yes | Keep |
@@ -289,7 +289,7 @@ Preserve exactly — disables all Microsoft auth/Graph calls, returns mock data 
 ## Windows Deployment
 
 ### Running the App on Windows
-- Node.js 18+ installed on Windows machine
+- Node.js 20+ installed on Windows machine
 - `npm install` → `npm run build` → `npm start`
 - App serves on configurable port (default 3001)
 - Browser opens to `localhost:3001` (or configure as Windows startup app)

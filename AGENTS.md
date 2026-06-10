@@ -27,7 +27,7 @@
 
 ## Stack (do not assume — verify against package.json each session)
 - **Frontend:** React 18 + Vite + TypeScript + Tailwind CSS
-- **Backend:** Node.js 18+ + Express + TypeScript + SQLite (better-sqlite3)
+- **Backend:** Node.js 20+ + Express + TypeScript + SQLite (better-sqlite3)
 - **Auth:** Azure MSAL Device Code Flow (Entra ID)
 - **Build:** `npm run build` at root builds both client and server
 - **Start:** `npm start` at root starts the compiled server on port 3001

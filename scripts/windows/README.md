@@ -17,7 +17,8 @@ Open `WallBoard-Menu.bat` for an interactive menu, or run individual scripts:
 | **`WallBoard-Menu.bat`** | Interactive menu for all actions |
 | **`Install-WallBoard.bat`** | Same as root INSTALL.bat |
 | **`Build-Production.bat`** | npm install + build client, server, shared |
-| **`Update-WallBoard.bat`** | Pull latest code, rebuild, restart server + browser |
+| **`Update-WallBoard.bat`** | Dev/git installs: pull latest code, rebuild, restart server + browser |
+| **`Update-FromRelease.bat`** | Kiosk installs: download latest GitHub release zip, install, restart |
 | **`Start-WallBoard.bat`** | Run server on port 3001 (foreground window) |
 | **`Start-WallBoard-Service.bat`** | Run server silently (Task Scheduler mode) |
 | **`Start-TrayApp.bat`** | Launch tray app (server + system-tray icon) |
@@ -61,6 +62,18 @@ This creates data folders, generates a random `ADMIN_TOKEN` in `server\.env`, bu
 
 ## Updating to a new version
 
+**Easiest:** in the app, open Settings → **About & Updates** → **Update**. The board downloads the latest GitHub release, installs it, and restarts itself.
+
+Manual, on a kiosk PC (installed from the release folder, no git):
+
+```powershell
+.\scripts\windows\Update-FromRelease.bat
+```
+
+Downloads the latest release zip from GitHub, stops the tray + server, copies the new files over the install (data and `server\.env` untouched), refreshes server dependencies, and restarts the tray and kiosk browser. Progress logs to `update.log` in the logs folder.
+
+Manual, on a dev machine (git clone):
+
 ```powershell
 .\scripts\windows\Update-WallBoard.bat   # or choose P from WallBoard-Menu
 ```
@@ -92,8 +105,9 @@ This registers the **VRSI WallBoard Tray** scheduled task, which launches `Start
 | `Install-WallBoard.ps1` | Full install: dirs + env + build + optional tasks |
 | `Install-DataDirs.ps1` | Create `ProgramData\VRSIWallBoard\` folders |
 | `Build-Production.ps1` | `npm install` + build shared, client, server |
-| `Update-WallBoard.ps1` | Pull + rebuild + restart server + reload browser |
-| `Package-Release.ps1` | Build and bundle `VRSI WallBoard\` folder for deployment |
+| `Update-WallBoard.ps1` | Dev/git: pull + rebuild + restart server + reload browser (`-Unattended` skips prompts) |
+| `Update-FromRelease.ps1` | Kiosk: download latest GitHub release zip + install + restart (`-Unattended` for the Settings Update button) |
+| `Package-Release.ps1` | Build and bundle `VRSI WallBoard\` folder for deployment (dev-only, not shipped) |
 | `Start-WallBoard.ps1` | Run production server (foreground) |
 | `Start-WallBoard-Service.ps1` | Run server silently (Task Scheduler / startup, no tray) |
 | `Start-TrayApp.ps1` | Launch tray app: starts server + shows system-tray icon with crash-restart |

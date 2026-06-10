@@ -1,6 +1,6 @@
 # VRSI WallBoard — Operations Guide
 
-**Covers:** Install · Uninstall · Backup & Restore · Sending Logs for Support  
+**Covers:** Install · Updating · Uninstall · Backup & Restore · Sending Logs for Support  
 **Platform:** Windows 10 / 11 (64-bit)  
 **Requires:** Node.js 20 or newer
 
@@ -9,9 +9,10 @@
 ## Table of Contents
 
 1. [Install](#1-install)
-2. [Uninstall](#2-uninstall)
-3. [Backup & Restore](#3-backup--restore)
-4. [Sending Logs for Support](#4-sending-logs-for-support)
+2. [Updating](#15-updating-to-a-new-version)
+3. [Uninstall](#2-uninstall)
+4. [Backup & Restore](#3-backup--restore)
+5. [Sending Logs for Support](#4-sending-logs-for-support)
 
 ---
 
@@ -128,6 +129,20 @@ Double-click **`ENABLE-STARTUP.bat`**. It will request Administrator approval an
 
 ---
 
+## 1.5. Updating to a new version
+
+An update banner appears at the top of the app within 6 hours of a new release being published.
+
+**Easiest — in the app:** open **Settings → About & Updates**. The section shows the version you are running; when a newer release exists, click **Update**. The board downloads the latest release from GitHub, installs it, and restarts itself (including the kiosk browser) within a few minutes. Job data, notes, and settings are preserved.
+
+**Manual — script:** double-click `scripts\windows\Update-FromRelease.bat`. Same process as the button. Progress is logged to `update.log` in the logs directory.
+
+**Manual — copy over:** download the release zip from GitHub, copy the `VRSI WallBoard` folder over the existing install, and re-run `INSTALL.bat`.
+
+> Dev machines running from a git clone use `scripts\windows\Update-WallBoard.bat` (git pull + rebuild) instead.
+
+---
+
 ## 2. Uninstall
 
 ### 2.1 Back up data first (recommended)
@@ -158,10 +173,9 @@ All application data lives in the data directory (default `C:\ProgramData\VRSIWa
 
 | File | Contents |
 |------|----------|
-| `wallboard.db` | All jobs, board state, notes, audit log |
-| `config.json` | Calendar and display settings |
-| `board-config.json` | Board column/status configuration |
-| `tokens.json` | Encrypted Microsoft OAuth tokens |
+| `wallboard.db` | All jobs, board state, notes, settings (app + board config), audit log |
+| `tokens.json` | Encrypted Microsoft OAuth tokens (only when Azure is enabled) |
+| `*.migrated` | Legacy JSON files (`jobs.json`, `config.json`, …) already imported into SQLite — safe to leave |
 
 ### 3.1 Manual backup
 
@@ -303,10 +317,13 @@ When reporting a problem, include:
 | Task | Command / Location |
 |------|--------------------|
 | Install | Double-click `INSTALL.bat` |
-| Start server | Double-click `Start-WallBoard.bat` |
+| Update to latest version | Settings → About & Updates → **Update** (or `scripts\windows\Update-FromRelease.bat`) |
+| Check current version | Settings → About & Updates |
+| Start server (tray) | Double-click `Start-TrayApp.bat` — blue W icon near the clock |
+| Start server (console) | Double-click `Start-WallBoard.bat` |
 | Enable auto-start on login | Double-click `ENABLE-STARTUP.bat` |
 | Uninstall | Double-click `UNINSTALL.bat` |
-| Stop server | `Ctrl+C` in the terminal window |
+| Stop server | Right-click tray icon → Stop & Exit (or `Ctrl+C` in the console window) |
 | Server health check | `http://localhost:3001/health` |
 | Data directory | `C:\ProgramData\VRSIWallBoard\data\` |
 | Backups directory | `C:\ProgramData\VRSIWallBoard\backups\` |
