@@ -6,9 +6,9 @@
 
 ## Current State
 
-- Last completed task: Fable audit pass + auto-start PATH fix + 6 audit findings resolved. Latest commit: 25d5c8c.
+- Last completed task: Full session — PS5.1 fixes, geocode proxy, hidden-users filter, taskbar fix (VBS shim), super user save fix. Latest commit: 88feb5f.
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
-- Blockers: None — auto-start fix deployed; kiosk PC needs updated Start-TrayApp.ps1 copied over
+- Blockers: None — kiosk needs ENABLE-STARTUP.bat re-run as Admin to pick up VBS taskbar fix
 
 ## Active Plan
 
@@ -28,6 +28,11 @@
 - [x] **Fable audit #1** — 21 code findings, 4 dead files removed, 5 release gaps fixed
 - [x] **Taskbar fix** — Application::Run($hiddenForm) with ShowInTaskbar=false; no taskbar entry
 - [x] **Fable verify pass** — 8 more findings fixed (see key decisions below)
+- [x] **PS5.1 compatibility** — removed all em-dashes + `?.` operator from PS scripts; Start-TrayApp.ps1 fully rewritten clean
+- [x] **Geocode proxy** — ZIP lookup now proxied through server (`GET /api/config/geocode`) instead of direct browser fetch (blocked on kiosk networks)
+- [x] **Hidden users** — PM/materials users with only shipped jobs hidden from user picker; super users always shown
+- [x] **Taskbar fix (VBS shim)** — task now launches via `wscript.exe + Start-TrayApp.vbs` (SW_HIDE=0); `cmd /c start /b` was insufficient
+- [x] **Super user save fix** — `deepMergeConfig` used `||` for superUser (dropped empty string); changed to `??`
 - [ ] Soft-delete tombstones for notes (awaiting human approval — schema change)
 - [ ] SharePoint provider (deferred)
 - [ ] Audit log UI panel (deferred)
@@ -36,9 +41,9 @@
 ## Key Decisions Made
 
 ### Tray App Architecture
-- **Primary startup mechanism**: Task Scheduler task `VRSI WallBoard Tray` (replaces `VRSI WallBoard Server`)
-- **Script**: `scripts/windows/Start-TrayApp.ps1` — runs with `-STA -WindowStyle Hidden`
-- **No taskbar entry**: Uses `Application::Run($AppForm)` with `$AppForm.ShowInTaskbar = $false`, never shown. Closing the task in taskbar no longer possible — only tray icon controls the app.
+- **Primary startup mechanism**: Task Scheduler task `VRSI WallBoard Tray` via `wscript.exe + Start-TrayApp.vbs` (SW_HIDE=0, fully invisible)
+- **Script**: `scripts/windows/Start-TrayApp.ps1` — pure ASCII (PS5.1 compatible), refreshes PATH from registry at start
+- **No taskbar entry**: `wscript.exe` SW_HIDE=0 prevents conhost from ever appearing. WinForms form also has `ShowInTaskbar=$false`. Previous `cmd /c start /b` and `-WindowStyle Hidden` both left a conhost entry.
 - **Icon**: Programmatic GDI+ 32x32 blue circle + white "W" via `Bitmap.GetHicon()` → `Icon.FromHandle()`
 - **Single-instance**: Named mutex `VRSIWallBoardTray`; `Restart-WallBoard.ps1` probes it to detect tray
 - **Crash-loop protection**: max 3 auto-restarts per 60 seconds; error balloon then stops retrying
@@ -69,7 +74,7 @@
 - Root: `INSTALL.bat`, `UNINSTALL.bat`, `ENABLE-STARTUP.bat`, `Start-WallBoard.bat`, `Start-TrayApp.bat`, `operations-guide.md`, `README.md`, `release-info.json`
 - `scripts/windows/`: 44 files (Package-Release.ps1 excluded — dev-only)
 - No `.env` secrets, no `node_modules`
-- Current at commit 25d5c8c (2026-06-10)
+- Current at commit 88feb5f (2026-06-10)
 
 ### Package-Release.ps1 Changes
 - Excludes `Package-Release.ps1` from scripts copy (dev tool, not for end users)
@@ -83,7 +88,7 @@
 ## Version
 
 - Current: `v0.1.0` — tagged and released on GitHub (title: "VRSI Wallboard")
-- Latest commit: `7c6b948` (2026-06-10, Fable final check fixes)
+- Latest commit: `88feb5f` (2026-06-10)
 - Next release: bump `server/package.json` → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → create GitHub release
 
 ## Files Modified This Session (2026-06-10)
@@ -126,10 +131,19 @@
 
 - Soft-delete tombstones for notes: ready to implement when Brian approves schema change
 
+### This Session Fixes (2026-06-10)
+- **PS5.1 parse errors**: All PS scripts had em-dashes (U+2014) and `?.` (PS7-only) — rewrote Start-TrayApp.ps1 clean, bulk-replaced em-dashes in all other scripts
+- **Auto-start PATH**: Task Scheduler `-NoProfile` skips user PATH; added registry PATH refresh + `Get-NodeExe` fallback in Start-TrayApp.ps1
+- **Geocode proxy**: `GET /api/config/geocode?q=` proxies ZIP lookup through server (browser on kiosk can't reach geocoding-api.open-meteo.com directly)
+- **Hidden users**: `getDerivedUsers` now uses `getMergedJobs()` and skips `status === 'shipped'` — users with only shipped jobs hidden from picker; super/manual always shown
+- **Taskbar window**: Task now uses `wscript.exe + Start-TrayApp.vbs` — SW_HIDE=0 fully hides conhost. Previous `cmd /c start /b` was insufficient.
+- **Super user save**: `deepMergeConfig` had `||` for `superUser` (dropped `""`); changed to `??`
+- **release-info.json**: now includes `version` field from `server/package.json`
+
 ## Context for Next Session
 
 Run `npm start` at repo root. Health: `GET http://localhost:3001/health`.
-App is v0.1.0, latest commit d1d0af7. `VRSI WallBoard\` folder is distribution-ready.
-Tray app starts at logon via Task Scheduler `VRSI WallBoard Tray`. Manual start: `Start-TrayApp.bat`.
-The tray W icon has no taskbar entry — only visible near the clock. Right-click to restart/stop.
-To update an already-installed PC: copy new `Start-TrayApp.ps1` over existing, or re-run `INSTALL.bat`.
+App is v0.1.0, latest commit 88feb5f. `VRSI WallBoard\` folder is distribution-ready.
+Tray starts via Task Scheduler `VRSI WallBoard Tray` → `wscript.exe Start-TrayApp.vbs` → `Start-TrayApp.ps1`.
+The tray W icon has no taskbar entry. Right-click to restart/stop.
+To update an already-installed PC: copy new `VRSI WallBoard\` folder over existing, re-run `INSTALL.bat` + `ENABLE-STARTUP.bat` as Admin.
