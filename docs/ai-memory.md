@@ -6,9 +6,9 @@
 
 ## Current State
 
-- Last completed task: Full session — PS5.1 fixes, geocode proxy, hidden-users filter, taskbar fix (VBS shim), super user save fix. Latest commit: 88feb5f.
+- Last completed task: v0.2.0 release — replaced VBS tray launcher with `conhost.exe --headless` (VBS never shipped in release folder, broke kiosk startup), restored degraded server/package-lock.json, bumped version, rebuilt release folder, tagged + published GitHub release.
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
-- Blockers: None — kiosk needs ENABLE-STARTUP.bat re-run as Admin to pick up VBS taskbar fix
+- Blockers: None — kiosk needs updated `VRSI WallBoard\` folder copied over + ENABLE-STARTUP.bat re-run as Admin to pick up the conhost launcher
 
 ## Active Plan
 
@@ -31,8 +31,10 @@
 - [x] **PS5.1 compatibility** — removed all em-dashes + `?.` operator from PS scripts; Start-TrayApp.ps1 fully rewritten clean
 - [x] **Geocode proxy** — ZIP lookup now proxied through server (`GET /api/config/geocode`) instead of direct browser fetch (blocked on kiosk networks)
 - [x] **Hidden users** — PM/materials users with only shipped jobs hidden from user picker; super users always shown
-- [x] **Taskbar fix (VBS shim)** — task now launches via `wscript.exe + Start-TrayApp.vbs` (SW_HIDE=0); `cmd /c start /b` was insufficient
+- [x] **Taskbar fix (VBS shim)** — superseded: see conhost --headless below
 - [x] **Super user save fix** — `deepMergeConfig` used `||` for superUser (dropped empty string); changed to `??`
+- [x] **Taskbar fix v2 (conhost --headless)** — VBS shim never shipped (Package-Release copies only *.ps1/*.bat → kiosk task pointed at missing .vbs); replaced with `conhost.exe --headless powershell.exe ...` everywhere; Start-TrayApp.vbs deleted
+- [x] **v0.2.0 release** — version bump (root + server package.json), release folder rebuilt, tagged, GitHub release published
 - [ ] Soft-delete tombstones for notes (awaiting human approval — schema change)
 - [ ] SharePoint provider (deferred)
 - [ ] Audit log UI panel (deferred)
@@ -41,9 +43,9 @@
 ## Key Decisions Made
 
 ### Tray App Architecture
-- **Primary startup mechanism**: Task Scheduler task `VRSI WallBoard Tray` via `wscript.exe + Start-TrayApp.vbs` (SW_HIDE=0, fully invisible)
+- **Primary startup mechanism**: Task Scheduler task `VRSI WallBoard Tray` via `conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File Start-TrayApp.ps1`
 - **Script**: `scripts/windows/Start-TrayApp.ps1` — pure ASCII (PS5.1 compatible), refreshes PATH from registry at start
-- **No taskbar entry**: `wscript.exe` SW_HIDE=0 prevents conhost from ever appearing. WinForms form also has `ShowInTaskbar=$false`. Previous `cmd /c start /b` and `-WindowStyle Hidden` both left a conhost entry.
+- **No taskbar entry**: `conhost.exe --headless` never creates a console window, regardless of whether Windows Terminal is the default host. WinForms form also has `ShowInTaskbar=$false`. History: `cmd /c start /b` and `-WindowStyle Hidden` left a taskbar window; the `wscript.exe + .vbs` shim worked locally but the .vbs was never copied into the release folder (Package-Release.ps1 copies only *.ps1/*.bat), so kiosk startup failed — and VBScript is deprecated on Win11 24H2+ anyway. conhost --headless solves all of it with zero extra files.
 - **Icon**: Programmatic GDI+ 32x32 blue circle + white "W" via `Bitmap.GetHicon()` → `Icon.FromHandle()`
 - **Single-instance**: Named mutex `VRSIWallBoardTray`; `Restart-WallBoard.ps1` probes it to detect tray
 - **Crash-loop protection**: max 3 auto-restarts per 60 seconds; error balloon then stops retrying
@@ -87,9 +89,8 @@
 
 ## Version
 
-- Current: `v0.1.0` — tagged and released on GitHub (title: "VRSI Wallboard")
-- Latest commit: `88feb5f` (2026-06-10)
-- Next release: bump `server/package.json` → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → create GitHub release
+- Current: `v0.2.0` — tagged and released on GitHub (2026-06-10)
+- Next release: bump `server/package.json` (+ root) → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → `gh release create`
 
 ## Files Modified This Session (2026-06-10)
 
@@ -143,7 +144,7 @@
 ## Context for Next Session
 
 Run `npm start` at repo root. Health: `GET http://localhost:3001/health`.
-App is v0.1.0, latest commit 88feb5f. `VRSI WallBoard\` folder is distribution-ready.
-Tray starts via Task Scheduler `VRSI WallBoard Tray` → `wscript.exe Start-TrayApp.vbs` → `Start-TrayApp.ps1`.
+App is v0.2.0. `VRSI WallBoard\` folder is distribution-ready.
+Tray starts via Task Scheduler `VRSI WallBoard Tray` → `conhost.exe --headless powershell.exe ... Start-TrayApp.ps1`.
 The tray W icon has no taskbar entry. Right-click to restart/stop.
 To update an already-installed PC: copy new `VRSI WallBoard\` folder over existing, re-run `INSTALL.bat` + `ENABLE-STARTUP.bat` as Admin.
