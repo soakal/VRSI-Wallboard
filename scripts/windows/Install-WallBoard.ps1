@@ -8,9 +8,6 @@ param(
 . "$PSScriptRoot\_common.ps1"
 $ErrorActionPreference = 'Stop'
 
-# Repo/install root: two levels above scripts\windows (i.e. the folder containing INSTALL.bat)
-$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-
 # Maximum Node.js major version supported by better-sqlite3 prebuilt binaries in this release.
 # better-sqlite3 v12.x declares engines: "20.x || 22.x || 23.x || 24.x || 25.x || 26.x"
 # When upgrading better-sqlite3, check its engines field and update this cap accordingly.
@@ -28,8 +25,12 @@ function Install-NodeMsi {
     Write-Host "  Downloading Node.js $Version ($arch)..." -ForegroundColor Cyan
     Invoke-WebRequest -Uri $msiUrl -OutFile $msi -UseBasicParsing -TimeoutSec 300
     Write-Host '  Running installer (this may take a minute)...' -ForegroundColor Cyan
-    $p = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart ADDLOCAL=ALL" -Wait -PassThru
-    Remove-Item $msi -Force -ErrorAction SilentlyContinue
+    $p = $null
+    try {
+        $p = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart ADDLOCAL=ALL" -Wait -PassThru
+    } finally {
+        Remove-Item $msi -Force -ErrorAction SilentlyContinue
+    }
     if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
         if ($p.ExitCode -eq 3010) {
             Write-Warning '  Install succeeded but a restart may be needed for PATH changes to take full effect.'
@@ -248,18 +249,6 @@ function New-WallBoardShortcuts {
     }
 }
 
-function Register-BackupTaskInternal {
-    $script = Join-Path $PSScriptRoot 'Invoke-WallBoardBackup.ps1'
-    $taskName = 'VRSI WallBoard Backup'
-    $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    if ($existing) { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false }
-    $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`""
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
-    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddHours(2) -RepetitionInterval (New-TimeSpan -Hours 6) -RepetitionDuration ([TimeSpan]::FromDays(3650))
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -Description 'VRSI WallBoard SQLite backup' | Out-Null
-    Write-Host "  Registered: backup every 6 hours" -ForegroundColor Green
-}
 
 Write-Host ''
 Write-Host '========================================' -ForegroundColor Cyan
@@ -327,7 +316,7 @@ if ($WithBackup) {
         Write-Warning 'Backup schedule needs Administrator  -  run Enable-Startup.bat or Register-BackupTask.bat as Admin later.'
     } else {
         Write-Step 'Registering backup schedule'
-        Register-BackupTaskInternal
+        & (Join-Path $PSScriptRoot 'Register-BackupTask.ps1')
     }
 }
 
@@ -355,6 +344,6 @@ if ($WithStartup) {
 Write-Host ''
 Write-Host '  Then open  http://localhost:3001  in any browser.' -ForegroundColor Cyan
 Write-Host ''
-Write-Host '  Save this token for support (board API):' -ForegroundColor DarkGray
-Write-Host "  $token" -ForegroundColor DarkGray
+Write-Host '  Admin token saved in server\.env (ADMIN_TOKEN=...).' -ForegroundColor DarkGray
+Write-Host '  To rotate the token, edit server\.env and restart the server.' -ForegroundColor DarkGray
 Write-Host ''

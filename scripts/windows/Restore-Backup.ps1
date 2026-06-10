@@ -38,6 +38,47 @@ if ($pick -match '^\d+$') {
     throw 'Invalid selection.'
 }
 
+# WARNING: This is a full file-level restore (disaster recovery).
+# It overwrites wallboard.db with the selected backup directly on disk.
+# For merge-safe restore use the in-app restore (Monitoring panel),
+# which enforces conflict checks and the project rule §7 "Merge, never overwrite".
+Write-Host ''
+Write-Warning 'DISASTER RECOVERY RESTORE: This performs a full file-level overwrite of wallboard.db.'
+Write-Warning 'For a merge-safe restore with conflict checks, use the in-app restore (Monitoring panel) instead.'
+Write-Host ''
+
+# Check whether the system tray monitor (Start-TrayApp.ps1) is running.
+# If it is, its 5-second watchdog timer will auto-restart the server during
+# the file copy, potentially opening wallboard.db mid-restore and causing
+# corruption when the -wal/-shm sidecars are deleted afterward.
+$trayMutex = $null
+$trayRunning = [System.Threading.Mutex]::TryOpenExisting('VRSIWallBoardTray', [ref]$trayMutex)
+if ($trayRunning -and $trayMutex -ne $null) {
+    $trayMutex.Close()
+    $trayMutex.Dispose()
+}
+
+if ($trayRunning) {
+    Write-Host ''
+    Write-Warning 'The VRSI WallBoard tray monitor is running.'
+    Write-Warning 'Its watchdog timer will auto-restart the server during restore, risking database corruption.'
+    $stopTray = Read-Host 'Stop the tray monitor now so restore can proceed safely? [Y/N]'
+    if ($stopTray -ne 'Y' -and $stopTray -ne 'y') {
+        throw 'Right-click the W tray icon and choose Stop && Exit, then re-run restore.'
+    }
+
+    # Stop the tray process using the same CommandLine-match approach used by Uninstall-WallBoard.ps1
+    $trayProcs = @(Get-CimInstance Win32_Process -Filter "Name='pwsh.exe' OR Name='powershell.exe'" |
+        Where-Object { $_.CommandLine -like '*Start-TrayApp*' })
+    foreach ($p in $trayProcs) {
+        Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    Write-Step 'Tray monitor stopped.'
+    $restartTray = $true
+} else {
+    $restartTray = $false
+}
+
 Write-Host ''
 Write-Warning 'The server must be stopped before restore.'
 if (Test-WallBoardHealthy) {
@@ -74,4 +115,16 @@ Write-Host ''
 Write-Host "Restored from: $source" -ForegroundColor Green
 Write-Host "Database:      $dbPath" -ForegroundColor Green
 Write-Host ''
-Write-Host 'Start the server again with Start-WallBoard.bat' -ForegroundColor Cyan
+
+if ($restartTray) {
+    $trayBat = Join-Path $PSScriptRoot 'Start-TrayApp.bat'
+    if (Test-Path $trayBat) {
+        Start-Process -FilePath $trayBat -WindowStyle Hidden
+        Write-Step 'Tray monitor restarted.'
+    } else {
+        Write-Warning "Could not find Start-TrayApp.bat at $trayBat — start it manually if needed."
+    }
+    Write-Host 'The tray monitor has been restarted and will launch the server automatically.' -ForegroundColor Cyan
+} else {
+    Write-Host 'Start the server again with Start-WallBoard.bat' -ForegroundColor Cyan
+}

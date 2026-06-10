@@ -95,7 +95,7 @@ function Stop-Server {
             Stop-Process -Id $serverPid -Force -ErrorAction SilentlyContinue
         }
     }
-    Start-Sleep -Seconds 1
+    # Note: no sleep here — callers that need the port to free (Restart path) add their own delay
 }
 
 # ---- Cleanup: called before Application::Exit ----
@@ -156,6 +156,7 @@ $itemRestart.add_Click({
         $script:RestartTimes.Clear()
         $script:CrashLoopNotified = $false
         Stop-Server
+        Start-Sleep -Seconds 1   # let port 3001 free before binding again
         Start-Server
         $script:Stopping = $false
         Show-Balloon 'WallBoard server restarted.' ([System.Windows.Forms.ToolTipIcon]::Info)

@@ -5,7 +5,7 @@
 | File | What it does |
 |------|----------------|
 | **`INSTALL.bat`** | Full one-time install + optional startup/backups |
-| **`ENABLE-STARTUP.bat`** | Register server + kiosk at Windows logon (Admin) |
+| **`ENABLE-STARTUP.bat`** | Register tray app at Windows logon (Admin) |
 | **`UNINSTALL.bat`** | Simple uninstall menu (keep or delete data) |
 
 ## scripts\windows\ -- all actions
@@ -20,7 +20,9 @@ Open `WallBoard-Menu.bat` for an interactive menu, or run individual scripts:
 | **`Update-WallBoard.bat`** | Pull latest code, rebuild, restart server + browser |
 | **`Start-WallBoard.bat`** | Run server on port 3001 (foreground window) |
 | **`Start-WallBoard-Service.bat`** | Run server silently (Task Scheduler mode) |
+| **`Start-TrayApp.bat`** | Launch tray app (server + system-tray icon) |
 | **`Start-Kiosk.bat`** | Fullscreen Edge/Chrome browser |
+| **`Restart-WallBoard.bat`** | Restart server (tray-aware) |
 | **`Stop-WallBoard.bat`** | Stop server on port 3001 |
 | **`Backup-Now.bat`** | Run a backup immediately |
 | **`List-Backups.bat`** | List wallboard-*.db backup files |
@@ -28,7 +30,7 @@ Open `WallBoard-Menu.bat` for an interactive menu, or run individual scripts:
 | **`Restore-Backup.bat`** | Restore a backup (stops server first) |
 | **`Register-BackupTask.bat`** | Schedule backups every 6h (Admin) |
 | **`Unregister-BackupTask.bat`** | Remove backup schedule (Admin) |
-| **`Register-StartupTasks.bat`** | Start server + kiosk at logon (Admin) |
+| **`Register-StartupTasks.bat`** | Register tray app at logon (Admin) |
 | **`Uninstall-WallBoard.bat`** | Remove tasks + optional data delete |
 | **`Open-IT-Report.bat`** | Open System monitor panel in browser |
 | **`Install-DataDirs.bat`** | Create ProgramData folders only |
@@ -80,6 +82,8 @@ Backups go to `C:\ProgramData\VRSIWallBoard\backups\` (or `BACKUP_DIR` in `.env`
 .\scripts\windows\Register-StartupTasks.ps1
 ```
 
+This registers the **VRSI WallBoard Tray** scheduled task, which launches `Start-TrayApp.ps1` at logon. The tray app starts the Node server, shows a `W` icon near the system clock, and auto-restarts the server if it crashes. Any legacy `VRSI WallBoard Server` and `VRSI WallBoard Kiosk` tasks from older installs are removed automatically.
+
 ## PowerShell scripts reference
 
 | Script | Purpose |
@@ -91,15 +95,16 @@ Backups go to `C:\ProgramData\VRSIWallBoard\backups\` (or `BACKUP_DIR` in `.env`
 | `Update-WallBoard.ps1` | Pull + rebuild + restart server + reload browser |
 | `Package-Release.ps1` | Build and bundle `VRSI WallBoard\` folder for deployment |
 | `Start-WallBoard.ps1` | Run production server (foreground) |
-| `Start-WallBoard-Service.ps1` | Run server silently (Task Scheduler / startup) |
+| `Start-WallBoard-Service.ps1` | Run server silently (Task Scheduler / startup, no tray) |
+| `Start-TrayApp.ps1` | Launch tray app: starts server + shows system-tray icon with crash-restart |
+| `Restart-WallBoard.ps1` | Restart server; if tray is running lets it auto-restart, otherwise relaunches headless service |
 | `Start-Kiosk.ps1` | Launch Edge/Chrome in kiosk mode |
-| `Start-KioskAfterDelay.ps1` | Kiosk launch with a startup delay |
 | `Stop-WallBoard.ps1` | Stop server on port 3001 |
 | `Invoke-WallBoardBackup.ps1` | Trigger backup via API |
 | `Register-BackupTask.ps1` | Task Scheduler backup every 6h |
 | `Unregister-BackupTask.ps1` | Remove backup task |
-| `Register-StartupTasks.ps1` | Register server + kiosk at logon |
-| `_Register-Startup.ps1` | Internal -- called by Register-StartupTasks.ps1 |
+| `Register-StartupTasks.ps1` | Register tray app at logon (creates VRSI WallBoard Tray task) |
+| `_Register-Startup.ps1` | Internal -- called by Register-StartupTasks.ps1; removes legacy Server/Kiosk tasks and registers the Tray task |
 | `Enable-Startup.ps1` | Enable startup tasks |
 | `List-Backups.ps1` | List backup files |
 | `Open-Backups-Folder.ps1` | Open backup folder in Explorer |

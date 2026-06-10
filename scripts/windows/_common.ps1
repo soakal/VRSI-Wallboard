@@ -1,4 +1,4 @@
-﻿# Shared helpers for VRSI WallBoard Windows scripts.
+# Shared helpers for VRSI WallBoard Windows scripts.
 $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $script:ServerDir = Join-Path $RepoRoot 'server'
 $script:ClientDir = Join-Path $RepoRoot 'client'
@@ -20,22 +20,6 @@ function Ensure-ServerEnv {
         }
     }
     return $envFile
-}
-
-function Get-AdminTokenFromServerEnv {
-    $envFile = Join-Path $ServerDir '.env'
-    if (-not (Test-Path $envFile)) { return $null }
-    foreach ($line in Get-Content $envFile) {
-        if ($line -match '^\s*ADMIN_TOKEN\s*=\s*(.+)\s*$') {
-            return $Matches[1].Trim()
-        }
-    }
-    return $null
-}
-
-function Sync-ClientProductionEnv {
-    # Client no longer uses VITE_ADMIN_TOKEN  -  the browser on localhost is trusted
-    # by the server without a token. Nothing to sync.
 }
 
 function Test-WallBoardHealthy {
@@ -83,6 +67,11 @@ function Stop-WallBoardServer {
         return $false
     }
     $serverPid = $conn.OwningProcess
+    $proc = Get-Process -Id $serverPid -ErrorAction SilentlyContinue
+    if ($proc -and $proc.ProcessName -ne 'node') {
+        Write-Warning "Port 3001 is owned by '$($proc.ProcessName)' (PID $serverPid), not node - not stopping it."
+        return $false
+    }
     Write-Step "Stopping process on port 3001 (PID $serverPid)"
     Stop-Process -Id $serverPid -Force -ErrorAction Stop
     Start-Sleep -Seconds 2

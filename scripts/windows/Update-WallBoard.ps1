@@ -9,6 +9,23 @@ Write-Host '  VRSI WallBoard - Update' -ForegroundColor Cyan
 Write-Host '  =======================' -ForegroundColor Cyan
 Write-Host ''
 
+# 0. Detect whether the tray app is running (mutex 'VRSIWallBoardTray').
+#    If it is, stop it now — it will otherwise restart the old server within
+#    seconds of Stop-WallBoardServer, causing a port-conflict and a false
+#    health-check against the stale build.
+Write-Step 'Checking for tray app'
+$trayMutexHandle = $null
+$trayWasRunning  = [System.Threading.Mutex]::TryOpenExisting('VRSIWallBoardTray', [ref]$trayMutexHandle)
+if ($trayWasRunning) {
+    Write-Host '  Tray app detected — stopping it before rebuild' -ForegroundColor DarkGray
+    Get-CimInstance Win32_Process |
+        Where-Object { $_.CommandLine -like '*Start-TrayApp.ps1*' } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 1
+} else {
+    Write-Host '  No tray app detected' -ForegroundColor DarkGray
+}
+
 # 1. Check for local modifications that would block git pull
 Write-Step 'Checking for local changes'
 Push-Location $RepoRoot
@@ -31,14 +48,28 @@ Write-Step 'Stopping WallBoard server'
 Stop-WallBoardServer | Out-Null
 
 # 4. Build (delegates to Build-Production.ps1 to avoid duplication)
+#    $LASTEXITCODE is NOT checked here — PowerShell script invocation does not
+#    reliably set $LASTEXITCODE; build failures surface via throw inside
+#    Build-Production.ps1 (which runs with $ErrorActionPreference='Stop').
 Write-Step 'Rebuilding (shared -> server -> client)'
 & (Join-Path $PSScriptRoot 'Build-Production.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Build failed. Server has been stopped. Run Build-Production.ps1 manually, then Start-WallBoard-Service.ps1.' }
 
-# 5. Restart server silently (matching the Task Scheduler / startup model)
+# 5. Restart: prefer tray (which owns server lifecycle) when it was present;
+#    fall back to headless service only when no tray was running.
 Write-Step 'Restarting server'
-$serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
-Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$serviceScript`""
+if ($trayWasRunning) {
+    $trayBat = Join-Path $RepoRoot 'Start-TrayApp.bat'
+    if (Test-Path $trayBat) {
+        Start-Process 'cmd.exe' -ArgumentList "/c `"$trayBat`"" -WindowStyle Hidden
+    } else {
+        Write-Warning "Start-TrayApp.bat not found at $trayBat — falling back to headless service."
+        $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
+        Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$serviceScript`""
+    }
+} else {
+    $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
+    Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$serviceScript`""
+}
 
 # 6. Wait for server to be healthy
 Write-Step 'Waiting for server to be ready'
@@ -55,17 +86,14 @@ if (-not (Test-WallBoardHealthy)) {
     Write-Host "Server healthy at $WallBoardUrl" -ForegroundColor Green
 }
 
-# 7. Restart kiosk browser so it loads the new version
+# 7. Restart kiosk browser so it loads the new version.
+#    Only kill browser processes that were launched in kiosk mode pointing at
+#    localhost:3001 — never kill unrelated Edge/Chrome sessions by name alone.
 Write-Step 'Restarting kiosk browser'
-$browserNames = @('msedge', 'chrome')
-foreach ($name in $browserNames) {
-    $procs = Get-Process -Name $name -ErrorAction SilentlyContinue
-    if ($procs) {
-        $procs | Stop-Process -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
-        break
-    }
-}
+Get-CimInstance Win32_Process -Filter "Name='msedge.exe' OR Name='chrome.exe'" |
+    Where-Object { $_.CommandLine -like '*--kiosk*localhost:3001*' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 2
 & (Join-Path $PSScriptRoot 'Start-Kiosk.ps1')
 
 Write-Host ''

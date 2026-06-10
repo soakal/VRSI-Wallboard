@@ -24,7 +24,7 @@ if ($trayRunning) {
 } else {
     Write-Step 'No tray app detected - relaunching headless service'
     $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
-    Start-Process powershell.exe `
+    Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
         -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`"" `
         -WindowStyle Hidden
 }
@@ -43,5 +43,8 @@ if ($healthy) {
     Write-Host "Server restarted - $WallBoardUrl" -ForegroundColor Green
 } else {
     Write-Warning 'Server did not report healthy within 30 seconds. Check logs in C:\ProgramData\VRSIWallBoard\logs.'
+    if ($trayRunning) {
+        Write-Warning 'If the tray icon is red/crash-looping, right-click it and choose Restart Server, or check logs.'
+    }
     exit 1
 }

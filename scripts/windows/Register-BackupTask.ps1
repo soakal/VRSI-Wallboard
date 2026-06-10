@@ -8,8 +8,10 @@ $taskName = 'VRSI WallBoard Backup'
 $scriptPath = Join-Path $PSScriptRoot 'Invoke-WallBoardBackup.ps1'
 $psArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
 
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
     Write-Warning 'Re-run this script as Administrator to register the scheduled task.'
+    exit 1
 }
 
 Write-Step "Registering scheduled task: $taskName"
@@ -20,7 +22,7 @@ if ($existing) {
 }
 
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
-$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddHours(1) -RepetitionInterval (New-TimeSpan -Hours 6) -RepetitionDuration ([TimeSpan]::MaxValue)
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddHours(1) -RepetitionInterval (New-TimeSpan -Hours 6) -RepetitionDuration ([TimeSpan]::FromDays(3650))
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description 'SQLite backup for VRSI WallBoard' -RunLevel Highest | Out-Null

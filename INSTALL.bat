@@ -10,7 +10,8 @@ REM Re-launch THIS .bat elevated so the pause below runs in the admin window.
 net session >nul 2>&1
 if not "%ERRORLEVEL%"=="0" (
   echo Requesting Administrator approval...
-  "%PS%" -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+  set "SELF=%~f0"
+  "%PS%" -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath $env:SELF -Verb RunAs"
   exit /b
 )
 
