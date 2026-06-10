@@ -63,7 +63,7 @@ Get-ChildItem "$PSScriptRoot\*.bat" -ErrorAction SilentlyContinue |
 # 5. Root batch files
 Write-Host '  Copying batch files...' -ForegroundColor DarkGray
 foreach ($bat in @('INSTALL.bat', 'ENABLE-STARTUP.bat', 'UNINSTALL.bat',
-                   'Start-WallBoard.bat', 'Start-Kiosk.bat')) {
+                   'Start-WallBoard.bat', 'Start-TrayApp.bat', 'Start-Kiosk.bat')) {
     $p = Join-Path $RepoRoot $bat
     if (Test-Path $p) { Copy-Item $p $ReleaseDir }
 }
