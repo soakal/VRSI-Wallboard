@@ -6,7 +6,7 @@
 
 ## Current State
 
-- Last completed task: v0.4.0 — calendar page user picker + per-user agenda (super sees all), NEW badge in calendar grid + agenda rail (events carry isNew/jobPm/jobMm), "New (n)" filter toggle on Projects tabs. Before that: v0.3.0 multiple super users; v0.2.0 conhost --headless tray launcher.
+- Last completed task: v0.5.0 — Settings → Files toggle (`showFiles`, default true) hides Files button/panel/Ctrl+F when off. Before that: v0.4.0 calendar user picker + per-user agenda + NEW badges + New filter; v0.3.0 multiple super users; v0.2.0 conhost --headless tray launcher.
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
 - Blockers: None — kiosk needs updated `VRSI WallBoard\` folder copied over + ENABLE-STARTUP.bat re-run as Admin to pick up the conhost launcher
 
@@ -37,6 +37,7 @@
 - [x] **v0.2.0 release** — version bump (root + server package.json), release folder rebuilt, tagged, GitHub release published
 - [x] **Multiple super users (v0.3.0)** — `BoardConfig.superUsers: string[]` replaces `superUser: string`; legacy fold in `localProvider.getBoardConfigRaw` + `migrate.ts`; `getDerivedUsers` loops list; client `isSuper` checks list; UsersView chip-list UI with instant save (BK approved data model change)
 - [x] **Calendar per-user agenda + NEW flag + new-items filter (v0.4.0)** — `NormalizedEvent`/`CalendarEvent` gain `isNew`/`jobPm`/`jobMm`; Dashboard has user select (desktop footer + mobile nav) and filters AgendaRail board events by role (pm→jobPm, materials→jobMm; super/none/manual see all); CalendarView custom event renderer shows red NEW chip; AgendaRail shows NEW badge; JobListView `newOnly` toggle ("New (n)" button, sessionStorage-persisted, hidden on archive)
+- [x] **Files enable/disable toggle (v0.5.0)** — `UiConfig.showFiles` (server configService + config route mapping, default true); SettingsPanel Files section Toggle (fileOpenMode shown only when on); Dashboard hides Files button + Ctrl+F; App.tsx guards Ctrl+F, closes + unmounts FileBrowserPanel when off
 - [ ] Soft-delete tombstones for notes (awaiting human approval — schema change)
 - [ ] SharePoint provider (deferred)
 - [ ] Audit log UI panel (deferred)
@@ -91,7 +92,7 @@
 
 ## Version
 
-- Current: `v0.4.0` — tagged and released on GitHub (2026-06-10)
+- Current: `v0.5.0` — tagged and released on GitHub (2026-06-10)
 - Next release: bump `server/package.json` (+ root) → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → `gh release create`
 
 ## Files Modified This Session (2026-06-10)
@@ -146,7 +147,7 @@
 ## Context for Next Session
 
 Run `npm start` at repo root. Health: `GET http://localhost:3001/health`.
-App is v0.4.0. `VRSI WallBoard\` folder is distribution-ready.
+App is v0.5.0. `VRSI WallBoard\` folder is distribution-ready.
 Tray starts via Task Scheduler `VRSI WallBoard Tray` → `conhost.exe --headless powershell.exe ... Start-TrayApp.ps1`.
 The tray W icon has no taskbar entry. Right-click to restart/stop.
 To update an already-installed PC: copy new `VRSI WallBoard\` folder over existing, re-run `INSTALL.bat` + `ENABLE-STARTUP.bat` as Admin.
