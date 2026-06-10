@@ -411,6 +411,8 @@ export function JobListView({ tab }: Props) {
   const q = search.trim().toLowerCase()
   const searched = q
     ? filtered.filter((j) =>
+        // Searching "new" surfaces every job flagged NEW from the last import
+        (q === 'new' && j.isNew) ||
         j.jobNumber.toLowerCase().includes(q) ||
         j.customer.toLowerCase().includes(q) ||
         j.pm.toLowerCase().includes(q) ||
@@ -469,7 +471,7 @@ export function JobListView({ tab }: Props) {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') commitSearch() }}
-              placeholder="Search job number, customer, PM, or MM…"
+              placeholder="Search job number, customer, PM, MM — or type 'new'…"
               className="w-full bg-slate-800 border border-slate-700 text-slate-200 placeholder-slate-500 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
             />
             {inputValue && (
