@@ -1,4 +1,4 @@
-# Builds the project and creates a self-contained VRSI WallBoard\ folder.
+﻿# Builds the project and creates a self-contained VRSI WallBoard\ folder.
 # Copy the VRSI WallBoard\ folder to any Windows PC and run INSTALL.bat there.
 . "$PSScriptRoot\_common.ps1"
 $ErrorActionPreference = 'Stop'
@@ -14,8 +14,10 @@ Write-Host ''
 
 Write-Step "Repo: $RepoRoot"
 Write-Step 'Running production build'
+# $LASTEXITCODE is NOT checked here - PowerShell script invocation does not
+# reliably set $LASTEXITCODE; build failures surface via throw inside
+# Build-Production.ps1 (which runs with $ErrorActionPreference='Stop').
 & (Join-Path $PSScriptRoot 'Build-Production.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 
 Write-Step "Preparing release folder: $ReleaseDir"
 if (Test-Path $ReleaseDir) {
@@ -59,11 +61,12 @@ New-Dir (Join-Path $ReleaseDir 'scripts\windows')
 Copy-Item "$PSScriptRoot\*.ps1" (Join-Path $ReleaseDir 'scripts\windows')
 Get-ChildItem "$PSScriptRoot\*.bat" -ErrorAction SilentlyContinue |
     Copy-Item -Destination (Join-Path $ReleaseDir 'scripts\windows')
+Copy-Item "$PSScriptRoot\README.md" (Join-Path $ReleaseDir 'scripts\windows') -ErrorAction SilentlyContinue
 
 # 5. Root batch files
 Write-Host '  Copying batch files...' -ForegroundColor DarkGray
 foreach ($bat in @('INSTALL.bat', 'ENABLE-STARTUP.bat', 'UNINSTALL.bat',
-                   'Start-WallBoard.bat', 'Start-TrayApp.bat', 'Start-Kiosk.bat')) {
+                   'Start-WallBoard.bat', 'Start-TrayApp.bat')) {
     $p = Join-Path $RepoRoot $bat
     if (Test-Path $p) { Copy-Item $p $ReleaseDir }
 }
@@ -71,10 +74,13 @@ foreach ($bat in @('INSTALL.bat', 'ENABLE-STARTUP.bat', 'UNINSTALL.bat',
 # 6. Write a release manifest so you know when and where it was built
 $nodeVer = ''
 try { $nodeVer = (node -v 2>$null) } catch {}
+$commitHash = ''
+try { $commitHash = (git -C $RepoRoot rev-parse --short HEAD 2>$null) } catch {}
 @{
     built   = (Get-Date -Format 'yyyy-MM-dd HH:mm')
     machine = $env:COMPUTERNAME
     node    = $nodeVer
+    commit  = $commitHash
 } | ConvertTo-Json | Set-Content (Join-Path $ReleaseDir 'release-info.json') -Encoding utf8
 
 # Summary
