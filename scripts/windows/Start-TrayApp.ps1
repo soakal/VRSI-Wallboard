@@ -1,5 +1,13 @@
 . "$PSScriptRoot\_common.ps1"
 
+# Refresh PATH from registry — Task Scheduler with -NoProfile does not load the
+# user profile, so winget/MSI installs that write to User PATH are invisible.
+# Reading both Machine and User PATH from the registry fixes node.exe lookup.
+$_mp = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+$_up = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+$env:Path = ((@($_mp, $_up) | Where-Object { $_ }) -join ';')
+Remove-Variable _mp, _up -ErrorAction SilentlyContinue
+
 $ErrorActionPreference = 'Stop'
 
 # STA guard — NotifyIcon/WinForms requires single-threaded apartment
@@ -20,7 +28,18 @@ Add-Type -AssemblyName System.Drawing
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
+# ---- Startup log — writes to ProgramData logs dir for diagnosing hidden-task failures ----
+function Write-TrayLog([string]$Level, [string]$Msg) {
+    try {
+        $logDir = Get-EnvValue 'LOGS_DIR' 'C:\ProgramData\VRSIWallBoard\logs'
+        if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+        $stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+        "$stamp  [$Level]  $Msg" | Add-Content -Path (Join-Path $logDir 'tray-startup.log') -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch { }
+}
+
 # ---- Pre-flight ----
+Write-TrayLog 'INFO' "Tray starting. PATH=$env:Path"
 try {
     Ensure-ServerEnv | Out-Null
 
@@ -30,7 +49,9 @@ try {
         & (Join-Path $PSScriptRoot 'Build-Production.ps1')
     }
 } catch {
-    [System.Windows.Forms.MessageBox]::Show("WallBoard tray failed to start: $($_.Exception.Message)", 'VRSI WallBoard', 'OK', 'Error') | Out-Null
+    $msg = $_.Exception.Message
+    Write-TrayLog 'ERROR' "Pre-flight failed: $msg"
+    [System.Windows.Forms.MessageBox]::Show("WallBoard tray failed to start: $msg", 'VRSI WallBoard', 'OK', 'Error') | Out-Null
     exit 1
 }
 
@@ -71,11 +92,26 @@ function Show-Balloon {
     $script:Notify.ShowBalloonTip(3000, 'VRSI WallBoard', $Message, $IconType)
 }
 
+# ---- Resolve node.exe — fallback to known install locations if PATH lookup fails ----
+function Get-NodeExe {
+    $fromPath = (Get-Command node -ErrorAction SilentlyContinue)?.Source
+    if ($fromPath) { return $fromPath }
+    foreach ($candidate in @(
+        (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
+        'C:\Program Files\nodejs\node.exe',
+        "$env:APPDATA\nvm\current\node.exe"
+    )) {
+        if (Test-Path $candidate) { return $candidate }
+    }
+    throw "node.exe not found. Install Node.js from https://nodejs.org then restart the tray."
+}
+
 # ---- Start the node server process ----
 function Start-Server {
+    $nodeExe = Get-NodeExe
     $env:NODE_ENV = 'production'
     $script:ServerProcess = Start-Process `
-        -FilePath       'node' `
+        -FilePath       $nodeExe `
         -ArgumentList   'dist\index.js' `
         -WorkingDirectory $ServerDir `
         -WindowStyle    Hidden `
@@ -128,6 +164,7 @@ if ($existingConn) {
     } else {
         # Port squatter is not a WallBoard server — starting would loop-crash with EADDRINUSE
         $squatter = if ($adoptedProcess) { "$($adoptedProcess.ProcessName) (PID $($adoptedProcess.Id))" } else { "PID $($existingConn.OwningProcess)" }
+        Write-TrayLog 'WARN' "Port squatter: $squatter"
         [System.Windows.Forms.MessageBox]::Show(
             "Port 3001 is already in use by $squatter — this is not a WallBoard server.`n`nFree port 3001 and try again.",
             'VRSI WallBoard', 'OK', 'Warning') | Out-Null
@@ -135,9 +172,14 @@ if ($existingConn) {
         exit 1
     }
 } else {
-    try { Start-Server } catch {
+    try {
+        Write-TrayLog 'INFO' "Starting server. node=$(Get-NodeExe)"
+        Start-Server
+    } catch {
+        $msg = $_.Exception.Message
+        Write-TrayLog 'ERROR' "Start-Server failed: $msg"
         [System.Windows.Forms.MessageBox]::Show(
-            "Failed to start WallBoard server: $($_.Exception.Message)`n`nIs Node.js installed?",
+            "Failed to start WallBoard server: $msg`n`nIs Node.js installed?",
             'VRSI WallBoard', 'OK', 'Error') | Out-Null
         Invoke-Cleanup
         exit 1
