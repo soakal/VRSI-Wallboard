@@ -6,7 +6,7 @@
 
 ## Current State
 
-- Last completed task: v0.2.0 release — replaced VBS tray launcher with `conhost.exe --headless` (VBS never shipped in release folder, broke kiosk startup), restored degraded server/package-lock.json, bumped version, rebuilt release folder, tagged + published GitHub release.
+- Last completed task: v0.3.0 — multiple super users (`BoardConfig.superUsers: string[]`, legacy `superUser` string auto-folded at read + JSON migration; UsersView add-dropdown + removable list with instant save). Before that, v0.2.0: conhost --headless tray launcher (VBS never shipped in release folder, broke kiosk startup).
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
 - Blockers: None — kiosk needs updated `VRSI WallBoard\` folder copied over + ENABLE-STARTUP.bat re-run as Admin to pick up the conhost launcher
 
@@ -35,6 +35,7 @@
 - [x] **Super user save fix** — `deepMergeConfig` used `||` for superUser (dropped empty string); changed to `??`
 - [x] **Taskbar fix v2 (conhost --headless)** — VBS shim never shipped (Package-Release copies only *.ps1/*.bat → kiosk task pointed at missing .vbs); replaced with `conhost.exe --headless powershell.exe ...` everywhere; Start-TrayApp.vbs deleted
 - [x] **v0.2.0 release** — version bump (root + server package.json), release folder rebuilt, tagged, GitHub release published
+- [x] **Multiple super users (v0.3.0)** — `BoardConfig.superUsers: string[]` replaces `superUser: string`; legacy fold in `localProvider.getBoardConfigRaw` + `migrate.ts`; `getDerivedUsers` loops list; client `isSuper` checks list; UsersView chip-list UI with instant save (BK approved data model change)
 - [ ] Soft-delete tombstones for notes (awaiting human approval — schema change)
 - [ ] SharePoint provider (deferred)
 - [ ] Audit log UI panel (deferred)
@@ -89,7 +90,7 @@
 
 ## Version
 
-- Current: `v0.2.0` — tagged and released on GitHub (2026-06-10)
+- Current: `v0.3.0` — tagged and released on GitHub (2026-06-10)
 - Next release: bump `server/package.json` (+ root) → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → `gh release create`
 
 ## Files Modified This Session (2026-06-10)
@@ -144,7 +145,7 @@
 ## Context for Next Session
 
 Run `npm start` at repo root. Health: `GET http://localhost:3001/health`.
-App is v0.2.0. `VRSI WallBoard\` folder is distribution-ready.
+App is v0.3.0. `VRSI WallBoard\` folder is distribution-ready.
 Tray starts via Task Scheduler `VRSI WallBoard Tray` → `conhost.exe --headless powershell.exe ... Start-TrayApp.ps1`.
 The tray W icon has no taskbar entry. Right-click to restart/stop.
 To update an already-installed PC: copy new `VRSI WallBoard\` folder over existing, re-run `INSTALL.bat` + `ENABLE-STARTUP.bat` as Admin.
