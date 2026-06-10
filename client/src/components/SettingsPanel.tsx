@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppConfig } from "../types/index";
 import CalendarSelector from "./CalendarSelector";
 import { useCalendars } from "../hooks/useCalendars";
@@ -11,7 +12,7 @@ interface SettingsPanelProps {
   config: AppConfig;
 }
 
-type SectionKey = "calendars" | "display" | "widgets" | "time" | "location" | "files" | "about";
+type SectionKey = "board" | "calendars" | "display" | "widgets" | "time" | "location" | "files" | "about";
 
 const SectionHeader: React.FC<{ label: string; isOpen: boolean; onToggle: () => void }> = ({ label, isOpen, onToggle }) => (
   <button type="button" onClick={onToggle} className="flex w-full items-center justify-between py-2 text-left">
@@ -67,8 +68,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
   const [zipStatus, setZipStatus] = useState<{ type: "ok" | "error"; message: string } | null>(null);
   const [zipLooking, setZipLooking] = useState(false);
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
-    calendars: true, display: true, widgets: true, time: true, location: false, files: false, about: true,
+    board: true, calendars: true, display: true, widgets: true, time: true, location: false, files: false, about: true,
   });
+  const navigate = useNavigate();
+
+  const goTo = (path: string) => {
+    onClose();
+    navigate(path);
+  };
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setLocal({ ...config }); setZipInput(""); setZipStatus(null); }, [config]);
@@ -189,6 +196,36 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <div className="border-b border-white/5 pb-4">
+            <SectionHeader label="Board" isOpen={openSections.board} onToggle={() => toggleSection("board")} />
+            {openSections.board && (
+              <div className="mt-2 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => goTo("/board/users")}
+                  className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left hover:bg-white/10 transition-colors"
+                >
+                  <span>
+                    <span className="block text-sm text-slate-200">Users</span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5">Pick who you are, super users, extra users, colors</span>
+                  </span>
+                  <span className="text-slate-500">→</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goTo("/board/import")}
+                  className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left hover:bg-white/10 transition-colors"
+                >
+                  <span>
+                    <span className="block text-sm text-slate-200">Import jobs</span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5">Upload the ops schedule XLSM</span>
+                  </span>
+                  <span className="text-slate-500">→</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="border-b border-white/5 pb-4">
             <SectionHeader label="Calendars" isOpen={openSections.calendars} onToggle={() => toggleSection("calendars")} />
             {openSections.calendars && (

@@ -7,7 +7,7 @@ export function BoardHeader() {
   const { jobs } = useBoardJobs()
   const { config } = useBoardConfig()
   const { users } = useBoardUsers()
-  const { activeUser, setActiveUser } = useAppStore()
+  const { activeUser, setActiveUser, setIsSettingsOpen } = useAppStore()
 
   const projectJobs = filterJobsForTab(jobs, 'project', config)
   const spareJobs = filterJobsForTab(jobs, 'spare-parts', config)
@@ -16,7 +16,6 @@ export function BoardHeader() {
   const projectColor = tabColor(projectJobs, config)
   const spareColor = tabColor(spareJobs, config)
   const archiveColor = config.statusColors.shipped
-  const usersColor = '#3b82f6'
 
   const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value
@@ -51,6 +50,16 @@ export function BoardHeader() {
             ))}
           </select>
 
+          {/* Settings gear — Users and Import management live in Settings */}
+          <button
+            type="button"
+            onClick={() => setIsSettingsOpen(true)}
+            className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
+            title="Open Settings (users, import, display)"
+            aria-label="Open Settings"
+          >
+            ⚙
+          </button>
         </div>
       </div>
 
@@ -99,33 +108,6 @@ export function BoardHeader() {
           Archive{archiveJobs.length > 0 ? ` (${archiveJobs.length})` : ''}
         </NavLink>
 
-        <NavLink
-          to="/board/users"
-          className={({ isActive }) =>
-            `px-3 py-2 text-sm font-medium rounded-t transition-colors ${
-              isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'
-            }`
-          }
-          style={({ isActive }) =>
-            isActive ? { borderBottom: `2px solid ${usersColor}`, backgroundColor: usersColor + '18' } : {}
-          }
-        >
-          Users
-        </NavLink>
-
-        <NavLink
-          to="/board/import"
-          className={({ isActive }) =>
-            `px-3 py-2 text-sm font-medium rounded-t transition-colors ${
-              isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'
-            }`
-          }
-          style={({ isActive }) =>
-            isActive ? { borderBottom: '2px solid #6366f1', backgroundColor: '#6366f118' } : {}
-          }
-        >
-          Import
-        </NavLink>
       </div>
     </header>
   )

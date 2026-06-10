@@ -10,7 +10,7 @@ import RecentFilesWidget from "./RecentFilesWidget";
 import StalenessIndicator from "./StalenessIndicator";
 import { useAppStore } from "../store/appStore";
 import { useBoardUsers, useBoardConfig } from "../hooks/useBoard";
-import { samePerson } from "@vrsi/person-identity";
+import { filterAgendaEvents } from "../lib/agendaFilter";
 
 interface DashboardProps {
   events: CalendarEvent[];
@@ -52,21 +52,13 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [sunsetIso, setSunsetIso] = useState<string | null>(null);
   const [isDimmed, setIsDimmed] = useState(false);
 
-  const isSuper =
-    !!activeUser && (boardConfig.superUsers ?? []).some((s) => samePerson(s, activeUser.name));
-
-  // Agenda: PM / Materials users see only their own ship-date jobs; super users
-  // (and no selection) see everything. Outlook events are never filtered.
-  const agendaEvents = useMemo(() => {
-    if (!activeUser || isSuper || (activeUser.role !== 'pm' && activeUser.role !== 'materials')) {
-      return events;
-    }
-    return events.filter((ev) => {
-      if (ev.calendarId !== 'board-jobs') return true;
-      const own = activeUser.role === 'pm' ? ev.jobPm : ev.jobMm;
-      return !!own && samePerson(own, activeUser.name);
-    });
-  }, [events, activeUser, isSuper]);
+  // Agenda: the selected user sees only board jobs where they are the PM or
+  // the Materials Manager; super users (and no selection) see everything.
+  // Outlook events are never filtered. Logic lives in lib/agendaFilter.ts.
+  const agendaEvents = useMemo(
+    () => filterAgendaEvents(events, activeUser, boardConfig),
+    [events, activeUser, boardConfig],
+  );
 
   const handleSelectUserId = useCallback(
     (id: string) => {

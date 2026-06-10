@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { startOfWeek, startOfMonth, addDays, formatISO } from 'date-fns';
+import { startOfMonth, addDays, formatISO } from 'date-fns';
 import { getEvents } from '../api/calendarApi';
 import type { CalendarEvent } from '../types/index';
 
@@ -17,23 +17,12 @@ export function useEvents(
 } {
   const { weekStart, weekEnd } = useMemo(() => {
     const now = new Date();
-    // Fetch a range that fully covers the visible period for the current view:
-    //  - month: from the 1st of this month, +45 days (covers a 6-week grid)
-    //  - week:  from the start of this week, +21 days (3 weeks of look-ahead)
-    //  - day:   from the start of this week, +21 days (agenda rail looks 14 days out)
-    let start: Date;
-    let span: number;
-    if (displayMode === 'month') {
-      start = startOfMonth(now);
-      span = 45;
-    } else if (displayMode === 'week') {
-      start = startOfWeek(now, { weekStartsOn: 0 });
-      span = 21;
-    } else {
-      start = startOfWeek(now, { weekStartsOn: 0 });
-      span = 21;
-    }
-    const end = addDays(start, span);
+    // Fetch from the 1st of this month (the agenda rail shows past-due ship
+    // dates from earlier in the month) through 45 days from today — enough
+    // for the month grid, 3 weeks of week-view look-ahead, and the agenda's
+    // rest-of-month horizon, in every display mode.
+    const start = startOfMonth(now);
+    const end = addDays(now, 45);
     return {
       weekStart: formatISO(start),
       weekEnd: formatISO(end),

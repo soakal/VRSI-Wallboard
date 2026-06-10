@@ -42,13 +42,14 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
   const now = new Date();
   const todayStart = startOfDay(now);
 
-  // Agenda covers today through the end of NEXT week. The current week alone
-  // is too sparse — late in the week it goes empty even though jobs ship the
-  // following Monday. Week start matches the calendar (Sunday normally,
-  // Monday when weekends are hidden), so the horizon rolls over with the grid.
-  const weekStartsOn = showWeekends ? 0 : 1;
-  const dayIndexInWeek = (todayStart.getDay() - weekStartsOn + 7) % 7;
-  const daysAhead = 7 - dayIndexInWeek + 7;
+  // Agenda covers the whole current month: past-due board jobs from earlier
+  // in the month (ship date passed, not shipped), then today through the end
+  // of the month — extended to at least 14 days so the rail never goes empty
+  // right before the month rolls over.
+  const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+  const nextMonthStart = new Date(todayStart.getFullYear(), todayStart.getMonth() + 1, 1);
+  const daysToMonthEnd = Math.round((nextMonthStart.getTime() - todayStart.getTime()) / 86_400_000);
+  const daysAhead = Math.max(daysToMonthEnd, 14);
 
   const sortGroup = (group: CalendarEvent[]) =>
     group.sort((a, b) => {
@@ -57,17 +58,35 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
       return new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime();
     });
 
+  const eventsOnDay = (dayStart: Date, dayEnd: Date) =>
+    visibleEvents.filter((ev) => {
+      const start = new Date(ev.startDateTime);
+      return start >= dayStart && start < dayEnd;
+    });
+
+  // Past due: board ship dates earlier this month that have not shipped
+  // (the server only sends non-shipped jobs). Outlook events in the past
+  // are just over — they are not "due" — so only board jobs appear here.
+  const pastDueSections: { key: string; label: string; events: CalendarEvent[] }[] = [];
+  for (let d = new Date(monthStart); d < todayStart; d = addDays(d, 1)) {
+    const dayEvents = eventsOnDay(d, addDays(d, 1)).filter(
+      (ev) => ev.calendarId === 'board-jobs',
+    );
+    if (dayEvents.length === 0) continue;
+    sortGroup(dayEvents);
+    pastDueSections.push({
+      key: `past-${d.toISOString().slice(0, 10)}`,
+      label: formatSectionDate(d),
+      events: dayEvents,
+    });
+  }
+
   const sections: { key: string; label: string; events: CalendarEvent[] }[] = [];
   for (let i = 0; i < daysAhead; i++) {
     const dayStart = addDays(todayStart, i);
-    const dayEnd = addDays(todayStart, i + 1);
-
-    const dayEvents = visibleEvents.filter((ev) => {
-      const start = new Date(ev.startDateTime);
-      const end = new Date(ev.endDateTime);
-      if (start < dayStart || start >= dayEnd) return false;
+    const dayEvents = eventsOnDay(dayStart, addDays(dayStart, 1)).filter((ev) => {
       // Today: drop timed events that already ended
-      if (i === 0 && !ev.isAllDay && end <= now) return false;
+      if (i === 0 && !ev.isAllDay && new Date(ev.endDateTime) <= now) return false;
       return true;
     });
     if (dayEvents.length === 0) continue;
@@ -164,7 +183,7 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
     );
   };
 
-  const isEmpty = sections.length === 0;
+  const isEmpty = sections.length === 0 && pastDueSections.length === 0;
 
   return (
     <div className={`flex flex-col overflow-hidden ${className}`}>
@@ -172,7 +191,27 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
         {isEmpty && (
           <div className="flex flex-col items-center justify-center gap-1 py-8 text-center">
             <p className="text-sm font-medium text-slate-400">Nothing on the agenda</p>
-            <p className="text-xs text-slate-600">No events for this week or next</p>
+            <p className="text-xs text-slate-600">No events this month</p>
+          </div>
+        )}
+
+        {pastDueSections.length > 0 && (
+          <div>
+            <h3 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-widest text-amber-500">
+              Past due
+            </h3>
+            <div className="space-y-3">
+              {pastDueSections.map((section) => (
+                <section key={section.key}>
+                  <h4 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-widest text-amber-500/70">
+                    {section.label}
+                  </h4>
+                  <div className="space-y-1">
+                    {section.events.map(renderEvent)}
+                  </div>
+                </section>
+              ))}
+            </div>
           </div>
         )}
 

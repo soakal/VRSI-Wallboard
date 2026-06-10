@@ -4,6 +4,7 @@ import { useAuthStatus } from './hooks/useAuth';
 import { useConfig } from './hooks/useConfig';
 import { useEvents } from './hooks/useEvents';
 import { useRecentFiles } from './hooks/useRecentFiles';
+import { useBoardUsers } from './hooks/useBoard';
 import { useAppStore } from './store/appStore';
 import Dashboard from './components/Dashboard';
 import AuthSetup from './components/AuthSetup';
@@ -50,7 +51,20 @@ function AppInner() {
     setIsMonitoringOpen,
     setDisplayMode,
     setConfig,
+    setActiveUser,
   } = useAppStore();
+
+  // Re-sync the persisted active user against the live users list — roles and
+  // names change as jobs import/ship, and a stale localStorage role breaks
+  // per-user filtering until the next manual re-selection.
+  const { users: boardUsers } = useBoardUsers();
+  useEffect(() => {
+    if (!activeUser || boardUsers.length === 0) return;
+    const fresh = boardUsers.find((u) => u.id === activeUser.id);
+    if (fresh && (fresh.role !== activeUser.role || fresh.name !== activeUser.name)) {
+      setActiveUser(fresh);
+    }
+  }, [boardUsers, activeUser, setActiveUser]);
 
   // Online status
   const [isOnline, setIsOnline] = useState(true);
