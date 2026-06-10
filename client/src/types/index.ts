@@ -59,6 +59,7 @@ export interface AppConfig {
   showRecentFiles: boolean;
   recentFilesCount: number;
   sharePointSiteIds: string[];
+  showFiles: boolean;
   fileOpenMode: 'same-window' | 'new-window';
 }
 
@@ -122,5 +123,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   showRecentFiles: true,
   recentFilesCount: 8,
   sharePointSiteIds: [],
+  showFiles: true,
   fileOpenMode: 'same-window'
 };

@@ -37,6 +37,7 @@ export interface UiConfig {
   weatherLat: number | null;
   weatherLon: number | null;
   tempUnit: 'F' | 'C';
+  showFiles: boolean;
   fileOpenMode: 'same-window' | 'new-window';
   sharePointSiteIds: string[];
 }
@@ -83,6 +84,7 @@ const DEFAULT_CONFIG: AppConfig = {
     weatherLat: null,
     weatherLon: null,
     tempUnit: 'F',
+    showFiles: true,
     fileOpenMode: 'same-window',
     sharePointSiteIds: [],
   },

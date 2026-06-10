@@ -250,8 +250,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
             <SectionHeader label="Files" isOpen={openSections.files} onToggle={() => toggleSection("files")} />
             {openSections.files && (
               <div className="mt-2 space-y-0.5">
-                <SelectField label="Open files in" value={local.fileOpenMode} onChange={(v) => set("fileOpenMode", v as AppConfig["fileOpenMode"])}
-                  options={[{ value: "same-window", label: "Same window" },{ value: "new-window", label: "New window" }]} />
+                <Toggle checked={local.showFiles} onChange={(v) => set("showFiles", v)} label="Files browser"
+                  description="Show the Files button and SharePoint file browser" />
+                {local.showFiles && (
+                  <SelectField label="Open files in" value={local.fileOpenMode} onChange={(v) => set("fileOpenMode", v as AppConfig["fileOpenMode"])}
+                    options={[{ value: "same-window", label: "Same window" },{ value: "new-window", label: "New window" }]} />
+                )}
               </div>
             )}
           </div>

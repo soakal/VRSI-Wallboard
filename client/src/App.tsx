@@ -135,7 +135,7 @@ function AppInner() {
       }
       if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
-        setIsFilesOpen(!isFilesOpen);
+        if (config.showFiles) setIsFilesOpen(!isFilesOpen);
         return;
       }
       if (e.ctrlKey && e.key === 'm') {
@@ -165,7 +165,12 @@ function AppInner() {
 
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [isSettingsOpen, isFilesOpen, isMonitoringOpen, setIsSettingsOpen, setIsFilesOpen, setIsMonitoringOpen, setDisplayMode]);
+  }, [isSettingsOpen, isFilesOpen, isMonitoringOpen, setIsSettingsOpen, setIsFilesOpen, setIsMonitoringOpen, setDisplayMode, config.showFiles]);
+
+  // Close the file browser if Files gets disabled in Settings while it is open
+  useEffect(() => {
+    if (!config.showFiles) setIsFilesOpen(false);
+  }, [config.showFiles, setIsFilesOpen]);
 
   // Nightly watchdog — reload at 3am
   useEffect(() => {
@@ -305,11 +310,13 @@ function AppInner() {
         onClose={() => setIsSettingsOpen(false)}
         config={config}
       />
-      <FileBrowserPanel
-        isOpen={isFilesOpen}
-        onClose={() => setIsFilesOpen(false)}
-        fileOpenMode={config.fileOpenMode}
-      />
+      {config.showFiles && (
+        <FileBrowserPanel
+          isOpen={isFilesOpen}
+          onClose={() => setIsFilesOpen(false)}
+          fileOpenMode={config.fileOpenMode}
+        />
+      )}
       <MonitoringPanel
         isOpen={isMonitoringOpen}
         onClose={() => setIsMonitoringOpen(false)}

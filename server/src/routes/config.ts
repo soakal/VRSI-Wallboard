@@ -42,6 +42,7 @@ function toClientConfig(cfg: AppConfig): Record<string, unknown> {
     showRecentFiles: cfg.sharepoint?.enableRecentFiles ?? false,
     recentFilesCount: cfg.sharepoint?.recentFilesCount ?? 8,
     sharePointSiteIds: Array.isArray(ui.sharePointSiteIds) ? ui.sharePointSiteIds : [],
+    showFiles: ui.showFiles ?? true,
     fileOpenMode: ui.fileOpenMode ?? 'same-window',
   };
 }
@@ -119,6 +120,9 @@ function fromClientConfig(flat: Record<string, unknown>): Partial<AppConfig> {
   if ('tempUnit' in flat && (flat.tempUnit === 'F' || flat.tempUnit === 'C')) {
     uiFields.tempUnit = flat.tempUnit;
   }
+  if ('showFiles' in flat) {
+    uiFields.showFiles = Boolean(flat.showFiles);
+  }
   if ('fileOpenMode' in flat && (flat.fileOpenMode === 'same-window' || flat.fileOpenMode === 'new-window')) {
     uiFields.fileOpenMode = flat.fileOpenMode;
   }
@@ -175,7 +179,7 @@ configRouter.post(
         'calendarIds', 'displayMode', 'refreshInterval', 'theme', 'timezone',
         'showWeekends', 'startHour', 'endHour', 'showAgendaRail', 'showWeather',
         'showNextEvent', 'weatherLat', 'weatherLon', 'timeFormat', 'tempUnit',
-        'showRecentFiles', 'recentFilesCount', 'sharePointSiteIds', 'fileOpenMode',
+        'showRecentFiles', 'recentFilesCount', 'sharePointSiteIds', 'showFiles', 'fileOpenMode',
       ]);
       const isFlat = Object.keys(body).some((k) => FLAT_KEYS.has(k));
       const partial = isFlat ? fromClientConfig(body) : (body as Partial<AppConfig>);

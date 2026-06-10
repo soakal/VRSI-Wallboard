@@ -94,11 +94,11 @@ const Dashboard: React.FC<DashboardProps> = ({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "s") { e.preventDefault(); onOpenSettings(); }
-      if (e.ctrlKey && e.key === "f") { e.preventDefault(); onOpenFiles(); }
+      if (e.ctrlKey && e.key === "f" && config.showFiles) { e.preventDefault(); onOpenFiles(); }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onOpenSettings, onOpenFiles]);
+  }, [onOpenSettings, onOpenFiles, config.showFiles]);
 
   const handleSunsetIso = useCallback((iso: string) => setSunsetIso(iso), []);
 
@@ -298,14 +298,16 @@ const Dashboard: React.FC<DashboardProps> = ({
           >
             ⚙ Settings
           </button>
-          <button
-            type="button"
-            onClick={onOpenFiles}
-            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
-            title="Open Files (Ctrl+F)"
-          >
-            Files
-          </button>
+          {config.showFiles && (
+            <button
+              type="button"
+              onClick={onOpenFiles}
+              className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+              title="Open Files (Ctrl+F)"
+            >
+              Files
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setIsMonitoringOpen(true)}
@@ -368,14 +370,16 @@ const Dashboard: React.FC<DashboardProps> = ({
           >
             ⚙
           </button>
-          <button
-            type="button"
-            onClick={onOpenFiles}
-            className="p-2 text-slate-500 hover:text-slate-300 text-lg leading-none"
-            aria-label="Files"
-          >
-            📁
-          </button>
+          {config.showFiles && (
+            <button
+              type="button"
+              onClick={onOpenFiles}
+              className="p-2 text-slate-500 hover:text-slate-300 text-lg leading-none"
+              aria-label="Files"
+            >
+              📁
+            </button>
+          )}
         </div>
       </div>
     </div>
