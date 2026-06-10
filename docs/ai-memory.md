@@ -6,7 +6,7 @@
 
 ## Current State
 
-- Last completed task: Full session — tray icon system + two Fable audit passes + all fixes. Latest commit: d1d0af7.
+- Last completed task: Full session — tray icon system + three Fable audit passes + all fixes. Latest commit: 7c6b948.
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
 - Blockers: None
 
@@ -62,7 +62,7 @@
 - Root: `INSTALL.bat`, `UNINSTALL.bat`, `ENABLE-STARTUP.bat`, `Start-WallBoard.bat`, `Start-TrayApp.bat`, `operations-guide.md`, `README.md`, `release-info.json`
 - `scripts/windows/`: 44 files (Package-Release.ps1 excluded — dev-only)
 - No `.env` secrets, no `node_modules`
-- Current at commit d1d0af7 (2026-06-10)
+- Current at commit 7c6b948 (2026-06-10)
 
 ### Package-Release.ps1 Changes
 - Excludes `Package-Release.ps1` from scripts copy (dev tool, not for end users)
@@ -76,7 +76,7 @@
 ## Version
 
 - Current: `v0.1.0` — tagged and released on GitHub (title: "VRSI Wallboard")
-- Latest commit: `d1d0af7` (2026-06-10, Fable verify fixes)
+- Latest commit: `7c6b948` (2026-06-10, Fable final check fixes)
 - Next release: bump `server/package.json` → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → create GitHub release
 
 ## Files Modified This Session (2026-06-10)
