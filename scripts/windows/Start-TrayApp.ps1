@@ -10,9 +10,10 @@ Remove-Variable _mp, _up -ErrorAction SilentlyContinue
 
 $ErrorActionPreference = 'Stop'
 
-# STA guard - NotifyIcon/WinForms requires single-threaded apartment
+# STA guard - NotifyIcon/WinForms requires single-threaded apartment.
+# Relaunch via conhost --headless so the new instance never gets a taskbar window.
 if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$PSCommandPath`"" -WindowStyle Hidden
+    Start-Process "$env:SystemRoot\System32\conhost.exe" -ArgumentList "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$PSCommandPath`""
     exit
 }
 

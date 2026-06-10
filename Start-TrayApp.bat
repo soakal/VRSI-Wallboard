@@ -14,7 +14,7 @@ if not "%ERRORLEVEL%"=="0" (
   exit /b 1
 )
 
-start "" "%PS%" -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File "%~dp0scripts\windows\Start-TrayApp.ps1"
+start "" "%SystemRoot%\System32\conhost.exe" --headless "%PS%" -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File "%~dp0scripts\windows\Start-TrayApp.ps1"
 
 echo VRSI WallBoard tray app started. Look for the W icon near the clock.
 echo.

@@ -14,6 +14,6 @@ if not "%ERRORLEVEL%"=="0" (
   exit /b 1
 )
 
-start "" "%PS%" -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File "%~dp0Start-TrayApp.ps1"
+start "" "%SystemRoot%\System32\conhost.exe" --headless "%PS%" -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File "%~dp0Start-TrayApp.ps1"
 
 exit /b 0

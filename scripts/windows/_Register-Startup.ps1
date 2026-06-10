@@ -36,12 +36,12 @@ Fix: Log on as the kiosk user first, then run ENABLE-STARTUP.bat again.
 "@
 }
 
-# Use wscript.exe + VBS shim so no console window ever appears in the taskbar.
-# wscript.exe window-style 0 (SW_HIDE) is the only fully reliable way to launch
-# PowerShell invisibly from a Task Scheduler interactive logon task.
-# cmd /c start or -WindowStyle Hidden both still create a conhost that flashes.
-$vbsLauncher = Join-Path $PSScriptRoot 'Start-TrayApp.vbs'
-$action   = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\wscript.exe" -Argument "`"$vbsLauncher`""
+# Launch via conhost.exe --headless so no console window ever appears in the
+# taskbar. Launching powershell.exe directly leaves a persistent taskbar window
+# when Windows Terminal is the default console host, and the old wscript.exe
+# VBS shim breaks on Windows 11 24H2+ where VBScript is an optional feature.
+$psExe  = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\conhost.exe" -Argument "--headless $psExe -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$trayPs1`""
 $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $triggerUser
 # -ExecutionTimeLimit ([TimeSpan]::Zero) disables the default 72-hour kill  - without it
 # Task Scheduler terminates the tray (and the server it owns) after 3 days.
