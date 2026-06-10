@@ -33,8 +33,13 @@ function Write-TrayLog([string]$Level, [string]$Msg) {
     try {
         $logDir = Get-EnvValue 'LOGS_DIR' 'C:\ProgramData\VRSIWallBoard\logs'
         if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+        $logFile = Join-Path $logDir 'tray-startup.log'
+        # Rotate at 1 MB to prevent unbounded growth on always-on kiosks
+        if ((Test-Path $logFile) -and (Get-Item $logFile).Length -gt 1MB) {
+            Move-Item $logFile "$logFile.old" -Force -ErrorAction SilentlyContinue
+        }
         $stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
-        "$stamp  [$Level]  $Msg" | Add-Content -Path (Join-Path $logDir 'tray-startup.log') -Encoding UTF8 -ErrorAction SilentlyContinue
+        "$stamp  [$Level]  $Msg" | Add-Content -Path $logFile -Encoding UTF8 -ErrorAction SilentlyContinue
     } catch { }
 }
 
@@ -96,12 +101,21 @@ function Show-Balloon {
 function Get-NodeExe {
     $fromPath = (Get-Command node -ErrorAction SilentlyContinue)?.Source
     if ($fromPath) { return $fromPath }
+    $x86 = ${env:ProgramFiles(x86)}
     foreach ($candidate in @(
         (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
         'C:\Program Files\nodejs\node.exe',
+        (if ($x86) { Join-Path $x86 'nodejs\node.exe' } else { $null }),
+        "$env:LOCALAPPDATA\Programs\nodejs\node.exe",
         "$env:APPDATA\nvm\current\node.exe"
     )) {
-        if (Test-Path $candidate) { return $candidate }
+        if ($candidate -and (Test-Path $candidate)) { return $candidate }
+    }
+    # Last resort: walk winget per-user packages for node.exe
+    $wingetPkg = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages"
+    if (Test-Path $wingetPkg) {
+        $found = Get-ChildItem -Path $wingetPkg -Filter 'node.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) { return $found.FullName }
     }
     throw "node.exe not found. Install Node.js from https://nodejs.org then restart the tray."
 }
@@ -127,7 +141,10 @@ function Stop-Server {
         $conn = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($conn) {
             $serverPid = $conn.OwningProcess
-            Stop-Process -Id $serverPid -Force -ErrorAction SilentlyContinue
+            $proc = Get-Process -Id $serverPid -ErrorAction SilentlyContinue
+            if ($proc -and $proc.ProcessName -eq 'node') {
+                Stop-Process -Id $serverPid -Force -ErrorAction SilentlyContinue
+            }
         }
     }
     # Note: no sleep here — callers that need the port to free (Restart path) add their own delay

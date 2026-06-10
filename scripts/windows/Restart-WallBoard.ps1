@@ -22,11 +22,18 @@ try {
 if ($trayRunning) {
     Write-Host 'Tray app detected - waiting for it to restart the server...'
 } else {
-    Write-Step 'No tray app detected - relaunching headless service'
-    $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
-    Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
-        -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`"" `
-        -WindowStyle Hidden
+    # Guard: if something already listening on 3001 (e.g. tray is mid-launch or
+    # the mutex probe had a timing gap), skip the fallback to avoid a port conflict.
+    $alreadyUp = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($alreadyUp) {
+        Write-Host '  Port 3001 is already in use - skipping headless fallback launch.' -ForegroundColor DarkGray
+    } else {
+        Write-Step 'No tray app detected - relaunching headless service'
+        $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
+        Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+            -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`"" `
+            -WindowStyle Hidden
+    }
 }
 
 # Poll /health once per second for up to 30 seconds.

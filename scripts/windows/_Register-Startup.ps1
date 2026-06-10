@@ -23,7 +23,17 @@ $consoleUser = (Get-CimInstance Win32_ComputerSystem -Property UserName).UserNam
 if ($consoleUser) {
     $triggerUser = $consoleUser
 } else {
-    $triggerUser = $env:USERNAME
+    # No interactive console session (e.g. installing over RDP or before first logon).
+    # Falling back to $env:USERNAME would register the task for the elevated admin
+    # account — the exact bug this logic was written to prevent.  Require the kiosk
+    # user to be interactively logged on, or pass -TriggerUser explicitly.
+    throw @"
+Cannot determine the interactive kiosk user (Win32_ComputerSystem.UserName is empty).
+This happens when no user is currently logged on at the console, or when running
+over a remote session with no active console session.
+
+Fix: Log on as the kiosk user first, then run ENABLE-STARTUP.bat again.
+"@
 }
 
 # -STA is required for Windows Forms (NotifyIcon/ContextMenuStrip use STA COM).

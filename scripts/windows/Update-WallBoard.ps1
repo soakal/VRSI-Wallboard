@@ -18,7 +18,10 @@ $trayMutexHandle = $null
 $trayWasRunning  = [System.Threading.Mutex]::TryOpenExisting('VRSIWallBoardTray', [ref]$trayMutexHandle)
 if ($trayMutexHandle) { $trayMutexHandle.Dispose() }   # handle not needed beyond the probe
 if ($trayWasRunning) {
-    Write-Host '  Tray app detected — stopping it before rebuild' -ForegroundColor DarkGray
+    Write-Host '  Tray app detected — disabling task + stopping tray before rebuild' -ForegroundColor DarkGray
+    # Disable the scheduled task FIRST so Task Scheduler does not relaunch the
+    # tray mid-update (RestartCount=3 would otherwise fire within 60 seconds).
+    Disable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
     Get-CimInstance Win32_Process |
         Where-Object { $_.Name -in @('powershell.exe', 'pwsh.exe') -and $_.CommandLine -like '*Start-TrayApp.ps1*' } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
@@ -59,6 +62,8 @@ Write-Step 'Rebuilding (shared -> server -> client)'
 #    fall back to headless service only when no tray was running.
 Write-Step 'Restarting server'
 if ($trayWasRunning) {
+    # Re-enable the scheduled task now that the new build is in place.
+    Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
     $trayBat = Join-Path $RepoRoot 'Start-TrayApp.bat'
     if (Test-Path $trayBat) {
         Start-Process 'cmd.exe' -ArgumentList "/c `"$trayBat`"" -WindowStyle Hidden
