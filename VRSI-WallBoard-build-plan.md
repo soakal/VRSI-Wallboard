@@ -150,7 +150,7 @@ interface StorageProvider {
 All existing fields preserved exactly. See existing spec §3.4 for full field list.
 
 ### Board Config (from `board-config.json` — unchanged)
-`spareCarrier`, `superUser`, `statusColors`, `extraUsers` — all preserved.
+`spareCarrier`, `superUsers` (list since v0.3.0; legacy `superUser` string auto-migrated), `statusColors`, `extraUsers` — all preserved.
 
 ### Migration from Existing JSON → SQLite
 On first run, if existing JSON files are detected in the configured data directory:

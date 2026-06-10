@@ -228,7 +228,13 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       | undefined;
     if (!row) return null;
     try {
-      return JSON.parse(row.value) as Partial<BoardConfig>;
+      const parsed = JSON.parse(row.value) as Partial<BoardConfig> & { superUser?: string };
+      // Configs saved before v0.3.0 stored a single superUser string — fold it
+      // into the superUsers list so existing installs keep their super user.
+      if (!parsed.superUsers && typeof parsed.superUser === 'string' && parsed.superUser.trim()) {
+        parsed.superUsers = [parsed.superUser.trim()];
+      }
+      return parsed;
     } catch {
       return null;
     }

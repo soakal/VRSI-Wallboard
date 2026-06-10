@@ -861,7 +861,7 @@ export function deleteNote(jobNumber: string, noteId: string, actor: Actor): Pro
 function deepMergeConfig(base: BoardConfig, override: Partial<BoardConfig>): BoardConfig {
   return {
     spareCarrier: override.spareCarrier ?? base.spareCarrier,
-    superUser: override.superUser ?? base.superUser,
+    superUsers: override.superUsers ?? base.superUsers,
     statusColors: {
       ...base.statusColors,
       ...(override.statusColors ?? {}),
@@ -993,12 +993,13 @@ export function getDerivedUsers(config: BoardConfig): BoardUser[] {
   // Permanent super user — always first, always present
   users.push({ id: makeId(PERMANENT_SUPER), name: PERMANENT_SUPER, role: 'super' })
 
-  // Configured super user (if different from permanent and non-empty)
+  // Configured super users (skip blanks, duplicates, and the permanent entry)
   const seen = new Set<string>([PERMANENT_SUPER])
-  const configuredSuper = config.superUser?.trim()
-  if (configuredSuper && configuredSuper !== PERMANENT_SUPER) {
-    seen.add(configuredSuper)
-    users.push({ id: makeId(configuredSuper), name: configuredSuper, role: 'super' })
+  for (const su of config.superUsers) {
+    const name = canonicalPersonName(su.trim())
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    users.push({ id: makeId(name), name, role: 'super' })
   }
   const rest: BoardUser[] = []
 

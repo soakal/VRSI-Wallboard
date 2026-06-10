@@ -45,23 +45,28 @@ export default function UsersView() {
 
   const [savedFlash, setSavedFlash] = useState(false)
 
-  // ── super user state ─────────────────────────────────────────────────────
-  const [superUserInput, setSuperUserInput] = useState(config.superUser)
+  // ── super users state ─────────────────────────────────────────────────────
+  const superUsers = config.superUsers ?? []
+  const [superPick, setSuperPick] = useState('')
   const [superSavedFlash, setSuperSavedFlash] = useState(false)
 
-  useEffect(() => {
-    setSuperUserInput(config.superUser)
-  }, [config.superUser])
+  const flashSuperSaved = () => {
+    setSuperSavedFlash(true)
+    setTimeout(() => setSuperSavedFlash(false), 2000)
+  }
 
-  const handleSaveSuperUser = () => {
+  const handleAddSuperUser = () => {
+    const name = superPick.trim()
+    setSuperPick('')
+    if (!name) return
+    if (superUsers.some((u) => u.toLowerCase() === name.toLowerCase())) return
+    updateConfig.mutate({ superUsers: [...superUsers, name] }, { onSuccess: flashSuperSaved })
+  }
+
+  const handleRemoveSuperUser = (name: string) => {
     updateConfig.mutate(
-      { superUser: superUserInput },
-      {
-        onSuccess: () => {
-          setSuperSavedFlash(true)
-          setTimeout(() => setSuperSavedFlash(false), 2000)
-        },
-      }
+      { superUsers: superUsers.filter((u) => u !== name) },
+      { onSuccess: flashSuperSaved }
     )
   }
 
@@ -203,32 +208,52 @@ export default function UsersView() {
         )}
       </details>
 
-      {/* ── Section 3: Super User ───────────────────────────────────────────── */}
+      {/* ── Section 3: Super Users ──────────────────────────────────────────── */}
       <div className="py-4 px-1">
-        <h3 className="text-slate-300 font-semibold text-sm mb-1">Super User</h3>
-        <p className="text-slate-500 text-xs mb-3">Super user sees all jobs in both tabs with no filtering. Set to "None" to disable.</p>
+        <h3 className="text-slate-300 font-semibold text-sm mb-1">Super Users</h3>
+        <p className="text-slate-500 text-xs mb-3">Super users see all jobs in both tabs with no filtering. Changes save immediately.</p>
 
-        <div className="flex gap-2 mb-1">
+        <div className="flex gap-2 mb-3">
           <select
-            value={superUserInput}
-            onChange={(e) => setSuperUserInput(e.target.value)}
+            value={superPick}
+            onChange={(e) => setSuperPick(e.target.value)}
             className="flex-1 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 px-3 py-1.5 focus:outline-none focus:border-blue-500/50 cursor-pointer"
           >
-            <option value="">— None —</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.name}>
-                {u.name}{u.name === config.superUser ? ' ✓' : ''}
-              </option>
-            ))}
+            <option value="">— Add a super user —</option>
+            {users
+              .filter((u) => !superUsers.some((s) => s.toLowerCase() === u.name.toLowerCase()))
+              .map((u) => (
+                <option key={u.id} value={u.name}>{u.name}</option>
+              ))}
           </select>
           <button
-            onClick={handleSaveSuperUser}
-            disabled={updateConfig.isPending}
-            className="bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-200 text-xs px-3 py-1.5 rounded transition-colors"
+            onClick={handleAddSuperUser}
+            disabled={!superPick || updateConfig.isPending}
+            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
           >
-            Save
+            Add
           </button>
         </div>
+
+        {superUsers.length > 0 ? (
+          <ul className="space-y-1">
+            {superUsers.map((name) => (
+              <li key={name} className="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2">
+                <span className="text-sm text-slate-200">{name}</span>
+                <button
+                  onClick={() => handleRemoveSuperUser(name)}
+                  disabled={updateConfig.isPending}
+                  className="text-slate-500 hover:text-red-400 transition-colors text-lg leading-none"
+                  aria-label={`Remove ${name} from super users`}
+                >
+                  &times;
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-slate-600 text-xs">No super users — everyone sees only their own jobs.</p>
+        )}
         {superSavedFlash && (
           <span className="text-green-400 text-xs">Saved!</span>
         )}

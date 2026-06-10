@@ -326,7 +326,7 @@ export function JobListView({ tab }: Props) {
   }
 
   const spare = norm(config.spareCarrier)
-  const isSuper = !!config.superUser && norm(activeUser?.name) === norm(config.superUser)
+  const isSuper = !!activeUser && (config.superUsers ?? []).some((s) => norm(s) === norm(activeUser.name))
   const pmUsers = users.filter((u) => u.role === 'pm')
 
   const tabFiltered = filterJobsForTab(jobs, tab, config)

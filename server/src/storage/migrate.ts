@@ -98,10 +98,12 @@ export function migrateJsonToSqliteIfNeeded(provider: LocalStorageProvider): voi
   }
 
   if (fs.existsSync(boardConfigPath)) {
-    const raw = JSON.parse(fs.readFileSync(boardConfigPath, 'utf-8')) as Partial<BoardConfig>;
+    const raw = JSON.parse(fs.readFileSync(boardConfigPath, 'utf-8')) as Partial<BoardConfig> & {
+      superUser?: string;
+    };
     provider.saveBoardConfigRaw({
       spareCarrier: raw.spareCarrier ?? 'matto@vrs-inc.com',
-      superUser: raw.superUser ?? 'Jon Shantry',
+      superUsers: raw.superUsers ?? (raw.superUser?.trim() ? [raw.superUser.trim()] : ['Jon Shantry']),
       statusColors: raw.statusColors ?? {
         none: '#475569',
         in_progress: '#facc15',

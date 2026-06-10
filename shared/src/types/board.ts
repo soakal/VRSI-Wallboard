@@ -53,7 +53,7 @@ export interface BoardUser {
 
 export interface BoardConfig {
   spareCarrier: string;
-  superUser: string;
+  superUsers: string[];
   statusColors: Record<JobStatus, string>;
   extraUsers: string[];
 }
@@ -65,7 +65,7 @@ export interface Actor {
 
 export const DEFAULT_BOARD_CONFIG: BoardConfig = {
   spareCarrier: 'matto@vrs-inc.com',
-  superUser: 'Jon Shantry',
+  superUsers: ['Jon Shantry'],
   statusColors: {
     none: '#475569',
     in_progress: '#facc15',
