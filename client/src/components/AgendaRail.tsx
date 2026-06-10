@@ -42,12 +42,13 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
   const now = new Date();
   const todayStart = startOfDay(now);
 
-  // Agenda covers the current week: today through the end of the week.
-  // Week start matches the calendar (Sunday normally, Monday when weekends
-  // are hidden), so the agenda and the grid roll over on the same day.
+  // Agenda covers today through the end of NEXT week. The current week alone
+  // is too sparse — late in the week it goes empty even though jobs ship the
+  // following Monday. Week start matches the calendar (Sunday normally,
+  // Monday when weekends are hidden), so the horizon rolls over with the grid.
   const weekStartsOn = showWeekends ? 0 : 1;
   const dayIndexInWeek = (todayStart.getDay() - weekStartsOn + 7) % 7;
-  const daysLeftInWeek = 7 - dayIndexInWeek;
+  const daysAhead = 7 - dayIndexInWeek + 7;
 
   const sortGroup = (group: CalendarEvent[]) =>
     group.sort((a, b) => {
@@ -57,7 +58,7 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
     });
 
   const sections: { key: string; label: string; events: CalendarEvent[] }[] = [];
-  for (let i = 0; i < daysLeftInWeek; i++) {
+  for (let i = 0; i < daysAhead; i++) {
     const dayStart = addDays(todayStart, i);
     const dayEnd = addDays(todayStart, i + 1);
 
@@ -171,7 +172,7 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
         {isEmpty && (
           <div className="flex flex-col items-center justify-center gap-1 py-8 text-center">
             <p className="text-sm font-medium text-slate-400">Nothing on the agenda</p>
-            <p className="text-xs text-slate-600">No events for the rest of this week</p>
+            <p className="text-xs text-slate-600">No events for this week or next</p>
           </div>
         )}
 
