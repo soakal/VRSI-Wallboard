@@ -98,7 +98,7 @@ function Stop-Server {
     # Note: no sleep here — callers that need the port to free (Restart path) add their own delay
 }
 
-# ---- Cleanup: called before Application::Exit ----
+# ---- Cleanup: called before closing the app form ----
 function Invoke-Cleanup {
     if ($script:MonitorTimer) {
         $script:MonitorTimer.Stop()
@@ -110,6 +110,9 @@ function Invoke-Cleanup {
     }
     if ($script:TrayIcon) {
         $script:TrayIcon.Dispose()
+    }
+    if ($script:AppForm -and -not $script:AppForm.IsDisposed) {
+        $script:AppForm.Close()
     }
     try {
         $script:TrayMutex.ReleaseMutex()
@@ -169,8 +172,7 @@ $itemExit = New-Object System.Windows.Forms.ToolStripMenuItem('Stop && Exit')
 $itemExit.add_Click({
     try {
         Stop-Server
-        Invoke-Cleanup
-        [System.Windows.Forms.Application]::Exit()
+        Invoke-Cleanup   # closes $script:AppForm → exits Application::Run($script:AppForm)
     } catch {
         Show-Balloon "Failed to stop server cleanly: $($_.Exception.Message)" ([System.Windows.Forms.ToolTipIcon]::Error)
     }
@@ -226,5 +228,12 @@ $script:MonitorTimer.Start()
 
 Show-Balloon 'WallBoard server running at http://localhost:3001' ([System.Windows.Forms.ToolTipIcon]::Info)
 
-# ---- Message loop (blocks until Application::Exit is called) ----
-[System.Windows.Forms.Application]::Run()
+# ---- Hidden host form — keeps the message loop alive without a taskbar button.
+# ShowInTaskbar=false + never Show()ed means no entry appears in the taskbar.
+# Application::Run($form) exits cleanly when $form.Close() is called.
+$script:AppForm                = New-Object System.Windows.Forms.Form
+$script:AppForm.WindowState    = [System.Windows.Forms.FormWindowState]::Minimized
+$script:AppForm.ShowInTaskbar  = $false
+$script:AppForm.Visible        = $false
+
+[System.Windows.Forms.Application]::Run($script:AppForm)
