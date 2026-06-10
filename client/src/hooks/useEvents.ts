@@ -20,7 +20,7 @@ export function useEvents(
     // Fetch a range that fully covers the visible period for the current view:
     //  - month: from the 1st of this month, +45 days (covers a 6-week grid)
     //  - week:  from the start of this week, +21 days (3 weeks of look-ahead)
-    //  - day:   from the start of this week, +14 days
+    //  - day:   from the start of this week, +21 days (agenda rail looks 14 days out)
     let start: Date;
     let span: number;
     if (displayMode === 'month') {
@@ -31,7 +31,7 @@ export function useEvents(
       span = 21;
     } else {
       start = startOfWeek(now, { weekStartsOn: 0 });
-      span = 14;
+      span = 21;
     }
     const end = addDays(start, span);
     return {

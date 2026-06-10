@@ -17,14 +17,6 @@ function formatSectionDate(d: Date): string {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -34,6 +26,9 @@ function addDays(d: Date, n: number): Date {
   result.setDate(result.getDate() + n);
   return result;
 }
+
+/** How many days ahead the agenda looks (today + the next 13). */
+const AGENDA_DAYS = 14;
 
 const AgendaRail: React.FC<AgendaRailProps> = ({
   events,
@@ -49,24 +44,6 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
       });
   const now = new Date();
   const todayStart = startOfDay(now);
-  const tomorrowStart = addDays(todayStart, 1);
-  const tomorrowEnd = addDays(todayStart, 2);
-
-  const todayEvents: CalendarEvent[] = [];
-  const tomorrowEvents: CalendarEvent[] = [];
-
-  for (const ev of visibleEvents) {
-    const start = new Date(ev.startDateTime);
-    const end = new Date(ev.endDateTime);
-
-    if (isSameDay(start, now) || (ev.isAllDay && start >= todayStart && start < tomorrowStart)) {
-      if (ev.isAllDay || end > now) {
-        todayEvents.push(ev);
-      }
-    } else if (start >= tomorrowStart && start < tomorrowEnd) {
-      tomorrowEvents.push(ev);
-    }
-  }
 
   const sortGroup = (group: CalendarEvent[]) =>
     group.sort((a, b) => {
@@ -75,8 +52,30 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
       return new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime();
     });
 
-  sortGroup(todayEvents);
-  sortGroup(tomorrowEvents);
+  const sections: { key: string; label: string; events: CalendarEvent[] }[] = [];
+  for (let i = 0; i < AGENDA_DAYS; i++) {
+    const dayStart = addDays(todayStart, i);
+    const dayEnd = addDays(todayStart, i + 1);
+
+    const dayEvents = visibleEvents.filter((ev) => {
+      const start = new Date(ev.startDateTime);
+      const end = new Date(ev.endDateTime);
+      if (start < dayStart || start >= dayEnd) return false;
+      // Today: drop timed events that already ended
+      if (i === 0 && !ev.isAllDay && end <= now) return false;
+      return true;
+    });
+    if (dayEvents.length === 0) continue;
+
+    sortGroup(dayEvents);
+    const label =
+      i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : formatSectionDate(dayStart);
+    sections.push({
+      key: dayStart.toISOString().slice(0, 10),
+      label: i <= 1 ? `${label} — ${formatSectionDate(dayStart)}` : label,
+      events: dayEvents,
+    });
+  }
 
   const renderEvent = (event: CalendarEvent) => {
     const start = new Date(event.startDateTime);
@@ -160,7 +159,7 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
     );
   };
 
-  const isEmpty = todayEvents.length === 0 && tomorrowEvents.length === 0;
+  const isEmpty = sections.length === 0;
 
   return (
     <div className={`flex flex-col overflow-hidden ${className}`}>
@@ -168,31 +167,20 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
         {isEmpty && (
           <div className="flex flex-col items-center justify-center gap-1 py-8 text-center">
             <p className="text-sm font-medium text-slate-400">Nothing on the agenda</p>
-            <p className="text-xs text-slate-600">No events for today or tomorrow</p>
+            <p className="text-xs text-slate-600">No events in the next {AGENDA_DAYS} days</p>
           </div>
         )}
 
-        {todayEvents.length > 0 && (
-          <section>
+        {sections.map((section) => (
+          <section key={section.key}>
             <h3 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-              Today <span className="text-slate-600">— {formatSectionDate(todayStart)}</span>
+              {section.label}
             </h3>
             <div className="space-y-1">
-              {todayEvents.map(renderEvent)}
+              {section.events.map(renderEvent)}
             </div>
           </section>
-        )}
-
-        {tomorrowEvents.length > 0 && (
-          <section>
-            <h3 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-              Tomorrow <span className="text-slate-600">— {formatSectionDate(tomorrowStart)}</span>
-            </h3>
-            <div className="space-y-1">
-              {tomorrowEvents.map(renderEvent)}
-            </div>
-          </section>
-        )}
+        ))}
       </div>
     </div>
   );
