@@ -53,15 +53,20 @@ function isGitHubRelease(v: unknown): v is { tag_name: string; html_url: string;
   );
 }
 
+// Deterministic link to the running version's release page — unlike the
+// "latest release" URL it never depends on the GitHub check or its cache.
+const currentReleaseUrl = `https://github.com/${GITHUB_REPO}/releases/tag/v${currentVersion}`;
+
 updateRouter.get('/check', async (_req: Request, res: Response) => {
   const now = Date.now();
   const ttl = cache?.ok === false ? FAIL_TTL_MS : CACHE_TTL_MS;
 
   if (cache && now - cache.checkedAt < ttl) {
-    if (!cache.ok) return res.json({ data: { currentVersion, updateAvailable: false } });
+    if (!cache.ok) return res.json({ data: { currentVersion, currentReleaseUrl, updateAvailable: false } });
     return res.json({
       data: {
         currentVersion,
+        currentReleaseUrl,
         latestVersion: cache.latestVersion,
         updateAvailable: isNewer(cache.latestVersion, currentVersion),
         releaseUrl: cache.releaseUrl,
@@ -78,13 +83,13 @@ updateRouter.get('/check', async (_req: Request, res: Response) => {
 
     if (!response.ok) {
       cache = { checkedAt: now, latestVersion: '', releaseUrl: '', releaseName: '', ok: false };
-      return res.json({ data: { currentVersion, updateAvailable: false } });
+      return res.json({ data: { currentVersion, currentReleaseUrl, updateAvailable: false } });
     }
 
     const raw: unknown = await response.json();
     if (!isGitHubRelease(raw)) {
       cache = { checkedAt: now, latestVersion: '', releaseUrl: '', releaseName: '', ok: false };
-      return res.json({ data: { currentVersion, updateAvailable: false } });
+      return res.json({ data: { currentVersion, currentReleaseUrl, updateAvailable: false } });
     }
 
     cache = {
@@ -98,6 +103,7 @@ updateRouter.get('/check', async (_req: Request, res: Response) => {
     return res.json({
       data: {
         currentVersion,
+        currentReleaseUrl,
         latestVersion: cache.latestVersion,
         updateAvailable: isNewer(cache.latestVersion, currentVersion),
         releaseUrl: cache.releaseUrl,
@@ -107,7 +113,7 @@ updateRouter.get('/check', async (_req: Request, res: Response) => {
   } catch (err) {
     logger.warn('Update check failed', { err });
     cache = { checkedAt: now, latestVersion: '', releaseUrl: '', releaseName: '', ok: false };
-    return res.json({ data: { currentVersion, updateAvailable: false } });
+    return res.json({ data: { currentVersion, currentReleaseUrl, updateAvailable: false } });
   }
 });
 

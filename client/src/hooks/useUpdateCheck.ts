@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react';
 export interface UpdateInfo {
   updateAvailable: boolean;
   currentVersion?: string;
+  /** Release page for the version currently running (always present) */
+  currentReleaseUrl?: string;
   latestVersion?: string;
+  /** Release page for the latest available release (from the GitHub check) */
   releaseUrl?: string;
   releaseName?: string;
 }

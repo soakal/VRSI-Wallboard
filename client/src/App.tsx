@@ -195,9 +195,15 @@ function AppInner() {
         <div className="fixed top-0 left-0 right-0 z-[9999] flex items-center justify-between gap-3 bg-blue-600 px-4 py-2 text-sm text-white shadow-lg">
           <span>
             Update available: <strong>{updateInfo.releaseName || updateInfo.latestVersion}</strong>
-            {' '}— you are on v{updateInfo.currentVersion}. Run{' '}
-            <code className="bg-blue-800/60 px-1 rounded">Update-WallBoard.bat</code>
-            {' '}from the scripts\windows folder to update.
+            {' '}— you are on v{updateInfo.currentVersion}. Open{' '}
+            <button
+              type="button"
+              onClick={() => setIsSettingsOpen(true)}
+              className="underline font-medium hover:text-blue-200"
+            >
+              Settings → About &amp; Updates
+            </button>
+            {' '}and click Update.
             {updateInfo.releaseUrl && (
               <a
                 href={updateInfo.releaseUrl}

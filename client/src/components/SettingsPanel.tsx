@@ -334,12 +334,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
                     {updateMsg.text}
                   </p>
                 )}
-                {updateInfo.releaseUrl && (
-                  <a href={updateInfo.releaseUrl} target="_blank" rel="noreferrer"
-                    className="inline-block text-xs text-slate-500 underline underline-offset-2 hover:text-slate-300">
-                    Release notes
-                  </a>
-                )}
+                {(() => {
+                  // Update pending: link to the new release. Up to date: link to
+                  // the running version's own release page (never the stale cache).
+                  const notesUrl = updateInfo.updateAvailable
+                    ? updateInfo.releaseUrl
+                    : updateInfo.currentReleaseUrl;
+                  if (!notesUrl) return null;
+                  return (
+                    <a href={notesUrl} target="_blank" rel="noreferrer"
+                      className="inline-block text-xs text-slate-500 underline underline-offset-2 hover:text-slate-300">
+                      Release notes{updateInfo.updateAvailable && updateInfo.latestVersion ? ` for ${updateInfo.latestVersion}` : updateInfo.currentVersion ? ` for v${updateInfo.currentVersion}` : ""}
+                    </a>
+                  );
+                })()}
               </div>
             )}
           </div>
