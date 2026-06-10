@@ -1,5 +1,7 @@
+param([switch]$Unattended)
 # Pull the latest code from GitHub, rebuild, and restart VRSI WallBoard.
 # Double-click Update-WallBoard.bat to run, or choose P from WallBoard-Menu.bat.
+# -Unattended (used by POST /api/update/run) skips the dirty-tree prompt.
 . "$PSScriptRoot\_common.ps1"
 
 $ErrorActionPreference = 'Stop'
@@ -37,8 +39,10 @@ $dirty = git status --porcelain 2>$null
 if ($dirty) {
     Write-Warning 'Uncommitted local changes detected. These may block the pull:'
     Write-Host $dirty -ForegroundColor DarkYellow
-    $ans = Read-Host 'Continue anyway? (Y/N)'
-    if ($ans -notmatch '^[Yy]') { exit 1 }
+    if (-not $Unattended) {
+        $ans = Read-Host 'Continue anyway? (Y/N)'
+        if ($ans -notmatch '^[Yy]') { exit 1 }
+    }
 }
 
 # 2. Pull latest code

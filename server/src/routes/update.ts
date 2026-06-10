@@ -1,6 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { createRequire } from 'module';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import fs from 'fs';
 import { logger } from '../utils/logger.js';
+import { requireAdminToken } from '../middleware/adminAuth.js';
 
 export const updateRouter = Router();
 
@@ -103,5 +108,52 @@ updateRouter.get('/check', async (_req: Request, res: Response) => {
     logger.warn('Update check failed', { err });
     cache = { checkedAt: now, latestVersion: '', releaseUrl: '', releaseName: '', ok: false };
     return res.json({ data: { currentVersion, updateAvailable: false } });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /run — launch the update script detached. Dev installs (git repo
+// present) pull + rebuild; kiosk installs download the latest release zip.
+// The script stops this server, applies the update, and restarts everything.
+// ---------------------------------------------------------------------------
+let updateStartedAt = 0;
+
+updateRouter.post('/run', requireAdminToken, (_req: Request, res: Response) => {
+  try {
+    // Debounce: ignore re-clicks while an update launched in the last 5 minutes
+    if (Date.now() - updateStartedAt < 5 * 60 * 1000) {
+      return res.json({ data: { started: true, alreadyRunning: true } });
+    }
+
+    // dist/routes/update.js → repo root is three levels up from this file's dir
+    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+    const scriptsDir = path.join(repoRoot, 'scripts', 'windows');
+    const isGit = fs.existsSync(path.join(repoRoot, '.git'));
+    const script = path.join(scriptsDir, isGit ? 'Update-WallBoard.ps1' : 'Update-FromRelease.ps1');
+    if (!fs.existsSync(script)) {
+      return res.status(500).json({
+        error: { code: 'update_script_missing', message: `Update script not found: ${script}` },
+      });
+    }
+
+    const psExe = path.join(
+      process.env.SystemRoot ?? 'C:\\Windows',
+      'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe',
+    );
+    const child = spawn(
+      psExe,
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', script, '-Unattended'],
+      { cwd: scriptsDir, detached: true, stdio: 'ignore', windowsHide: true },
+    );
+    child.unref();
+    updateStartedAt = Date.now();
+
+    logger.info('Update launched', { script, method: isGit ? 'git' : 'release' });
+    return res.json({ data: { started: true, method: isGit ? 'git' : 'release' } });
+  } catch (err) {
+    logger.error('Failed to launch update', { err });
+    return res.status(500).json({
+      error: { code: 'update_launch_failed', message: 'Could not start the update script' },
+    });
   }
 });

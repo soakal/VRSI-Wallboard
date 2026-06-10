@@ -3,6 +3,7 @@ import { AppConfig } from "../types/index";
 import CalendarSelector from "./CalendarSelector";
 import { useCalendars } from "../hooks/useCalendars";
 import { useUpdateConfig } from "../hooks/useConfig";
+import { useUpdateCheck } from "../hooks/useUpdateCheck";
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -10,7 +11,7 @@ interface SettingsPanelProps {
   config: AppConfig;
 }
 
-type SectionKey = "calendars" | "display" | "widgets" | "time" | "location" | "files";
+type SectionKey = "calendars" | "display" | "widgets" | "time" | "location" | "files" | "about";
 
 const SectionHeader: React.FC<{ label: string; isOpen: boolean; onToggle: () => void }> = ({ label, isOpen, onToggle }) => (
   <button type="button" onClick={onToggle} className="flex w-full items-center justify-between py-2 text-left">
@@ -66,7 +67,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
   const [zipStatus, setZipStatus] = useState<{ type: "ok" | "error"; message: string } | null>(null);
   const [zipLooking, setZipLooking] = useState(false);
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
-    calendars: true, display: true, widgets: true, time: true, location: false, files: false,
+    calendars: true, display: true, widgets: true, time: true, location: false, files: false, about: true,
   });
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -103,6 +104,45 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
       setZipStatus({ type: "error", message: "Lookup failed — check connection" });
     } finally {
       setZipLooking(false);
+    }
+  };
+
+  // ── update state ───────────────────────────────────────────────────────────
+  const updateInfo = useUpdateCheck();
+  const [updating, setUpdating] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+  const pollRef = useRef<number | null>(null);
+
+  useEffect(() => () => { if (pollRef.current !== null) window.clearInterval(pollRef.current); }, []);
+
+  const startUpdate = async () => {
+    if (!window.confirm("Update WallBoard now? The board will go down for a few minutes and restart itself when done.")) return;
+    setUpdating(true);
+    setUpdateMsg(null);
+    try {
+      const res = await fetch("/api/update/run", { method: "POST" });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      setUpdateMsg({ type: "ok", text: "Update started. The board will restart itself in a few minutes — leave it alone until then." });
+      const startedFrom = updateInfo.currentVersion;
+      // Reload once the server is back on a different version
+      pollRef.current = window.setInterval(async () => {
+        try {
+          const r = await fetch("/api/update/check");
+          if (!r.ok) return;
+          const j: unknown = await r.json();
+          if (j !== null && typeof j === "object" && "data" in j) {
+            const d = (j as { data?: { currentVersion?: string } }).data;
+            if (d && typeof d.currentVersion === "string" && d.currentVersion !== startedFrom) {
+              window.location.reload();
+            }
+          }
+        } catch {
+          // Server is down mid-update — keep polling
+        }
+      }, 10_000);
+    } catch (err) {
+      setUpdating(false);
+      setUpdateMsg({ type: "error", text: err instanceof Error ? `Update failed to start: ${err.message}` : "Update failed to start" });
     }
   };
 
@@ -246,7 +286,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
             )}
           </div>
 
-          <div className="pb-4">
+          <div className="border-b border-white/5 pb-4">
             <SectionHeader label="Files" isOpen={openSections.files} onToggle={() => toggleSection("files")} />
             {openSections.files && (
               <div className="mt-2 space-y-0.5">
@@ -255,6 +295,50 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
                 {local.showFiles && (
                   <SelectField label="Open files in" value={local.fileOpenMode} onChange={(v) => set("fileOpenMode", v as AppConfig["fileOpenMode"])}
                     options={[{ value: "same-window", label: "Same window" },{ value: "new-window", label: "New window" }]} />
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="pb-4">
+            <SectionHeader label="About & Updates" isOpen={openSections.about} onToggle={() => toggleSection("about")} />
+            {openSections.about && (
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="text-sm text-slate-300">Version</span>
+                  <span className="text-sm font-mono text-slate-200">
+                    {updateInfo.currentVersion ? `v${updateInfo.currentVersion}` : "—"}
+                  </span>
+                </div>
+                {updateInfo.updateAvailable ? (
+                  <>
+                    <p className="text-xs text-amber-400">
+                      Update available: {updateInfo.releaseName || updateInfo.latestVersion}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={startUpdate}
+                      disabled={updating}
+                      className="w-full rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white transition-colors"
+                    >
+                      {updating ? "Updating…" : `Update to ${updateInfo.latestVersion}`}
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    {updateInfo.currentVersion ? "You are on the latest version." : "Checking for updates…"}
+                  </p>
+                )}
+                {updateMsg && (
+                  <p className={`text-xs ${updateMsg.type === "ok" ? "text-blue-300" : "text-red-400"}`}>
+                    {updateMsg.text}
+                  </p>
+                )}
+                {updateInfo.releaseUrl && (
+                  <a href={updateInfo.releaseUrl} target="_blank" rel="noreferrer"
+                    className="inline-block text-xs text-slate-500 underline underline-offset-2 hover:text-slate-300">
+                    Release notes
+                  </a>
                 )}
               </div>
             )}
