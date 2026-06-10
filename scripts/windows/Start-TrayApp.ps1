@@ -127,10 +127,22 @@ if ($existingConn) {
     if ($adoptedProcess -and $adoptedProcess.ProcessName -eq 'node') {
         $script:ServerProcess = $adoptedProcess
     } else {
-        Start-Server
+        # Port squatter is not a WallBoard server — starting would loop-crash with EADDRINUSE
+        $squatter = if ($adoptedProcess) { "$($adoptedProcess.ProcessName) (PID $($adoptedProcess.Id))" } else { "PID $($existingConn.OwningProcess)" }
+        [System.Windows.Forms.MessageBox]::Show(
+            "Port 3001 is already in use by $squatter — this is not a WallBoard server.`n`nFree port 3001 and try again.",
+            'VRSI WallBoard', 'OK', 'Warning') | Out-Null
+        Invoke-Cleanup
+        exit 1
     }
 } else {
-    Start-Server
+    try { Start-Server } catch {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Failed to start WallBoard server: $($_.Exception.Message)`n`nIs Node.js installed?",
+            'VRSI WallBoard', 'OK', 'Error') | Out-Null
+        Invoke-Cleanup
+        exit 1
+    }
 }
 
 # ---- Build NotifyIcon ----
@@ -161,10 +173,11 @@ $itemRestart.add_Click({
         Stop-Server
         Start-Sleep -Seconds 1   # let port 3001 free before binding again
         Start-Server
-        $script:Stopping = $false
         Show-Balloon 'WallBoard server restarted.' ([System.Windows.Forms.ToolTipIcon]::Info)
     } catch {
         Show-Balloon "Failed to restart server: $($_.Exception.Message)" ([System.Windows.Forms.ToolTipIcon]::Error)
+    } finally {
+        $script:Stopping = $false  # always re-enable watchdog, even if Start-Server threw
     }
 })
 

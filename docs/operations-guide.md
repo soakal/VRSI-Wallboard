@@ -124,7 +124,7 @@ Place the shortcut in the Windows Startup folder (`shell:startup`) to auto-launc
 
 ### 1.7 Auto-start the server on Windows login (optional)
 
-Double-click **`ENABLE-STARTUP.bat`**. It will request Administrator approval and register a Windows Task Scheduler logon task (`VRSI WallBoard Tray`) that starts the tray app automatically whenever anyone logs in. The blue W icon will appear near the clock on every login — no console window.
+Double-click **`ENABLE-STARTUP.bat`**. It will request Administrator approval and register a Windows Task Scheduler logon task (`VRSI WallBoard Tray`) that starts the tray app automatically when **that user** logs in. The blue W icon will appear near the clock on every login — no console window.
 
 ---
 
@@ -136,7 +136,7 @@ Before removing anything, back up your data — see [Section 3.1](#31-manual-bac
 
 ### 2.2 Run the uninstaller
 
-Double-click **`UNINSTALL.bat`**. It will request Administrator approval and then stop the server, remove the scheduled task, and remove the app files.
+Double-click **`UNINSTALL.bat`**. It will request Administrator approval and then stop the server and tray app, and remove the scheduled tasks. The app folder itself is **not** deleted — only the tasks and optionally the data.
 
 ### 2.3 Remove data and logs (optional — permanent)
 

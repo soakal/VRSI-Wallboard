@@ -263,7 +263,7 @@ Write-Step 'Creating data folders'
 & (Join-Path $PSScriptRoot 'Install-DataDirs.ps1')
 
 Write-Step 'Configuring server'
-$token = Set-ServerEnvProduction
+Set-ServerEnvProduction | Out-Null
 
 $serverBuilt = Test-Path (Join-Path $ServerDir 'dist\index.js')
 $clientBuilt = Test-Path (Join-Path $ClientDir 'dist\index.html')
@@ -299,11 +299,15 @@ if (-not $WithStartup) {
 }
 
 if ($WithStartup) {
-    Write-Step 'Registering startup at logon'
-    . (Join-Path $PSScriptRoot '_Register-Startup.ps1')
+    if (-not $isAdmin) {
+        Write-Warning 'Startup registration needs Administrator — run ENABLE-STARTUP.bat as Admin after install.'
+    } else {
+        Write-Step 'Registering startup at logon'
+        . (Join-Path $PSScriptRoot '_Register-Startup.ps1')
+    }
 } else {
     Write-Host '  Skipped startup registration.' -ForegroundColor DarkGray
-    Write-Host '  Later: double-click Enable-Startup.bat (as Administrator)' -ForegroundColor DarkGray
+    Write-Host '  Later: double-click ENABLE-STARTUP.bat (as Administrator)' -ForegroundColor DarkGray
 }
 
 if (-not $WithBackup) {

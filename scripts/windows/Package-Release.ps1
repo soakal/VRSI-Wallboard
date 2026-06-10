@@ -55,21 +55,26 @@ Write-Host '  Copying client dist...' -ForegroundColor DarkGray
 New-Dir (Join-Path $ReleaseDir 'client\dist')
 Copy-Item (Join-Path $ClientDir 'dist\*') (Join-Path $ReleaseDir 'client\dist') -Recurse -Force
 
-# 4. All scripts
+# 4. All scripts (exclude Package-Release.ps1 — dev-only, not needed on end-user PCs)
 Write-Host '  Copying scripts...' -ForegroundColor DarkGray
 New-Dir (Join-Path $ReleaseDir 'scripts\windows')
-Copy-Item "$PSScriptRoot\*.ps1" (Join-Path $ReleaseDir 'scripts\windows')
+Get-ChildItem "$PSScriptRoot\*.ps1" | Where-Object { $_.Name -ne 'Package-Release.ps1' } |
+    Copy-Item -Destination (Join-Path $ReleaseDir 'scripts\windows')
 Get-ChildItem "$PSScriptRoot\*.bat" -ErrorAction SilentlyContinue |
     Copy-Item -Destination (Join-Path $ReleaseDir 'scripts\windows')
 Copy-Item "$PSScriptRoot\README.md" (Join-Path $ReleaseDir 'scripts\windows') -ErrorAction SilentlyContinue
 
-# 5. Root batch files
-Write-Host '  Copying batch files...' -ForegroundColor DarkGray
+# 5. Root batch files + user-facing docs
+Write-Host '  Copying batch files and docs...' -ForegroundColor DarkGray
 foreach ($bat in @('INSTALL.bat', 'ENABLE-STARTUP.bat', 'UNINSTALL.bat',
                    'Start-WallBoard.bat', 'Start-TrayApp.bat')) {
     $p = Join-Path $RepoRoot $bat
     if (Test-Path $p) { Copy-Item $p $ReleaseDir }
 }
+$opsGuide = Join-Path $RepoRoot 'docs\operations-guide.md'
+if (Test-Path $opsGuide) { Copy-Item $opsGuide $ReleaseDir }
+$readme = Join-Path $RepoRoot 'README.md'
+if (Test-Path $readme) { Copy-Item $readme $ReleaseDir }
 
 # 6. Write a release manifest so you know when and where it was built
 $nodeVer = ''

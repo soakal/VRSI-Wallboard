@@ -1,5 +1,5 @@
 # Pull the latest code from GitHub, rebuild, and restart VRSI WallBoard.
-# Double-click Update-WallBoard.bat to run, or choose U from WallBoard-Menu.bat.
+# Double-click Update-WallBoard.bat to run, or choose P from WallBoard-Menu.bat.
 . "$PSScriptRoot\_common.ps1"
 
 $ErrorActionPreference = 'Stop'
@@ -16,10 +16,11 @@ Write-Host ''
 Write-Step 'Checking for tray app'
 $trayMutexHandle = $null
 $trayWasRunning  = [System.Threading.Mutex]::TryOpenExisting('VRSIWallBoardTray', [ref]$trayMutexHandle)
+if ($trayMutexHandle) { $trayMutexHandle.Dispose() }   # handle not needed beyond the probe
 if ($trayWasRunning) {
     Write-Host '  Tray app detected — stopping it before rebuild' -ForegroundColor DarkGray
     Get-CimInstance Win32_Process |
-        Where-Object { $_.CommandLine -like '*Start-TrayApp.ps1*' } |
+        Where-Object { $_.Name -in @('powershell.exe', 'pwsh.exe') -and $_.CommandLine -like '*Start-TrayApp.ps1*' } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     Start-Sleep -Seconds 1
 } else {

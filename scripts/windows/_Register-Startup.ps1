@@ -33,7 +33,10 @@ $action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
 $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $triggerUser
 # -ExecutionTimeLimit ([TimeSpan]::Zero) disables the default 72-hour kill — without it
 # Task Scheduler terminates the tray (and the server it owns) after 3 days.
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
-Register-ScheduledTask -TaskName 'VRSI WallBoard Tray' -Action $action -Trigger $trigger -Settings $settings -Description 'VRSI WallBoard server + tray icon' | Out-Null
+$settings   = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
+# Principal must match the trigger user with Interactive logon; without it the task
+# runs as the elevated admin (who is not interactively logged on on a kiosk PC).
+$principal  = New-ScheduledTaskPrincipal -UserId $triggerUser -LogonType Interactive
+Register-ScheduledTask -TaskName 'VRSI WallBoard Tray' -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description 'VRSI WallBoard server + tray icon' | Out-Null
 Write-Host "  Registered at logon: VRSI WallBoard Tray (server + tray icon) for user: $triggerUser" -ForegroundColor Green
 Write-Host '  The W icon appears near the clock; app is at http://localhost:3001' -ForegroundColor DarkGray
