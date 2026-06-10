@@ -6,9 +6,9 @@
 
 ## Current State
 
-- Last completed task: Full session — tray icon system + three Fable audit passes + all fixes. Latest commit: 7c6b948.
+- Last completed task: Fable audit pass + auto-start PATH fix + 6 audit findings resolved. Latest commit: 25d5c8c.
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
-- Blockers: None
+- Blockers: None — auto-start fix deployed; kiosk PC needs updated Start-TrayApp.ps1 copied over
 
 ## Active Plan
 
@@ -56,13 +56,20 @@
 - `$isAdmin` guard on startup registration — friendly warning if non-admin answers Y
 - All `%~dp0` paths quoted in bat files; `_run.ps1.bat` uses absolute `%SystemRoot%\System32\WindowsPowerShell` path
 - `Restore-Backup.ps1` stops tray watchdog before restore (prevents mid-restore DB corruption)
-- `Update-WallBoard.ps1`: tray-kill uses `Name -in @('powershell.exe','pwsh.exe')` filter; mutex handle disposed; comment fixed U→P
+- `Update-WallBoard.ps1`: tray-kill uses `Name -in @('powershell.exe','pwsh.exe')` filter; mutex handle disposed; comment fixed U→P; disables/enables scheduled task around rebuild (H1 race fix)
+
+### Auto-Start PATH Fix + Fable Audit Fixes (2026-06-10, this session)
+- **Root cause of exit-1**: Task Scheduler with `-NoProfile` does not inherit User PATH — winget Node install writes to User PATH, making `node` invisible
+- `Start-TrayApp.ps1`: refresh Machine+User PATH from registry at script start; `Get-NodeExe` fallback covers ProgramFiles(x86), LOCALAPPDATA\Programs\nodejs, winget per-user packages; `Write-TrayLog` writes to `tray-startup.log` with 1 MB rotation; `Stop-Server` fallback now guards `ProcessName -eq 'node'`
+- `_Register-Startup.ps1`: throws loudly when `$consoleUser` is empty (no silent fallback to admin account)
+- `Restart-WallBoard.ps1`: checks port 3001 before launching headless fallback
+- **To fix kiosk PC**: copy updated `scripts\windows\Start-TrayApp.ps1` and `_Register-Startup.ps1` to `C:\Program Files\VRSI WallBoard\scripts\windows\`, then run `ENABLE-STARTUP.bat` as admin
 
 ### Release Folder (`VRSI WallBoard\`)
 - Root: `INSTALL.bat`, `UNINSTALL.bat`, `ENABLE-STARTUP.bat`, `Start-WallBoard.bat`, `Start-TrayApp.bat`, `operations-guide.md`, `README.md`, `release-info.json`
 - `scripts/windows/`: 44 files (Package-Release.ps1 excluded — dev-only)
 - No `.env` secrets, no `node_modules`
-- Current at commit 7c6b948 (2026-06-10)
+- Current at commit 25d5c8c (2026-06-10)
 
 ### Package-Release.ps1 Changes
 - Excludes `Package-Release.ps1` from scripts copy (dev tool, not for end users)
