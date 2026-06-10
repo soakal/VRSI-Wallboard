@@ -179,6 +179,7 @@ export function JobListView({ tab }: Props) {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [showAll, setShowAll] = useState(false)
+  const [newOnly, setNewOnly] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [search, setSearch] = useState('')
   const [filterPms, setFilterPms] = useState<string[]>([])
@@ -195,6 +196,7 @@ export function JobListView({ tab }: Props) {
   const scrollKey = `board-scroll-${tab}-${userId}`
   const searchKey = `board-search-${tab}-${userId}`
   const showAllKey = `board-showall-${tab}-${userId}`
+  const newOnlyKey = `board-newonly-${tab}-${userId}`
   const filterPmKey = `board-filter-pm-${tab}-${userId}`
   const filterMmKey = `board-filter-mm-${tab}-${userId}`
 
@@ -217,6 +219,7 @@ export function JobListView({ tab }: Props) {
       setSearch(savedSearch)
     }
     if (savedShowAll) setShowAll(true)
+    if (sessionStorage.getItem(newOnlyKey) === 'true') setNewOnly(true)
     if (savedFilterPm.length) setFilterPms(savedFilterPm)
     if (savedFilterMm.length) setFilterMms(savedFilterMm)
     const savedScroll = sessionStorage.getItem(scrollKey)
@@ -240,6 +243,11 @@ export function JobListView({ tab }: Props) {
   useEffect(() => {
     sessionStorage.setItem(showAllKey, String(showAll))
   }, [showAll, showAllKey])
+
+  // Persist newOnly
+  useEffect(() => {
+    sessionStorage.setItem(newOnlyKey, String(newOnly))
+  }, [newOnly, newOnlyKey])
 
   useEffect(() => {
     if (filterPms.length) sessionStorage.setItem(filterPmKey, JSON.stringify(filterPms))
@@ -410,7 +418,9 @@ export function JobListView({ tab }: Props) {
       )
     : filtered
 
-  const sorted = sortBoardJobsByShipDate(searched, tab)
+  const newMatched = newOnly ? searched.filter((j) => j.isNew) : searched
+  const sorted = sortBoardJobsByShipDate(newMatched, tab)
+  const newCount = tabFiltered.filter((j) => j.isNew).length
 
   const activeFilterCount = filterPms.length + filterMms.length
 
@@ -418,6 +428,7 @@ export function JobListView({ tab }: Props) {
     const visible = sorted.some((j) => j.jobNumber === jobNumber)
     if (!visible) {
       setShowAll(true)
+      setNewOnly(false)
       setFilterPms([])
       setFilterMms([])
       if (search) {
@@ -437,6 +448,7 @@ export function JobListView({ tab }: Props) {
 
   const filterSummary = (() => {
     const parts: string[] = []
+    if (newOnly) parts.push('New only')
     if (filterPms.length === 1) parts.push(`Project Manager: ${filterPms[0]}`)
     else if (filterPms.length > 1) parts.push(`${filterPms.length} Project Managers`)
     if (filterMms.length === 1) parts.push(`Materials Manager: ${filterMms[0]}`)
@@ -579,28 +591,44 @@ export function JobListView({ tab }: Props) {
               ? ' · newest ship date first'
               : ' · soonest ship date first')}
           </p>
-          {canToggle && (
-            <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-0.5">
+          <div className="flex items-center gap-2">
+            {tab !== 'archive' && (newCount > 0 || newOnly) && (
               <button
                 type="button"
-                onClick={() => setShowAll(false)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                  !showAll ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                onClick={() => setNewOnly((o) => !o)}
+                className={`px-3 py-1 rounded-lg border text-xs font-medium transition-colors ${
+                  newOnly
+                    ? 'bg-red-600/80 border-red-500 text-white'
+                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
                 }`}
+                title="Show only jobs flagged NEW from the last import"
               >
-                My Jobs
+                New{newCount > 0 ? ` (${newCount})` : ''}
               </button>
-              <button
-                type="button"
-                onClick={() => setShowAll(true)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                  showAll ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                All Jobs
-              </button>
-            </div>
-          )}
+            )}
+            {canToggle && (
+              <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAll(false)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    !showAll ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  My Jobs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAll(true)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    showAll ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  All Jobs
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

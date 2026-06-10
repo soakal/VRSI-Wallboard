@@ -3,6 +3,7 @@ import {
   Calendar,
   dateFnsLocalizer,
   Event as RBCEvent,
+  EventProps,
 } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS } from 'date-fns/locale/en-US';
@@ -54,6 +55,21 @@ function hexToRgba(hex: string, alpha: number): string {
   const b = parseInt(cleaned.substring(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
+
+// Event chip content — prefixes a red NEW badge on newly imported board jobs.
+const EventContent: React.FC<EventProps<RBCCalendarEvent>> = ({ event, title }) => {
+  const resource: CalendarEvent | undefined = event.resource;
+  return (
+    <span>
+      {resource?.isNew && (
+        <span className="mr-1 rounded-sm bg-red-600/90 px-1 align-middle text-[9px] font-bold uppercase text-white">
+          New
+        </span>
+      )}
+      {title}
+    </span>
+  );
+};
 
 const CalendarView: React.FC<CalendarViewProps> = ({
   events,
@@ -286,6 +302,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         onView={() => {}}
         eventPropGetter={eventPropGetter}
         dayPropGetter={dayPropGetter}
+        components={{ event: EventContent }}
         min={minTime}
         max={maxTime}
         style={{ height: '100%' }}

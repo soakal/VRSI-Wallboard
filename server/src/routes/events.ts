@@ -31,6 +31,11 @@ export interface NormalizedEvent {
   calendarColor: string;
   /** Present for ship-date events from the project board */
   boardTab?: 'project' | 'spare-parts' | 'archive';
+  /** Ship-date events: true when the job is newly imported */
+  isNew?: boolean;
+  /** Ship-date events: canonical PM / Materials Manager for per-user filtering */
+  jobPm?: string;
+  jobMm?: string;
 }
 
 eventsRouter.get(
@@ -125,6 +130,9 @@ eventsRouter.get(
               calendarName: 'Ship Dates',
               calendarColor: statusColors[job.status] ?? '#475569',
               boardTab,
+              isNew: job.isNew,
+              jobPm: job.pm,
+              jobMm: job.materialsManager,
             });
           } catch (jobErr) {
             logger.warn('Skipped board ship-date event for job', {

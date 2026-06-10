@@ -139,6 +139,11 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
             <p className="truncate text-[15px] font-medium leading-tight text-slate-100">
               {event.subject}
             </p>
+            {event.isNew && (
+              <span className="flex-shrink-0 text-[10px] font-bold uppercase text-red-400">
+                New
+              </span>
+            )}
             {inProgress && (
               <span className="flex-shrink-0 rounded-full bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-300">
                 Now

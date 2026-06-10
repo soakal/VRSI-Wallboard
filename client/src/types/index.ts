@@ -33,6 +33,11 @@ export interface CalendarEvent {
   location?: string;
   /** Ship-date events: which Projects tab owns this job */
   boardTab?: 'project' | 'spare-parts' | 'archive';
+  /** Ship-date events: true when the job is newly imported */
+  isNew?: boolean;
+  /** Ship-date events: canonical PM / Materials Manager for per-user filtering */
+  jobPm?: string;
+  jobMm?: string;
 }
 
 export interface AppConfig {

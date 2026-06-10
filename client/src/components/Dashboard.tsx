@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { CalendarEvent, AppConfig, SharePointFile } from "../types/index";
 import Clock from "./Clock";
@@ -9,6 +9,8 @@ import AgendaRail from "./AgendaRail";
 import RecentFilesWidget from "./RecentFilesWidget";
 import StalenessIndicator from "./StalenessIndicator";
 import { useAppStore } from "../store/appStore";
+import { useBoardUsers, useBoardConfig } from "../hooks/useBoard";
+import { samePerson } from "@vrsi/person-identity";
 
 interface DashboardProps {
   events: CalendarEvent[];
@@ -42,9 +44,38 @@ const Dashboard: React.FC<DashboardProps> = ({
   const navigate = useNavigate();
   const setIsMonitoringOpen = useAppStore((s) => s.setIsMonitoringOpen);
   const setDisplayMode = useAppStore((s) => s.setDisplayMode);
+  const activeUser = useAppStore((s) => s.activeUser);
+  const setActiveUser = useAppStore((s) => s.setActiveUser);
+  const { users } = useBoardUsers();
+  const { config: boardConfig } = useBoardConfig();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [sunsetIso, setSunsetIso] = useState<string | null>(null);
   const [isDimmed, setIsDimmed] = useState(false);
+
+  const isSuper =
+    !!activeUser && (boardConfig.superUsers ?? []).some((s) => samePerson(s, activeUser.name));
+
+  // Agenda: PM / Materials users see only their own ship-date jobs; super users
+  // (and no selection) see everything. Outlook events are never filtered.
+  const agendaEvents = useMemo(() => {
+    if (!activeUser || isSuper || (activeUser.role !== 'pm' && activeUser.role !== 'materials')) {
+      return events;
+    }
+    return events.filter((ev) => {
+      if (ev.calendarId !== 'board-jobs') return true;
+      const own = activeUser.role === 'pm' ? ev.jobPm : ev.jobMm;
+      return !!own && samePerson(own, activeUser.name);
+    });
+  }, [events, activeUser, isSuper]);
+
+  const handleSelectUserId = useCallback(
+    (id: string) => {
+      if (!id) { setActiveUser(null); return; }
+      const user = users.find((u) => u.id === id) ?? null;
+      setActiveUser(user);
+    },
+    [users, setActiveUser],
+  );
 
   // Tick every minute to re-evaluate staleness and sunset dimming
   useEffect(() => {
@@ -174,7 +205,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   Agenda
                 </h2>
                 <AgendaRail
-                  events={events}
+                  events={agendaEvents}
                   showWeekends={config.showWeekends}
                   className="min-h-0 flex-1"
                   onSelectEvent={handleSelectEvent}
@@ -203,7 +234,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               Agenda
             </h2>
             <AgendaRail
-              events={events}
+              events={agendaEvents}
               showWeekends={config.showWeekends}
               className="min-h-0"
               onSelectEvent={handleSelectEvent}
@@ -243,6 +274,20 @@ const Dashboard: React.FC<DashboardProps> = ({
           >
             ↓ Export Ship Dates
           </a>
+          <select
+            value={activeUser?.id ?? ''}
+            onChange={(e) => handleSelectUserId(e.target.value)}
+            className="max-w-[11rem] rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-[#1a1f2e] border border-white/10 hover:border-white/20 focus:outline-none transition-colors cursor-pointer"
+            title="Select your name — the agenda shows only your jobs (super users see everything)"
+          >
+            <option value="">👤 All users</option>
+            {activeUser && !users.some((u) => u.id === activeUser.id) && (
+              <option value={activeUser.id}>{activeUser.name}</option>
+            )}
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -292,6 +337,20 @@ const Dashboard: React.FC<DashboardProps> = ({
             <option value="day">Day</option>
             <option value="week">Week</option>
             <option value="month">Month</option>
+          </select>
+          <select
+            value={activeUser?.id ?? ''}
+            onChange={(e) => handleSelectUserId(e.target.value)}
+            className="max-w-[7.5rem] bg-slate-700/60 border border-slate-600 text-slate-200 px-2 py-1.5 rounded text-xs font-medium focus:outline-none cursor-pointer"
+            title="Select your name — the agenda shows only your jobs"
+          >
+            <option value="">👤 All</option>
+            {activeUser && !users.some((u) => u.id === activeUser.id) && (
+              <option value={activeUser.id}>{activeUser.name}</option>
+            )}
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
           </select>
         </div>
         <div className="flex items-center gap-1.5">
