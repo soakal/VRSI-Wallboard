@@ -216,6 +216,26 @@ function Set-ServerEnvProduction {
     return $token
 }
 
+function Grant-UpdatePermissions {
+    # The in-app Update button runs the updater as the logged-in (kiosk) user.
+    # That user cannot overwrite files under C:\Program Files by default, so the
+    # updater's file-copy step fails with "Access is denied" and the update aborts
+    # after stopping the server. Grant the console user Modify on the install tree
+    # so the updater can replace files in place without elevation. (OI)(CI) makes
+    # the grant inherit to files written by future updates. Requires admin.
+    $consoleUser = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).UserName
+    if (-not $consoleUser) {
+        Write-Warning '  Could not determine the logged-in user - skipping update-permission grant. The in-app Update button may require Administrator until this is granted.'
+        return
+    }
+    & icacls "$RepoRoot" /grant "${consoleUser}:(OI)(CI)M" /T /C /Q | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  Granted $consoleUser permission to self-update the install folder" -ForegroundColor Green
+    } else {
+        Write-Warning "  icacls grant returned exit $LASTEXITCODE - the in-app Update button may require Administrator."
+    }
+}
+
 function New-WallBoardShortcuts {
     $shell = $null
     try {
@@ -292,6 +312,13 @@ Write-Step 'Creating shortcuts'
 New-WallBoardShortcuts
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if ($isAdmin) {
+    Write-Step 'Granting update permissions'
+    Grant-UpdatePermissions
+} else {
+    Write-Warning 'Not Administrator - skipped update-permission grant. Re-run INSTALL.bat as Administrator so the in-app Update button works without elevation.'
+}
 
 if (-not $WithStartup) {
     $r = Read-Host 'Start WallBoard at login with a tray icon near the clock? [Y/N]'
