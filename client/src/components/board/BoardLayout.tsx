@@ -9,6 +9,8 @@ export function BoardLayout() {
   const queryClient = useQueryClient()
   const { setIsSettingsOpen, setIsFilesOpen, setIsMonitoringOpen } = useAppStore()
   const dirtyCount = useAppStore((s) => Object.keys(s.dirtyJobs).length)
+  // Same rule as the calendar page: Files button hidden when disabled in Settings
+  const showFiles = useAppStore((s) => s.config?.showFiles ?? true)
 
   // Refetch board data whenever the user switches Project / Spare / Archive / Import
   useEffect(() => {
@@ -47,14 +49,16 @@ export function BoardLayout() {
           >
             ⚙ Settings
           </button>
-          <button
-            type="button"
-            onClick={() => setIsFilesOpen(true)}
-            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
-            title="Open Files (Ctrl+F)"
-          >
-            Files
-          </button>
+          {showFiles && (
+            <button
+              type="button"
+              onClick={() => setIsFilesOpen(true)}
+              className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+              title="Open Files (Ctrl+F)"
+            >
+              Files
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setIsMonitoringOpen(true)}
