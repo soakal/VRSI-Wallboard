@@ -1,6 +1,6 @@
 {
   "name": "vrsi-wallboard-server",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "VRSI WallBoard API — local standalone",
   "type": "module",
   "scripts": {
