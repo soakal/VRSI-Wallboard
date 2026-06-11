@@ -6,7 +6,7 @@
 
 ## Current State
 
-- Last completed task: v0.8.1 released + VM tested. Update-FromRelease.ps1 (kiosk path) confirmed working — runs fine when spawned with `-ExecutionPolicy Bypass` (Node.js spawn). VM execution policy was Undefined (defaults to Restricted) which blocked manual script runs but NOT the Node spawn. VM manually updated to v0.8.1 via `Update-FromRelease.ps1`. `server/package-lock.json` committed and pushed. Repo clean.
+- Last completed task: v0.8.2 — Update button root cause fixed. Fable diagnosed: Node.js passes the absolute script path (with spaces, eg `C:\Program Files\VRSI WallBoard\...`) as the `-File` arg; PowerShell 5.1 does not reliably set `$PSScriptRoot` when spawned non-interactively with a spaced path → `. "$PSScriptRoot\_common.ps1"` fails before `Start-Transcript` → no log, no update. Fix: `update.ts` now uses `path.basename(script)` for `-File` (cwd already = scriptsDir); both PS update scripts have `$PSScriptRoot` fallback guard using `$MyInvocation.MyCommand.Path`. Also added 10s stderr capture + exit-code logging to server logs. To bootstrap a kiosk still on v0.8.1 or older: `powershell.exe -ExecutionPolicy Bypass -File "C:\Program Files\VRSI WallBoard\scripts\windows\Update-FromRelease.ps1"` — after that the button works for all future updates.
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
 - Blockers: None
 
@@ -92,38 +92,21 @@
 
 ## Version
 
-- Current: `v0.8.1` — tagged and released on GitHub (2026-06-11). Patch: Update button silent failure fix + polling resilience.
-- Previous: v0.8.0 (2026-06-10). Note: v0.5.1 tag exists with no GitHub release; v0.5.2 was never tagged.
+- Current: `v0.8.2` — tagged and released on GitHub (2026-06-11). Root cause fix: `$PSScriptRoot` not set when spawned with spaced path + stderr logging.
+- Previous: v0.8.1 (2026-06-11) — git pull auto-stash + transcript. v0.8.0 (2026-06-10) — unsaved-changes protection. Note: v0.5.1 tag exists with no GitHub release; v0.5.2 was never tagged.
 - Next release: bump `server/package.json` (+ root) → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → `gh release create` (needs `dangerouslyDisableSandbox`)
 
 ## Files Modified This Session (2026-06-11)
 
-**New:**
-- `scripts/windows/Start-TrayApp.ps1` — tray app
-- `scripts/windows/Start-TrayApp.bat` — hidden launcher (with node check)
-- `scripts/windows/Restart-WallBoard.ps1` — tray-aware restart
-- `scripts/windows/Restart-WallBoard.bat` — wrapper
-- `Start-TrayApp.bat` (repo root) — one-click tray launcher
+**v0.8.1 fixes:**
+- `scripts/windows/Update-WallBoard.ps1` — Start-Transcript + auto-stash dirty tree before git pull
+- `client/src/components/SettingsPanel.tsx` — localStorage pending flag, alreadyRunning message
+- `client/src/App.tsx` — resume version polling on mount from localStorage flag
 
-**Modified:**
-- `scripts/windows/_Register-Startup.ps1` — Tray task + Principal fix (HIGH)
-- `scripts/windows/Install-WallBoard.ps1` — shortcuts, dead token dropped, isAdmin guard
-- `scripts/windows/Uninstall-WallBoard.ps1` — kills tray, removes Tray task
-- `scripts/windows/WallBoard-Menu.bat` — T=Start tray app
-- `scripts/windows/_common.ps1` — Stop-WallBoardServer: -State Listen + node name check
-- `scripts/windows/Package-Release.ps1` — excludes Package-Release.ps1, adds docs/README
-- `scripts/windows/Update-WallBoard.ps1` — process filter, mutex dispose, comment fix
-- `scripts/windows/Restore-Backup.ps1` — stops tray before restore
-- `scripts/windows/Register-BackupTask.ps1` — finite ExecutionTimeLimit
-- `scripts/windows/_run.ps1.bat` — absolute powershell.exe path
-- `scripts/windows/Start-WallBoard-Service.bat` — quoted path
-- `INSTALL.bat` — quoted %~dp0 paths
-- `VRSI-WALLBOARD-RULES.md` — §19 changelog
-- `docs/operations-guide.md` — §1.5 tray docs, §1.7 user wording, §2.2 uninstaller wording
-
-**Deleted:**
-- `scripts/windows/Enable-Startup.bat` (stub, superseded)
-- `scripts/windows/Start-KioskAfterDelay.ps1` (legacy, never called)
+**v0.8.2 fixes (root cause):**
+- `server/src/routes/update.ts` — use `path.basename(script)` for `-File` arg; 10s stderr capture + exit-code logging
+- `scripts/windows/Update-FromRelease.ps1` — `$PSScriptRoot` fallback guard before dot-source
+- `scripts/windows/Update-WallBoard.ps1` — same fallback guard added
 
 ## Known Issues Status (§10)
 
@@ -148,10 +131,11 @@
 ## Context for Next Session
 
 Run `npm start` at repo root. Health: `GET http://localhost:3001/health`.
-App is v0.8.1. `VRSI WallBoard\` folder is distribution-ready (zipped as `VRSI-WallBoard-v0.8.1.zip`).
+App is v0.8.2. `VRSI WallBoard\` folder is distribution-ready (zipped as `VRSI-WallBoard-v0.8.2.zip`).
 Agenda filtering single source of truth: `client/src/lib/agendaFilter.ts` — change it there, nowhere else.
-Kiosk update path: Settings → About & Updates → Update button (or Update-FromRelease.bat); dev machine uses git-based Update-WallBoard.bat.
-Update failures: check `C:\ProgramData\VRSIWallBoard\logs\update.log`.
+Kiosk update path: Settings → About & Updates → Update button now works reliably. Dev machine uses git-based Update-WallBoard.ps1 (auto-stashes dirty tree).
+Update failures: check `C:\ProgramData\VRSIWallBoard\logs\update.log`; also check server logs for "Update script exited early" or "Update script stderr" entries.
 Tray starts via Task Scheduler `VRSI WallBoard Tray` → `conhost.exe --headless powershell.exe ... Start-TrayApp.ps1`.
 The tray W icon has no taskbar entry. Right-click to restart/stop.
-To update an already-installed PC: Settings → About & Updates → Update (or copy new `VRSI WallBoard\` folder + re-run `INSTALL.bat`).
+To bootstrap a kiosk on v0.8.1 or older (button was broken): `powershell.exe -ExecutionPolicy Bypass -File "C:\Program Files\VRSI WallBoard\scripts\windows\Update-FromRelease.ps1"` — after that the button works for all future updates.
+To update an already-installed PC on v0.8.2+: Settings → About & Updates → Update button.
