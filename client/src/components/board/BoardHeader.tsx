@@ -51,7 +51,10 @@ export function BoardHeader() {
             onChange={handleUserChange}
             className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-slate-500 cursor-pointer"
           >
-            <option value="">— Select user —</option>
+            <option value="">👤 All users</option>
+            {activeUser && !users.some((u) => u.id === activeUser.id) && (
+              <option value={activeUser.id}>{activeUser.name}</option>
+            )}
             {users.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
