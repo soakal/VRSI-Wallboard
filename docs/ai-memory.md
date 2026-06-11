@@ -6,7 +6,7 @@
 
 ## Current State
 
-- Last completed task: v0.8.1 — Update button fix: `Update-WallBoard.ps1` (dev/git path) now logs to `update.log` via `Start-Transcript` + auto-stashes dirty working tree before `git pull --ff-only` in `-Unattended` mode (root cause: modified `server/package-lock.json` caused git pull to abort silently). Client: `vrsi_update_pending` localStorage flag + `App.tsx` resume polling so the reload fires even if Settings panel is closed mid-update. 15-min staleness guard on the flag.
+- Last completed task: v0.8.1 released + VM tested. Update-FromRelease.ps1 (kiosk path) confirmed working — runs fine when spawned with `-ExecutionPolicy Bypass` (Node.js spawn). VM execution policy was Undefined (defaults to Restricted) which blocked manual script runs but NOT the Node spawn. VM manually updated to v0.8.1 via `Update-FromRelease.ps1`. `server/package-lock.json` committed and pushed. Repo clean.
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
 - Blockers: None
 
