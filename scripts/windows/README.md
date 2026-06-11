@@ -64,7 +64,9 @@ This creates data folders, generates a random `ADMIN_TOKEN` in `server\.env`, bu
 
 **Easiest:** in the app, open Settings → **About & Updates** → **Update**. The board downloads the latest GitHub release, installs it, and restarts itself.
 
-Manual, on a kiosk PC (installed from the release folder, no git):
+> Installs older than **v0.8.3** have a broken Update button (the script silently never launched). One-time fix: right-click `Update-FromRelease.bat` → **Run as administrator**. The button works from then on.
+
+Manual, on a kiosk PC (installed from the release folder, no git) — right-click → **Run as administrator** (the running server may be elevated):
 
 ```powershell
 .\scripts\windows\Update-FromRelease.bat

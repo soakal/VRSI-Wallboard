@@ -135,11 +135,15 @@ An update banner appears at the top of the app within 6 hours of a new release b
 
 **Easiest — in the app:** open **Settings → About & Updates**. The section shows the version you are running; when a newer release exists, click **Update**. The board downloads the latest release from GitHub, installs it, and restarts itself (including the kiosk browser) within a few minutes. Job data, notes, and settings are preserved.
 
-**Manual — script:** double-click `scripts\windows\Update-FromRelease.bat`. Same process as the button. Progress is logged to `update.log` in the logs directory.
+> **Installs older than v0.8.3:** the Update button in those versions is broken (the launched script silently never ran). Fix it once: right-click `scripts\windows\Update-FromRelease.bat` → **Run as administrator**. After that one manual update, the in-app button works for all future updates.
+
+**Manual — script:** right-click `scripts\windows\Update-FromRelease.bat` → **Run as administrator** (admin is needed because the running server may be elevated). Same process as the button. Progress is logged to `update.log` in the logs directory.
 
 **Manual — copy over:** download the release zip from GitHub, copy the `VRSI WallBoard` folder over the existing install, and re-run `INSTALL.bat`.
 
-> Dev machines running from a git clone use `scripts\windows\Update-WallBoard.bat` (git pull + rebuild) instead.
+> Dev machines running from a git clone use `scripts\windows\Update-WallBoard.bat` (git pull + rebuild) instead. When run unattended (via the Update button), it auto-stashes any uncommitted local changes before pulling.
+
+**If an update fails:** check `C:\ProgramData\VRSIWallBoard\logs\update.log` for the script's progress, and `combined.log` in the same folder for launcher errors.
 
 ---
 
@@ -316,8 +320,8 @@ When reporting a problem, include:
 
 | Task | Command / Location |
 |------|--------------------|
-| Install | Double-click `INSTALL.bat` |
-| Update to latest version | Settings → About & Updates → **Update** (or `scripts\windows\Update-FromRelease.bat`) |
+| Install | Double-click `INSTALL.bat` (see `START-HERE.txt` for the 3-step walkthrough) |
+| Update to latest version | Settings → About & Updates → **Update** (or `scripts\windows\Update-FromRelease.bat` as Administrator) |
 | Check current version | Settings → About & Updates |
 | Start server (tray) | Double-click `Start-TrayApp.bat` — blue W icon near the clock |
 | Start server (console) | Double-click `Start-WallBoard.bat` |

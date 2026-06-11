@@ -1,0 +1,71 @@
+=====================================================
+  VRSI WallBoard - Install Guide (Start Here)
+=====================================================
+
+WHAT YOU NEED
+  - A Windows 10 or 11 PC
+  - An internet connection (for the first install)
+
+-----------------------------------------------------
+  INSTALL (new PC) - 3 steps
+-----------------------------------------------------
+
+  1. Copy this whole "VRSI WallBoard" folder onto the PC
+     (for example into C:\Program Files\)
+
+  2. Double-click INSTALL.bat
+     - Click "Yes" when Windows asks for permission
+     - If Node.js is missing it installs automatically
+     - Answer Y to "start at logon" so the board starts
+       itself every time the PC turns on
+
+  3. Open a browser to:  http://localhost:3001
+     (or just reboot - it starts on its own)
+
+  That's it. Look for the blue "W" icon near the clock -
+  that means the board is running.
+
+-----------------------------------------------------
+  UPDATE (PC that already has WallBoard)
+-----------------------------------------------------
+
+  In the app: Settings -> About & Updates -> Update
+  One click. It downloads the newest version, installs
+  it, and restarts itself. Your data is kept.
+
+  NOTE - if the board is older than v0.8.3, the Update
+  button is broken in that old version. Fix it once by
+  right-clicking this file and choosing
+  "Run as administrator":
+
+     scripts\windows\Update-FromRelease.bat
+
+  After that one time, the Update button works forever.
+
+-----------------------------------------------------
+  EVERYDAY USE
+-----------------------------------------------------
+
+  Open the board      http://localhost:3001
+  Restart the board   Right-click the W icon -> Restart Server
+  Stop the board      Right-click the W icon -> Stop & Exit
+  Settings            Click the gear icon (or press Ctrl+S)
+
+-----------------------------------------------------
+  IF SOMETHING GOES WRONG
+-----------------------------------------------------
+
+  - No W icon / page will not load:
+      Double-click Start-TrayApp.bat in this folder
+
+  - Update problems:
+      Look at  C:\ProgramData\VRSIWallBoard\logs\update.log
+
+  - Everything else:
+      See operations-guide.md in this folder
+      (backups, uninstall, sending logs for help)
+
+  Your data always lives in:
+      C:\ProgramData\VRSIWallBoard\
+  Reinstalling or updating the app NEVER deletes it.
+=====================================================

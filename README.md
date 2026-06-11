@@ -56,10 +56,11 @@ API: `GET /api/storage/status`, `GET /api/storage/backups`, `POST /api/storage/b
 
 Deployments use the packaged **`VRSI WallBoard\`** release folder (built by `scripts\windows\Package-Release.ps1`, attached as a zip to every [GitHub release](https://github.com/soakal/VRSI-Wallboard/releases)).
 
-### Three files at the release-folder root
+### Key files at the release-folder root
 
 | File | What it does |
 |------|----------------|
+| **`START-HERE.txt`** | Plain-language 3-step install guide — read this first |
 | **`INSTALL.bat`** | One-time: checks Node, folders, config, build. Asks about **startup at logon** and **backups**. |
 | **`ENABLE-STARTUP.bat`** | Only registers auto-start (run as **Administrator** if backup schedule is needed). |
 | **`UNINSTALL.bat`** | Pick **1** = remove auto-start only, **2** = also delete all data |
@@ -71,7 +72,8 @@ Manual start (no auto-start): `scripts\windows\Start-TrayApp.bat` (tray) or `Sta
 ### Updating an installed kiosk
 
 - **Easiest:** Settings → **About & Updates** → **Update** button. The board downloads the latest GitHub release, installs it, and restarts itself (data and settings are preserved).
-- Manual: run `scripts\windows\Update-FromRelease.bat`, or copy a downloaded release folder over the install and re-run `INSTALL.bat`.
+- **Installs older than v0.8.3:** the Update button in those versions was broken — fix it once by right-clicking `scripts\windows\Update-FromRelease.bat` → **Run as administrator**. The button works from then on.
+- Manual: run `scripts\windows\Update-FromRelease.bat` as Administrator, or copy a downloaded release folder over the install and re-run `INSTALL.bat`.
 - Dev machines with a git clone use `scripts\windows\Update-WallBoard.bat` (git pull + rebuild) instead.
 
 An update banner appears in the app within 6 hours of a new GitHub release.

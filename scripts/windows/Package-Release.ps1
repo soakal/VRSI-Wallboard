@@ -71,6 +71,8 @@ foreach ($bat in @('INSTALL.bat', 'ENABLE-STARTUP.bat', 'UNINSTALL.bat',
     $p = Join-Path $RepoRoot $bat
     if (Test-Path $p) { Copy-Item $p $ReleaseDir }
 }
+$startHere = Join-Path $RepoRoot 'docs\START-HERE.txt'
+if (Test-Path $startHere) { Copy-Item $startHere $ReleaseDir }
 $opsGuide = Join-Path $RepoRoot 'docs\operations-guide.md'
 if (Test-Path $opsGuide) { Copy-Item $opsGuide $ReleaseDir }
 $readme = Join-Path $RepoRoot 'README.md'
