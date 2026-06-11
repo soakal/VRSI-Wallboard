@@ -2,6 +2,7 @@ param([switch]$Unattended)
 # Pull the latest code from GitHub, rebuild, and restart VRSI WallBoard.
 # Double-click Update-WallBoard.bat to run, or choose P from WallBoard-Menu.bat.
 # -Unattended (used by POST /api/update/run) skips the dirty-tree prompt.
+if (-not $PSScriptRoot) { $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
 . "$PSScriptRoot\_common.ps1"
 
 $ErrorActionPreference = 'Stop'

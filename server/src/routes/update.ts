@@ -148,10 +148,23 @@ updateRouter.post('/run', requireAdminToken, (_req: Request, res: Response) => {
     );
     const child = spawn(
       psExe,
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', script, '-Unattended'],
-      { cwd: scriptsDir, detached: true, stdio: 'ignore', windowsHide: true },
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', path.basename(script), '-Unattended'],
+      { cwd: scriptsDir, detached: true, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true },
     );
-    child.unref();
+    // Log early stderr (first 10s) so startup failures surface in server logs, then detach
+    const stderrChunks: Buffer[] = [];
+    child.stderr?.on('data', (d: Buffer) => stderrChunks.push(d));
+    const stderrTimer = setTimeout(() => {
+      if (stderrChunks.length > 0) logger.warn('Update script stderr', { stderr: Buffer.concat(stderrChunks).toString().slice(0, 500) });
+      child.stderr?.destroy();
+      child.unref();
+    }, 10_000);
+    child.on('exit', (code) => {
+      clearTimeout(stderrTimer);
+      const errText = stderrChunks.length > 0 ? Buffer.concat(stderrChunks).toString().slice(0, 500) : undefined;
+      if (code !== null && code !== 0) logger.warn('Update script exited early', { code, script: path.basename(script), stderr: errText });
+      child.unref();
+    });
     updateStartedAt = Date.now();
 
     logger.info('Update launched', { script, method: isGit ? 'git' : 'release' });

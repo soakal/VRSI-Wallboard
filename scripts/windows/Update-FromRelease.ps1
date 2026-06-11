@@ -3,6 +3,7 @@ param([switch]$Unattended)
 # This is the update path for kiosk PCs installed from the release folder
 # (no git repo). Triggered by Update-FromRelease.bat or the Update button
 # in Settings (POST /api/update/run). Logs to update.log in the logs dir.
+if (-not $PSScriptRoot) { $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
 . "$PSScriptRoot\_common.ps1"
 
 $ErrorActionPreference = 'Stop'
