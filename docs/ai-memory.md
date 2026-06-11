@@ -6,7 +6,7 @@
 
 ## Current State
 
-- Last completed task: Full docs refresh after the verified v0.8.3 update fix: NEW `docs/START-HERE.txt` (plain-language 3-step install guide, copied to release root by Package-Release.ps1); operations-guide §1.5, scripts README, root README all note the pre-v0.8.3 bootstrap (run Update-FromRelease.bat as Administrator once) and the run-as-admin requirement for manual updates; code-guide rows updated (update.ts WMI launch, SettingsPanel/App.tsx localStorage polling, Update-WallBoard auto-stash). v0.8.3 zip asset re-uploaded with the new docs (--clobber). Before that: v0.8.3 — Update button TRULY fixed and **confirmed working end-to-end on the test VM** (v0.8.2's basename/$PSScriptRoot diagnosis was wrong). Sandbox bisect proved: `powershell.exe` spawned with `detached: true` (DETACHED_PROCESS) exits 0 instantly without running the script — no console to initialize, empty stderr, looks like success. Fix in `update.ts`: non-detached short-lived PS launcher (hidden console via CREATE_NO_WINDOW works) creates the updater via WMI `Win32_Process.Create` — updater's parent is WmiPrvSE, survives server/tray/Task Scheduler kills mid-update. Verified in sandbox: spaced paths, -Unattended passthrough, $PSScriptRoot, parent-death survival. RULE: never spawn powershell.exe with detached:true. To bootstrap a kiosk on v0.8.2 or older: double-click `scripts\windows\Update-FromRelease.bat` once — button works for all future updates after that.
+- Last completed task: v0.9.0 — calendar month navigation: ‹ › / Today chip buttons in the Dashboard footer (desktop + mobile) step the view by the current display mode; `viewDate` lives in appStore; CalendarView is date-controlled (`date` + no-op `onNavigate`, RBC toolbar stays hidden); AgendaRail takes `viewDate` — current month keeps past-due + today→month-end behavior, any other month lists all of that month's events grouped by day (agenda heading shows "Agenda — July 2026" when not current); useEvents takes `viewDate` and stretches the fetch window (earlier of now/anchor month start → later of now+45d/anchor month end); BoardLayout Files button now respects `config.showFiles` (reads store config, defaults true). All verified headless with puppeteer-core driving Edge against the running server: month forward/back, Today return, past month, agenda follows, July/Aug board ship events fetched, Files hidden on Projects + Calendar when toggled off. Previous task: full docs refresh after the verified v0.8.3 update fix (WMI launch; never spawn powershell.exe with detached:true). NEW `docs/START-HERE.txt` (plain-language 3-step install guide, copied to release root by Package-Release.ps1); operations-guide §1.5, scripts README, root README all note the pre-v0.8.3 bootstrap (run Update-FromRelease.bat as Administrator once) and the run-as-admin requirement for manual updates; code-guide rows updated (update.ts WMI launch, SettingsPanel/App.tsx localStorage polling, Update-WallBoard auto-stash). v0.8.3 zip asset re-uploaded with the new docs (--clobber). Before that: v0.8.3 — Update button TRULY fixed and **confirmed working end-to-end on the test VM** (v0.8.2's basename/$PSScriptRoot diagnosis was wrong). Sandbox bisect proved: `powershell.exe` spawned with `detached: true` (DETACHED_PROCESS) exits 0 instantly without running the script — no console to initialize, empty stderr, looks like success. Fix in `update.ts`: non-detached short-lived PS launcher (hidden console via CREATE_NO_WINDOW works) creates the updater via WMI `Win32_Process.Create` — updater's parent is WmiPrvSE, survives server/tray/Task Scheduler kills mid-update. Verified in sandbox: spaced paths, -Unattended passthrough, $PSScriptRoot, parent-death survival. RULE: never spawn powershell.exe with detached:true. To bootstrap a kiosk on v0.8.2 or older: double-click `scripts\windows\Update-FromRelease.bat` once — button works for all future updates after that.
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
 - Blockers: None
 
@@ -92,11 +92,20 @@
 
 ## Version
 
-- Current: `v0.8.3` — tagged and released on GitHub (2026-06-11). TRUE root cause fix: powershell + detached:true exits silently; WMI Win32_Process.Create launch.
-- Previous: v0.8.2 (2026-06-11, wrong diagnosis), v0.8.1 (2026-06-11) — git pull auto-stash + transcript. v0.8.0 (2026-06-10) — unsaved-changes protection. Note: v0.5.1 tag exists with no GitHub release; v0.5.2 was never tagged.
+- Current: `v0.9.0` — calendar month navigation + agenda follows displayed month + Files toggle respected on Projects. NOT yet tagged/released — Brian wants to test locally first; on his OK: package → tag v0.9.0 → gh release.
+- Previous: v0.8.3 (2026-06-11) — tagged and released. TRUE root cause fix: powershell + detached:true exits silently; WMI Win32_Process.Create launch. v0.8.2 (2026-06-11, wrong diagnosis), v0.8.1 (2026-06-11) — git pull auto-stash + transcript. v0.8.0 (2026-06-10) — unsaved-changes protection. Note: v0.5.1 tag exists with no GitHub release; v0.5.2 was never tagged.
 - Next release: bump `server/package.json` (+ root) → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → `gh release create` (needs `dangerouslyDisableSandbox`)
 
 ## Files Modified This Session (2026-06-11)
+
+**v0.9.0 (calendar navigation + agenda + files visibility):**
+- `client/src/store/appStore.ts` — `viewDate` + `setViewDate`
+- `client/src/components/Dashboard.tsx` — ‹ › / Today footer controls (desktop + mobile), view label, agenda heading month suffix, passes `date`/`viewDate` down
+- `client/src/components/CalendarView.tsx` — `date` prop, controlled `date`/`onNavigate` on RBC Calendar
+- `client/src/components/AgendaRail.tsx` — `viewDate` prop; non-current month lists that whole month
+- `client/src/hooks/useEvents.ts` — `viewDate` param widens fetch window to navigated month
+- `client/src/App.tsx` — passes `viewDate` from store into `useEvents`
+- `client/src/components/board/BoardLayout.tsx` — Files button hidden when `showFiles` off
 
 **v0.8.1 fixes:**
 - `scripts/windows/Update-WallBoard.ps1` — Start-Transcript + auto-stash dirty tree before git pull
