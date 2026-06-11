@@ -310,6 +310,26 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       );
   }
 
+  /**
+   * Delete audit entries older than the retention window so the table cannot
+   * grow without bound on a kiosk that runs for years. Returns rows removed.
+   * Timestamps are ISO 8601 UTC strings, so lexicographic comparison is safe.
+   */
+  pruneAuditLog(retentionDays: number): number {
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+    const result = this.db
+      .prepare(`DELETE FROM audit_log WHERE timestamp < ?`)
+      .run(cutoff);
+    if (result.changes > 0) {
+      this.logAudit(
+        'system',
+        `Pruned ${result.changes} audit entries older than ${retentionDays} days`,
+        dbPath(this.dataDir)
+      );
+    }
+    return result.changes;
+  }
+
   // ---------------------------------------------------------------------------
   // StorageProvider (async wrappers)
   // ---------------------------------------------------------------------------

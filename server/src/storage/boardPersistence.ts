@@ -33,4 +33,5 @@ export interface BoardPersistence {
     success?: boolean,
     sizeBytes?: number
   ): void;
+  pruneAuditLog(retentionDays: number): number;
 }

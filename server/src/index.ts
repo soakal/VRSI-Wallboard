@@ -18,7 +18,7 @@ import { updateRouter } from './routes/update.js';
 import { getPersistence } from './storage/factory.js';
 import { resolveDataDir, resolveLogsDir, resolveBackupDir } from './lib/paths.js';
 import { auditApiMiddleware } from './middleware/auditMiddleware.js';
-import { logAudit } from './services/auditService.js';
+import { logAudit, startAuditPruneCron } from './services/auditService.js';
 import { runBackup } from './services/backupService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -157,6 +157,7 @@ async function bootstrap(): Promise<void> {
     storage: 'local',
   });
   getPersistence();
+  startAuditPruneCron();
   logAudit('system', 'VRSI WallBoard server started', resolveDataDir(), true);
   logAudit(
     'system',

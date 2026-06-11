@@ -55,4 +55,5 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notes_job ON notes(job_number);
+CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
 `;

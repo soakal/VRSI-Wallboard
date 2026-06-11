@@ -107,6 +107,14 @@
 - `client/src/App.tsx` — passes `viewDate` from store into `useEvents`
 - `client/src/components/board/BoardLayout.tsx` — Files button hidden when `showFiles` off
 
+**v0.9.0 audit retention:**
+- `server/src/storage/schema.ts` — `idx_audit_timestamp` index
+- `server/src/storage/localProvider.ts` — `pruneAuditLog(retentionDays)` (DELETE < ISO cutoff, logs result)
+- `server/src/storage/boardPersistence.ts` — interface method
+- `server/src/services/auditService.ts` — `startAuditPruneCron()` (prune at startup + cron 3:30 AM daily, 90-day retention)
+- `server/src/index.ts` — calls `startAuditPruneCron()` in bootstrap
+- Verified live: fake 100-day-old row inserted → server restart → row pruned, "Pruned 1 audit entries" record written, index created on existing DB
+
 **v0.8.1 fixes:**
 - `scripts/windows/Update-WallBoard.ps1` — Start-Transcript + auto-stash dirty tree before git pull
 - `client/src/components/SettingsPanel.tsx` — localStorage pending flag, alreadyRunning message
