@@ -1,6 +1,6 @@
 {
   "name": "vrsi-wallboard",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "private": true,
   "description": "VRSI WallBoard — local standalone job board + calendar kiosk",
   "scripts": {

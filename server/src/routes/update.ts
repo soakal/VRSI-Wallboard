@@ -146,24 +146,33 @@ updateRouter.post('/run', requireAdminToken, (_req: Request, res: Response) => {
       process.env.SystemRoot ?? 'C:\\Windows',
       'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe',
     );
+
+    // powershell.exe silently exits 0 without running the script when spawned
+    // with detached:true (DETACHED_PROCESS gives it no console to initialize).
+    // Instead, a short-lived NON-detached launcher creates the real updater via
+    // WMI Win32_Process.Create — the updater's parent is the WMI service, so it
+    // survives this server (and the tray, and any Task Scheduler job) being
+    // killed mid-update.
+    const innerCmd = `"${psExe}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${script}" -Unattended`;
+    const launcherCmd =
+      `$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = '${innerCmd.replace(/'/g, "''")}'; CurrentDirectory = '${scriptsDir.replace(/'/g, "''")}' }; exit $r.ReturnValue`;
+
     const child = spawn(
       psExe,
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', path.basename(script), '-Unattended'],
-      { cwd: scriptsDir, detached: true, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true },
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', launcherCmd],
+      { cwd: scriptsDir, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true },
     );
-    // Log early stderr (first 10s) so startup failures surface in server logs, then detach
     const stderrChunks: Buffer[] = [];
     child.stderr?.on('data', (d: Buffer) => stderrChunks.push(d));
-    const stderrTimer = setTimeout(() => {
-      if (stderrChunks.length > 0) logger.warn('Update script stderr', { stderr: Buffer.concat(stderrChunks).toString().slice(0, 500) });
-      child.stderr?.destroy();
-      child.unref();
-    }, 10_000);
-    child.on('exit', (code) => {
-      clearTimeout(stderrTimer);
-      const errText = stderrChunks.length > 0 ? Buffer.concat(stderrChunks).toString().slice(0, 500) : undefined;
-      if (code !== null && code !== 0) logger.warn('Update script exited early', { code, script: path.basename(script), stderr: errText });
-      child.unref();
+    child.on('exit', (code, signal) => {
+      if (code === 0) {
+        logger.info('Update process created', { script: path.basename(script) });
+      } else {
+        logger.error('Update launcher failed', {
+          code, signal, script: path.basename(script),
+          stderr: Buffer.concat(stderrChunks).toString().slice(0, 500),
+        });
+      }
     });
     updateStartedAt = Date.now();
 
