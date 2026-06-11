@@ -6,7 +6,7 @@
 
 ## Current State
 
-- Last completed task: v0.8.2 — Update button root cause fixed. Fable diagnosed: Node.js passes the absolute script path (with spaces, eg `C:\Program Files\VRSI WallBoard\...`) as the `-File` arg; PowerShell 5.1 does not reliably set `$PSScriptRoot` when spawned non-interactively with a spaced path → `. "$PSScriptRoot\_common.ps1"` fails before `Start-Transcript` → no log, no update. Fix: `update.ts` now uses `path.basename(script)` for `-File` (cwd already = scriptsDir); both PS update scripts have `$PSScriptRoot` fallback guard using `$MyInvocation.MyCommand.Path`. Also added 10s stderr capture + exit-code logging to server logs. To bootstrap a kiosk still on v0.8.1 or older: `powershell.exe -ExecutionPolicy Bypass -File "C:\Program Files\VRSI WallBoard\scripts\windows\Update-FromRelease.ps1"` — after that the button works for all future updates.
+- Last completed task: v0.8.3 — Update button TRULY fixed (v0.8.2's basename/$PSScriptRoot diagnosis was wrong). Sandbox bisect proved: `powershell.exe` spawned with `detached: true` (DETACHED_PROCESS) exits 0 instantly without running the script — no console to initialize, empty stderr, looks like success. Fix in `update.ts`: non-detached short-lived PS launcher (hidden console via CREATE_NO_WINDOW works) creates the updater via WMI `Win32_Process.Create` — updater's parent is WmiPrvSE, survives server/tray/Task Scheduler kills mid-update. Verified in sandbox: spaced paths, -Unattended passthrough, $PSScriptRoot, parent-death survival. RULE: never spawn powershell.exe with detached:true. To bootstrap a kiosk on v0.8.2 or older: double-click `scripts\windows\Update-FromRelease.bat` once — button works for all future updates after that.
 - Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
 - Blockers: None
 
@@ -92,8 +92,8 @@
 
 ## Version
 
-- Current: `v0.8.2` — tagged and released on GitHub (2026-06-11). Root cause fix: `$PSScriptRoot` not set when spawned with spaced path + stderr logging.
-- Previous: v0.8.1 (2026-06-11) — git pull auto-stash + transcript. v0.8.0 (2026-06-10) — unsaved-changes protection. Note: v0.5.1 tag exists with no GitHub release; v0.5.2 was never tagged.
+- Current: `v0.8.3` — tagged and released on GitHub (2026-06-11). TRUE root cause fix: powershell + detached:true exits silently; WMI Win32_Process.Create launch.
+- Previous: v0.8.2 (2026-06-11, wrong diagnosis), v0.8.1 (2026-06-11) — git pull auto-stash + transcript. v0.8.0 (2026-06-10) — unsaved-changes protection. Note: v0.5.1 tag exists with no GitHub release; v0.5.2 was never tagged.
 - Next release: bump `server/package.json` (+ root) → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → `gh release create` (needs `dangerouslyDisableSandbox`)
 
 ## Files Modified This Session (2026-06-11)
@@ -131,7 +131,7 @@
 ## Context for Next Session
 
 Run `npm start` at repo root. Health: `GET http://localhost:3001/health`.
-App is v0.8.2. `VRSI WallBoard\` folder is distribution-ready (zipped as `VRSI-WallBoard-v0.8.2.zip`).
+App is v0.8.3. `VRSI WallBoard\` folder is distribution-ready (zipped as `VRSI-WallBoard-v0.8.3.zip`).
 Agenda filtering single source of truth: `client/src/lib/agendaFilter.ts` — change it there, nowhere else.
 Kiosk update path: Settings → About & Updates → Update button now works reliably. Dev machine uses git-based Update-WallBoard.ps1 (auto-stashes dirty tree).
 Update failures: check `C:\ProgramData\VRSIWallBoard\logs\update.log`; also check server logs for "Update script exited early" or "Update script stderr" entries.
