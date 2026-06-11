@@ -135,15 +135,26 @@ An update banner appears at the top of the app within 6 hours of a new release b
 
 **Easiest — in the app:** open **Settings → About & Updates**. The section shows the version you are running; when a newer release exists, click **Update**. The board downloads the latest release from GitHub, installs it, and restarts itself (including the kiosk browser) within a few minutes. Job data, notes, and settings are preserved.
 
+The Update button needs the logged-in user to have permission to write to the install folder (`C:\Program Files\VRSI WallBoard`), because the updater replaces files there as that user. Installs from **v0.9.1 or later grant this automatically** during `INSTALL.bat`, so the button just works. Installs made before v0.9.1 may not have it — see the access-denied note below.
+
 > **Installs older than v0.8.3:** the Update button in those versions is broken (the launched script silently never ran). Fix it once: right-click `scripts\windows\Update-FromRelease.bat` → **Run as administrator**. After that one manual update, the in-app button works for all future updates.
 
-**Manual — script:** right-click `scripts\windows\Update-FromRelease.bat` → **Run as administrator** (admin is needed because the running server may be elevated). Same process as the button. Progress is logged to `update.log` in the logs directory.
+**Manual — script:** right-click `scripts\windows\Update-FromRelease.bat` → **Run as administrator**. Same process as the button; admin guarantees the file copy succeeds regardless of the install-folder permissions. Progress is logged to `update.log` in the logs directory.
 
-**Manual — copy over:** download the release zip from GitHub, copy the `VRSI WallBoard` folder over the existing install, and re-run `INSTALL.bat`.
+**Manual — copy over:** download the release zip from GitHub, copy the `VRSI WallBoard` folder over the existing install, and re-run `INSTALL.bat` (re-running is safe — data is preserved, and v0.9.1+ also re-applies the update permission).
 
 > Dev machines running from a git clone use `scripts\windows\Update-WallBoard.bat` (git pull + rebuild) instead. When run unattended (via the Update button), it auto-stashes any uncommitted local changes before pulling.
 
 **If an update fails:** check `C:\ProgramData\VRSIWallBoard\logs\update.log` for the script's progress, and `combined.log` in the same folder for launcher errors.
+
+> **"Access is denied" during the copy step** (on installs made before v0.9.1): the kiosk user can't write to Program Files. A failed update also leaves the server stopped and the tray task disabled. Fix it once in an **Administrator** PowerShell:
+> ```powershell
+> $u = (Get-CimInstance Win32_ComputerSystem).UserName
+> icacls 'C:\Program Files\VRSI WallBoard' /grant "${u}:(OI)(CI)M" /T
+> Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray'
+> Start-ScheduledTask  -TaskName 'VRSI WallBoard Tray'
+> ```
+> This grants the permission, restarts the board, and the Update button works from then on. (Or just re-run `INSTALL.bat` as Administrator — v0.9.1+ grants the permission for you.)
 
 ---
 
