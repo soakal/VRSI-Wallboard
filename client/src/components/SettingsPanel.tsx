@@ -124,6 +124,27 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
 
   useEffect(() => () => { if (pollRef.current !== null) window.clearInterval(pollRef.current); }, []);
 
+  /** Start a 10-second polling loop that reloads when the server version changes. */
+  const startVersionPoll = (fromVersion: string | undefined) => {
+    if (pollRef.current !== null) window.clearInterval(pollRef.current);
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const r = await fetch("/api/update/check");
+        if (!r.ok) return;
+        const j: unknown = await r.json();
+        if (j !== null && typeof j === "object" && "data" in j) {
+          const d = (j as { data?: { currentVersion?: string } }).data;
+          if (d && typeof d.currentVersion === "string" && d.currentVersion !== fromVersion) {
+            localStorage.removeItem("vrsi_update_pending");
+            window.location.reload();
+          }
+        }
+      } catch {
+        // Server is down mid-update — keep polling
+      }
+    }, 10_000);
+  };
+
   const startUpdate = async () => {
     if (!window.confirm("Update WallBoard now? The board will go down for a few minutes and restart itself when done.")) return;
     setUpdating(true);
@@ -131,24 +152,22 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
     try {
       const res = await fetch("/api/update/run", { method: "POST" });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      setUpdateMsg({ type: "ok", text: "Update started. The board will restart itself in a few minutes — leave it alone until then." });
-      const startedFrom = updateInfo.currentVersion;
-      // Reload once the server is back on a different version
-      pollRef.current = window.setInterval(async () => {
-        try {
-          const r = await fetch("/api/update/check");
-          if (!r.ok) return;
-          const j: unknown = await r.json();
-          if (j !== null && typeof j === "object" && "data" in j) {
-            const d = (j as { data?: { currentVersion?: string } }).data;
-            if (d && typeof d.currentVersion === "string" && d.currentVersion !== startedFrom) {
-              window.location.reload();
-            }
-          }
-        } catch {
-          // Server is down mid-update — keep polling
-        }
-      }, 10_000);
+      const j: unknown = await res.json();
+      const isAlreadyRunning =
+        j !== null && typeof j === "object" && "data" in j &&
+        (j as { data?: { alreadyRunning?: boolean } }).data?.alreadyRunning === true;
+
+      const fromVersion = updateInfo.currentVersion;
+      // Persist so App.tsx can resume polling if Settings is closed before the reload
+      localStorage.setItem("vrsi_update_pending", JSON.stringify({ fromVersion, startedAt: Date.now() }));
+
+      setUpdateMsg({
+        type: "ok",
+        text: isAlreadyRunning
+          ? "Update is already in progress. Leave the board alone and it will restart when done."
+          : "Update started. The board will restart itself in a few minutes — leave it alone until then.",
+      });
+      startVersionPoll(fromVersion);
     } catch (err) {
       setUpdating(false);
       setUpdateMsg({ type: "error", text: err instanceof Error ? `Update failed to start: ${err.message}` : "Update failed to start" });

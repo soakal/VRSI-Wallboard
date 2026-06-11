@@ -28,6 +28,37 @@ function AppInner() {
   const updateInfo = useUpdateCheck();
   const [updateDismissed, setUpdateDismissed] = useState(false);
 
+  // Resume version polling if Settings was closed before the update-triggered reload.
+  useEffect(() => {
+    const raw = localStorage.getItem("vrsi_update_pending");
+    if (!raw) return;
+    let fromVersion: string | undefined;
+    let startedAt = 0;
+    try {
+      const parsed = JSON.parse(raw) as { fromVersion?: string; startedAt?: number };
+      fromVersion = parsed.fromVersion;
+      startedAt = parsed.startedAt ?? 0;
+    } catch { localStorage.removeItem("vrsi_update_pending"); return; }
+    // Clear stale flags (> 15 min old — update either finished or failed)
+    if (Date.now() - startedAt > 15 * 60 * 1000) { localStorage.removeItem("vrsi_update_pending"); return; }
+    const id = window.setInterval(async () => {
+      try {
+        const r = await fetch("/api/update/check");
+        if (!r.ok) return;
+        const j: unknown = await r.json();
+        if (j !== null && typeof j === "object" && "data" in j) {
+          const d = (j as { data?: { currentVersion?: string } }).data;
+          if (d && typeof d.currentVersion === "string" && d.currentVersion !== fromVersion) {
+            window.clearInterval(id);
+            localStorage.removeItem("vrsi_update_pending");
+            window.location.reload();
+          }
+        }
+      } catch { /* server down mid-update — keep polling */ }
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   // Auth — always polling
   const { isAuthenticated, needsReauth, isLoading: authLoading } = useAuthStatus(true);
 

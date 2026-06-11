@@ -6,6 +6,12 @@ param([switch]$Unattended)
 
 $ErrorActionPreference = 'Stop'
 
+$logDir = Get-EnvValue 'LOGS_DIR' 'C:\ProgramData\VRSIWallBoard\logs'
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+Start-Transcript -Path (Join-Path $logDir 'update.log') -Append | Out-Null
+
+try {
+
 Write-Host ''
 Write-Host '  VRSI WallBoard - Update' -ForegroundColor Cyan
 Write-Host '  =======================' -ForegroundColor Cyan
@@ -36,19 +42,33 @@ if ($trayWasRunning) {
 Write-Step 'Checking for local changes'
 Push-Location $RepoRoot
 $dirty = git status --porcelain 2>$null
+$autoStashed = $false
 if ($dirty) {
-    Write-Warning 'Uncommitted local changes detected. These may block the pull:'
+    Write-Warning 'Uncommitted local changes detected:'
     Write-Host $dirty -ForegroundColor DarkYellow
-    if (-not $Unattended) {
+    if ($Unattended) {
+        Write-Host '  Auto-stashing changes for unattended update' -ForegroundColor DarkGray
+        git stash push -m 'pre-update auto-stash (unattended)' 2>&1 | Out-Host
+        $autoStashed = ($LASTEXITCODE -eq 0)
+    } else {
         $ans = Read-Host 'Continue anyway? (Y/N)'
-        if ($ans -notmatch '^[Yy]') { exit 1 }
+        if ($ans -notmatch '^[Yy]') { Pop-Location; Stop-Transcript | Out-Null; exit 1 }
     }
 }
 
 # 2. Pull latest code
 Write-Step 'Pulling latest code from GitHub'
 git pull --ff-only
-if ($LASTEXITCODE -ne 0) { throw 'git pull failed. The branch may have diverged  - pull manually, then re-run this script.' }
+if ($LASTEXITCODE -ne 0) {
+    if ($autoStashed) { git stash pop 2>&1 | Out-Host }
+    Pop-Location
+    throw 'git pull failed. The branch may have diverged - pull manually, then re-run this script.'
+}
+
+if ($autoStashed) {
+    Write-Host '  Restoring auto-stash' -ForegroundColor DarkGray
+    git stash pop 2>&1 | Out-Host
+}
 Pop-Location
 
 # 3. Stop the running server
@@ -109,4 +129,8 @@ Start-Sleep -Seconds 2
 Write-Host ''
 Write-Host 'Update complete. WallBoard is running the new version.' -ForegroundColor Green
 Write-Host ''
-Start-Sleep -Seconds 3
+if (-not $Unattended) { Start-Sleep -Seconds 3 }
+
+} finally {
+    Stop-Transcript | Out-Null
+}
