@@ -92,7 +92,7 @@
 
 ## Version
 
-- Current: `v0.9.0` — calendar month navigation + agenda follows displayed month + Files toggle respected on Projects. NOT yet tagged/released — Brian wants to test locally first; on his OK: package → tag v0.9.0 → gh release.
+- Current: `v0.9.0` — tagged and released on GitHub (2026-06-11, commit 0ada277, zip asset uploaded). Calendar month navigation + agenda follows displayed month + Files toggle respected on Projects + 90-day audit log retention. Brian tested locally and approved before release.
 - Previous: v0.8.3 (2026-06-11) — tagged and released. TRUE root cause fix: powershell + detached:true exits silently; WMI Win32_Process.Create launch. v0.8.2 (2026-06-11, wrong diagnosis), v0.8.1 (2026-06-11) — git pull auto-stash + transcript. v0.8.0 (2026-06-10) — unsaved-changes protection. Note: v0.5.1 tag exists with no GitHub release; v0.5.2 was never tagged.
 - Next release: bump `server/package.json` (+ root) → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → `gh release create` (needs `dangerouslyDisableSandbox`)
 
