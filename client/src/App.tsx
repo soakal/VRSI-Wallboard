@@ -75,6 +75,7 @@ function AppInner() {
     isFilesOpen,
     isMonitoringOpen,
     displayMode,
+    viewDate,
     activeUser,
     setIsAuthenticated,
     setIsSettingsOpen,
@@ -115,7 +116,8 @@ function AppInner() {
     config.calendarIds,
     isAuthenticated,
     config.refreshInterval,
-    displayMode
+    displayMode,
+    viewDate
   );
 
   const { data: recentFiles, isLoading: recentFilesLoading } = useRecentFiles(

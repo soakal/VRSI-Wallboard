@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { addDays, addWeeks, addMonths, isSameDay, isSameMonth } from "date-fns";
 import type { CalendarEvent, AppConfig, SharePointFile } from "../types/index";
 import Clock from "./Clock";
 import NextEventBadge from "./NextEventBadge";
@@ -44,6 +45,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   const navigate = useNavigate();
   const setIsMonitoringOpen = useAppStore((s) => s.setIsMonitoringOpen);
   const setDisplayMode = useAppStore((s) => s.setDisplayMode);
+  const viewDate = useAppStore((s) => s.viewDate);
+  const setViewDate = useAppStore((s) => s.setViewDate);
   const activeUser = useAppStore((s) => s.activeUser);
   const setActiveUser = useAppStore((s) => s.setActiveUser);
   const { users } = useBoardUsers();
@@ -59,6 +62,23 @@ const Dashboard: React.FC<DashboardProps> = ({
     () => filterAgendaEvents(events, activeUser, boardConfig),
     [events, activeUser, boardConfig],
   );
+
+  // Calendar navigation — ‹ › step by the current view (day/week/month),
+  // Today jumps back. The agenda rail follows the displayed month.
+  const stepViewDate = useCallback(
+    (dir: 1 | -1) => {
+      const step = displayMode === 'month' ? addMonths : displayMode === 'week' ? addWeeks : addDays;
+      setViewDate(step(viewDate, dir));
+    },
+    [displayMode, viewDate, setViewDate],
+  );
+  const isViewingToday = isSameDay(viewDate, new Date());
+  const isViewingCurrentMonth = isSameMonth(viewDate, new Date());
+  const viewLabel =
+    displayMode === 'day'
+      ? viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      : viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const agendaMonthLabel = viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const handleSelectUserId = useCallback(
     (id: string) => {
@@ -180,6 +200,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <CalendarView
             events={events}
             displayMode={displayMode}
+            date={viewDate}
             showWeekends={config.showWeekends}
             startHour={config.startHour}
             endHour={config.endHour}
@@ -194,10 +215,11 @@ const Dashboard: React.FC<DashboardProps> = ({
             {config.showAgendaRail && (
               <div className="flex min-h-0 flex-1 flex-col">
                 <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                  Agenda
+                  Agenda{!isViewingCurrentMonth && ` — ${agendaMonthLabel}`}
                 </h2>
                 <AgendaRail
                   events={agendaEvents}
+                  viewDate={viewDate}
                   showWeekends={config.showWeekends}
                   className="min-h-0 flex-1"
                   onSelectEvent={handleSelectEvent}
@@ -223,10 +245,11 @@ const Dashboard: React.FC<DashboardProps> = ({
         {config.showAgendaRail && (
           <div className="mb-4">
             <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-              Agenda
+              Agenda{!isViewingCurrentMonth && ` — ${agendaMonthLabel}`}
             </h2>
             <AgendaRail
               events={agendaEvents}
+              viewDate={viewDate}
               showWeekends={config.showWeekends}
               className="min-h-0"
               onSelectEvent={handleSelectEvent}
@@ -258,6 +281,37 @@ const Dashboard: React.FC<DashboardProps> = ({
             <option value="week">Week</option>
             <option value="month">Month</option>
           </select>
+          <button
+            type="button"
+            onClick={() => stepViewDate(-1)}
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+            title={`Previous ${displayMode}`}
+            aria-label={`Previous ${displayMode}`}
+          >
+            ‹
+          </button>
+          <span className="min-w-[7.5rem] text-center text-xs font-semibold text-slate-200">
+            {viewLabel}
+          </span>
+          <button
+            type="button"
+            onClick={() => stepViewDate(1)}
+            className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+            title={`Next ${displayMode}`}
+            aria-label={`Next ${displayMode}`}
+          >
+            ›
+          </button>
+          {!isViewingToday && (
+            <button
+              type="button"
+              onClick={() => setViewDate(new Date())}
+              className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
+              title="Jump back to today"
+            >
+              Today
+            </button>
+          )}
           <a
             href="/api/board/export/ship-dates.ics"
             download="vrsi-ship-dates.ics"
@@ -332,6 +386,31 @@ const Dashboard: React.FC<DashboardProps> = ({
             <option value="week">Week</option>
             <option value="month">Month</option>
           </select>
+          <button
+            type="button"
+            onClick={() => stepViewDate(-1)}
+            className="bg-slate-700/60 border border-slate-600 text-slate-200 px-2.5 py-1.5 rounded text-xs font-medium"
+            aria-label={`Previous ${displayMode}`}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => stepViewDate(1)}
+            className="bg-slate-700/60 border border-slate-600 text-slate-200 px-2.5 py-1.5 rounded text-xs font-medium"
+            aria-label={`Next ${displayMode}`}
+          >
+            ›
+          </button>
+          {!isViewingToday && (
+            <button
+              type="button"
+              onClick={() => setViewDate(new Date())}
+              className="bg-slate-700/60 border border-slate-600 text-slate-200 px-2 py-1.5 rounded text-xs font-medium"
+            >
+              Today
+            </button>
+          )}
           <select
             value={activeUser?.id ?? ''}
             onChange={(e) => handleSelectUserId(e.target.value)}

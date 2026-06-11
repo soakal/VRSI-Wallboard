@@ -3,6 +3,8 @@ import { CalendarEvent } from '../types/index';
 
 interface AgendaRailProps {
   events: CalendarEvent[];
+  /** Date the calendar is showing — the agenda lists that month's events */
+  viewDate?: Date;
   showWeekends?: boolean;
   className?: string;
   onSelectEvent?: (event: CalendarEvent) => void;
@@ -29,6 +31,7 @@ function addDays(d: Date, n: number): Date {
 
 const AgendaRail: React.FC<AgendaRailProps> = ({
   events,
+  viewDate,
   showWeekends = true,
   className = '',
   onSelectEvent,
@@ -42,12 +45,20 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
   const now = new Date();
   const todayStart = startOfDay(now);
 
-  // Agenda covers the whole current month: past-due board jobs from earlier
-  // in the month (ship date passed, not shipped), then today through the end
-  // of the month — extended to at least 14 days so the rail never goes empty
-  // right before the month rolls over.
-  const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
-  const nextMonthStart = new Date(todayStart.getFullYear(), todayStart.getMonth() + 1, 1);
+  // The agenda follows the month shown on the calendar. On the current month
+  // it covers: past-due board jobs from earlier in the month (ship date
+  // passed, not shipped), then today through the end of the month — extended
+  // to at least 14 days so the rail never goes empty right before the month
+  // rolls over. When the calendar is navigated to another month, the agenda
+  // simply lists every day of that month that has events.
+  const anchor = viewDate ? startOfDay(viewDate) : todayStart;
+  const viewMonthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const viewNextMonthStart = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+  const isCurrentMonth =
+    anchor.getFullYear() === todayStart.getFullYear() &&
+    anchor.getMonth() === todayStart.getMonth();
+  const monthStart = viewMonthStart;
+  const nextMonthStart = viewNextMonthStart;
   const daysToMonthEnd = Math.round((nextMonthStart.getTime() - todayStart.getTime()) / 86_400_000);
   const daysAhead = Math.max(daysToMonthEnd, 14);
 
@@ -68,37 +79,52 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
   // (the server only sends non-shipped jobs). Outlook events in the past
   // are just over — they are not "due" — so only board jobs appear here.
   const pastDueSections: { key: string; label: string; events: CalendarEvent[] }[] = [];
-  for (let d = new Date(monthStart); d < todayStart; d = addDays(d, 1)) {
-    const dayEvents = eventsOnDay(d, addDays(d, 1)).filter(
-      (ev) => ev.calendarId === 'board-jobs',
-    );
-    if (dayEvents.length === 0) continue;
-    sortGroup(dayEvents);
-    pastDueSections.push({
-      key: `past-${d.toISOString().slice(0, 10)}`,
-      label: formatSectionDate(d),
-      events: dayEvents,
-    });
-  }
-
   const sections: { key: string; label: string; events: CalendarEvent[] }[] = [];
-  for (let i = 0; i < daysAhead; i++) {
-    const dayStart = addDays(todayStart, i);
-    const dayEvents = eventsOnDay(dayStart, addDays(dayStart, 1)).filter((ev) => {
-      // Today: drop timed events that already ended
-      if (i === 0 && !ev.isAllDay && new Date(ev.endDateTime) <= now) return false;
-      return true;
-    });
-    if (dayEvents.length === 0) continue;
 
-    sortGroup(dayEvents);
-    const label =
-      i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : formatSectionDate(dayStart);
-    sections.push({
-      key: dayStart.toISOString().slice(0, 10),
-      label: i <= 1 ? `${label} — ${formatSectionDate(dayStart)}` : label,
-      events: dayEvents,
-    });
+  if (isCurrentMonth) {
+    for (let d = new Date(monthStart); d < todayStart; d = addDays(d, 1)) {
+      const dayEvents = eventsOnDay(d, addDays(d, 1)).filter(
+        (ev) => ev.calendarId === 'board-jobs',
+      );
+      if (dayEvents.length === 0) continue;
+      sortGroup(dayEvents);
+      pastDueSections.push({
+        key: `past-${d.toISOString().slice(0, 10)}`,
+        label: formatSectionDate(d),
+        events: dayEvents,
+      });
+    }
+
+    for (let i = 0; i < daysAhead; i++) {
+      const dayStart = addDays(todayStart, i);
+      const dayEvents = eventsOnDay(dayStart, addDays(dayStart, 1)).filter((ev) => {
+        // Today: drop timed events that already ended
+        if (i === 0 && !ev.isAllDay && new Date(ev.endDateTime) <= now) return false;
+        return true;
+      });
+      if (dayEvents.length === 0) continue;
+
+      sortGroup(dayEvents);
+      const label =
+        i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : formatSectionDate(dayStart);
+      sections.push({
+        key: dayStart.toISOString().slice(0, 10),
+        label: i <= 1 ? `${label} — ${formatSectionDate(dayStart)}` : label,
+        events: dayEvents,
+      });
+    }
+  } else {
+    // Viewing another month: list every day of that month that has events.
+    for (let d = new Date(viewMonthStart); d < viewNextMonthStart; d = addDays(d, 1)) {
+      const dayEvents = eventsOnDay(d, addDays(d, 1));
+      if (dayEvents.length === 0) continue;
+      sortGroup(dayEvents);
+      sections.push({
+        key: d.toISOString().slice(0, 10),
+        label: formatSectionDate(d),
+        events: dayEvents,
+      });
+    }
   }
 
   const renderEvent = (event: CalendarEvent) => {
@@ -191,7 +217,9 @@ const AgendaRail: React.FC<AgendaRailProps> = ({
         {isEmpty && (
           <div className="flex flex-col items-center justify-center gap-1 py-8 text-center">
             <p className="text-sm font-medium text-slate-400">Nothing on the agenda</p>
-            <p className="text-xs text-slate-600">No events this month</p>
+            <p className="text-xs text-slate-600">
+              No events in {anchor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </p>
           </div>
         )}
 

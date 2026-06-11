@@ -8,6 +8,8 @@ interface AppState {
   isFilesOpen: boolean;
   isMonitoringOpen: boolean;
   displayMode: 'day' | 'week' | 'month';
+  /** Date the calendar is showing — navigated with the ‹ › / Today controls */
+  viewDate: Date;
   theme: 'dark' | 'light';
   config: AppConfig | null;
   activeUser: BoardUser | null;
@@ -18,6 +20,7 @@ interface AppState {
   setIsFilesOpen: (value: boolean) => void;
   setIsMonitoringOpen: (value: boolean) => void;
   setDisplayMode: (mode: 'day' | 'week' | 'month') => void;
+  setViewDate: (date: Date) => void;
   setTheme: (theme: 'dark' | 'light') => void;
   setConfig: (config: AppConfig) => void;
   setActiveUser: (user: BoardUser | null) => void;
@@ -49,6 +52,7 @@ export const useAppStore = create<AppState>((set) => ({
   isFilesOpen: false,
   isMonitoringOpen: false,
   displayMode: 'month',
+  viewDate: new Date(),
   theme: 'dark',
   config: null,
   activeUser: getInitialActiveUser(),
@@ -67,6 +71,7 @@ export const useAppStore = create<AppState>((set) => ({
   setIsFilesOpen: (value) => set({ isFilesOpen: value }),
   setIsMonitoringOpen: (value) => set({ isMonitoringOpen: value }),
   setDisplayMode: (mode) => set({ displayMode: mode }),
+  setViewDate: (date) => set({ viewDate: date }),
   setTheme: (theme) => set({ theme: theme }),
   setConfig: (config) => set({ config: config }),
   setActiveUser: (user) => {

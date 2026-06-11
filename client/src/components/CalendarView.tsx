@@ -36,6 +36,8 @@ interface RBCCalendarEvent extends RBCEvent {
 interface CalendarViewProps {
   events: CalendarEvent[];
   displayMode: 'day' | 'week' | 'month';
+  /** Date the calendar shows — controlled by the footer ‹ › / Today buttons */
+  date: Date;
   showWeekends: boolean;
   startHour: number;
   endHour: number;
@@ -74,6 +76,7 @@ const EventContent: React.FC<EventProps<RBCCalendarEvent>> = ({ event, title }) 
 const CalendarView: React.FC<CalendarViewProps> = ({
   events,
   displayMode,
+  date,
   showWeekends,
   startHour,
   endHour,
@@ -300,6 +303,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         events={rbcEvents}
         view={rbcView}
         onView={() => {}}
+        date={date}
+        onNavigate={() => {}}
         eventPropGetter={eventPropGetter}
         dayPropGetter={dayPropGetter}
         components={{ event: EventContent }}
