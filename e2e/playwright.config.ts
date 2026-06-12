@@ -33,9 +33,12 @@ export default defineConfig({
   // One worker — the tours share a single seeded server and tell a linear story.
   workers: 1,
   fullyParallel: false,
-  timeout: 180_000,
+  timeout: 240_000,
   expect: { timeout: 15_000 },
   outputDir: path.join(ARTIFACTS, 'test-results'),
+  // After the run, transcode the recordings to universal MP4 (H.264) with
+  // friendly names in e2e/artifacts/videos/.
+  globalTeardown: path.resolve(__dirname, 'export-videos.cjs'),
   reporter: [
     ['list'],
     ['html', { outputFolder: path.join(ARTIFACTS, 'report'), open: 'never' }],
@@ -43,9 +46,12 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     viewport: { width: 1440, height: 900 },
-    video: 'on',
+    // Record at full viewport size (crisp, no scaling distortion).
+    video: { mode: 'on', size: { width: 1440, height: 900 } },
     screenshot: 'on',
     trace: 'on-first-retry',
+    // Slow every click/select/scroll so the recording is watchable, not a blur.
+    launchOptions: { slowMo: 350 },
   },
   projects: [
     // Seeds demo data once; both tours depend on it.

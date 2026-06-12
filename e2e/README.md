@@ -14,12 +14,18 @@ The demo board is seeded first by `seed/seed.setup.ts` via the normal
 `POST /api/board/import` API (no direct DB writes) using the fixed dataset in
 `seed/demo-jobs.ts` (ship dates are relative to today, so there's always content).
 
+The tours are **paced and narrated** — every click is slowed down (slowMo), an
+on-screen caption explains each step, and the run pauses so a person can read the
+screen. Each recording is auto-converted to a **universal MP4 (H.264)** that
+plays anywhere (PowerPoint, Teams, QuickTime, phones, any browser).
+
 ## Prerequisites (one time)
 
 ```powershell
 # from the repo root:
 npm install                     # installs @playwright/test
 npx playwright install chromium # downloads the browser (~120 MB, one time)
+winget install Gyan.FFmpeg      # for the MP4 export (H.264). Skip and you get .webm only.
 npm run build                   # npm start serves client/dist + server/dist
 ```
 
@@ -35,9 +41,17 @@ npm run e2e:report    # opens the HTML report (screenshots + video + steps)
 
 ## Output (`e2e/artifacts/`, git-ignored)
 
-- `screens/upgrade/…` and `screens/features/…` — numbered PNGs in story order
-- `test-results/…` — per-test video (`video.webm`) and any traces
+- **`videos/VRSI-upgrade-walkthrough.mp4`** and **`videos/VRSI-feature-walkthrough.mp4`**
+  — the universal, watchable videos (this is what you share)
+- `screens/upgrade/…` and `screens/features/…` — numbered PNGs in story order (captions baked in)
+- `test-results/…` — the raw per-test `video.webm` and any traces
 - `report/…` — the HTML report (each screenshot is also attached here)
+
+Already have a run and just want to (re)build the MP4s from the last recording?
+
+```powershell
+npm run e2e:video
+```
 
 ## Notes
 
