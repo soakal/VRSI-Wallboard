@@ -17,3 +17,5 @@ client/vite.config.js
 client/vite.config.d.ts
 shared/src/**/*.js
 shared/src/**/*.d.ts
+e2e/artifacts/
+e2e/.demo-data/

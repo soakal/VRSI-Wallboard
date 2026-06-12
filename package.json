@@ -7,6 +7,11 @@
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
     "build": "npm run build --prefix shared && npm run build --prefix client && npm run build --prefix server",
-    "start": "npm run start --prefix server"
+    "start": "npm run start --prefix server",
+    "e2e:tour": "playwright test --config e2e/playwright.config.ts",
+    "e2e:report": "playwright show-report e2e/artifacts/report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
   }
 }
