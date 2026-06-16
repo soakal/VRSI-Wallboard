@@ -23,6 +23,7 @@ function isoToEpoch(value: string): number {
 export class LocalStorageProvider implements StorageProvider, BoardPersistence {
   private db: Database.Database;
   readonly dataDir: string;
+  private checkpointTimer?: NodeJS.Timeout;
 
   constructor(dataDir?: string) {
     this.dataDir = dataDir ?? resolveDataDir();
@@ -34,6 +35,32 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     this.ensureColumns();
     migrateJsonToSqliteIfNeeded(this);
     this.ensureJobsMetaRow();
+
+    // Detect a corrupt database file at startup so it surfaces in logs/Monitoring
+    // instead of failing mysteriously later. Cheap on the kiosk-sized DB.
+    try {
+      const row = this.db.prepare('PRAGMA integrity_check').get() as { integrity_check?: string };
+      if (row?.integrity_check && row.integrity_check !== 'ok') {
+        logger.error('SQLite integrity_check failed — database may be corrupt', {
+          result: row.integrity_check,
+          dbPath: file,
+        });
+        this.logAudit('system', `Database integrity_check failed: ${row.integrity_check}`, file, false);
+      }
+    } catch (e) {
+      logger.warn('Could not run integrity_check', { error: e instanceof Error ? e.message : String(e) });
+    }
+
+    // Periodically truncate the WAL so it can't grow without bound on a kiosk that
+    // runs for months. unref() so it never keeps the process alive.
+    this.checkpointTimer = setInterval(() => {
+      try {
+        this.db.pragma('wal_checkpoint(TRUNCATE)');
+      } catch {
+        // best-effort; a busy DB will checkpoint on the next tick
+      }
+    }, 60 * 60 * 1000);
+    this.checkpointTimer.unref();
   }
 
   /**
@@ -544,8 +571,8 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       }
     }
 
-    // Keep newest 3 pre-restore snapshots; delete older ones.
-    for (const old of preRestoreFiles.slice(3)) {
+    // Keep newest 5 pre-restore snapshots; delete older ones.
+    for (const old of preRestoreFiles.slice(5)) {
       try {
         fs.unlinkSync(old.full);
       } catch {
@@ -910,6 +937,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
   }
 
   close(): void {
+    if (this.checkpointTimer) clearInterval(this.checkpointTimer);
     this.db.close();
   }
 }

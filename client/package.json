@@ -1,6 +1,6 @@
 {
   "name": "vrsi-wallboard-client",
-  "version": "1.0.0",
+  "version": "0.14.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

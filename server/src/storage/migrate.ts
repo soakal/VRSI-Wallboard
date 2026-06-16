@@ -35,6 +35,22 @@ function renameMigrated(filePath: string): void {
   logger.info('JSON migrated — renamed', { from: filePath, to: dest });
 }
 
+/**
+ * Parse a legacy JSON file, returning null (and logging) on corruption instead of
+ * throwing — a single malformed legacy file must never brick server startup.
+ */
+function readJsonOrNull<T>(filePath: string): T | null {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
+  } catch (e) {
+    logger.error('Skipping unreadable legacy JSON during migration', {
+      file: filePath,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return null;
+  }
+}
+
 const MIGRATION_FLAG = 'json_migration_v1_complete';
 
 export function migrateJsonToSqliteIfNeeded(provider: LocalStorageProvider): void {
@@ -64,8 +80,8 @@ export function migrateJsonToSqliteIfNeeded(provider: LocalStorageProvider): voi
   logger.info('Migrating legacy JSON data into SQLite', { dataDir });
 
   if (fs.existsSync(jobsPath)) {
-    const raw = JSON.parse(fs.readFileSync(jobsPath, 'utf-8')) as LegacyJobsFile;
-    if (raw.jobs?.length) {
+    const raw = readJsonOrNull<LegacyJobsFile>(jobsPath);
+    if (raw?.jobs?.length) {
       provider.saveJobsFile({
         jobs: raw.jobs,
         importedAt: raw.importedAt ?? new Date().toISOString(),
@@ -77,8 +93,8 @@ export function migrateJsonToSqliteIfNeeded(provider: LocalStorageProvider): voi
   }
 
   if (fs.existsSync(statePath)) {
-    const raw = JSON.parse(fs.readFileSync(statePath, 'utf-8')) as LegacyBoardStateFile;
-    if (raw.jobs) {
+    const raw = readJsonOrNull<LegacyBoardStateFile>(statePath);
+    if (raw?.jobs) {
       const normalized: Record<string, import('./boardPersistence.js').JobStateEntry> = {};
       for (const [k, v] of Object.entries(raw.jobs)) {
         normalized[k] = {
@@ -98,26 +114,26 @@ export function migrateJsonToSqliteIfNeeded(provider: LocalStorageProvider): voi
   }
 
   if (fs.existsSync(boardConfigPath)) {
-    const raw = JSON.parse(fs.readFileSync(boardConfigPath, 'utf-8')) as Partial<BoardConfig> & {
-      superUser?: string;
-    };
-    provider.saveBoardConfigRaw({
-      spareCarrier: raw.spareCarrier ?? 'matto@vrs-inc.com',
-      superUsers: raw.superUsers ?? (raw.superUser?.trim() ? [raw.superUser.trim()] : ['Jon Shantry']),
-      statusColors: raw.statusColors ?? {
-        none: '#475569',
-        in_progress: '#facc15',
-        ready_to_ship: '#3b82f6',
-        shipped: '#22c55e',
-      },
-      extraUsers: raw.extraUsers ?? [],
-    });
+    const raw = readJsonOrNull<Partial<BoardConfig> & { superUser?: string }>(boardConfigPath);
+    if (raw) {
+      provider.saveBoardConfigRaw({
+        spareCarrier: raw.spareCarrier ?? 'matto@vrs-inc.com',
+        superUsers: raw.superUsers ?? (raw.superUser?.trim() ? [raw.superUser.trim()] : ['Jon Shantry']),
+        statusColors: raw.statusColors ?? {
+          none: '#475569',
+          in_progress: '#facc15',
+          ready_to_ship: '#3b82f6',
+          shipped: '#22c55e',
+        },
+        extraUsers: raw.extraUsers ?? [],
+      });
+    }
     renameMigrated(boardConfigPath);
   }
 
   if (fs.existsSync(appConfigPath)) {
-    const raw = JSON.parse(fs.readFileSync(appConfigPath, 'utf-8')) as Record<string, unknown>;
-    provider.saveAppConfig(raw);
+    const raw = readJsonOrNull<Record<string, unknown>>(appConfigPath);
+    if (raw) provider.saveAppConfig(raw);
     renameMigrated(appConfigPath);
   }
 

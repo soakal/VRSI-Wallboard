@@ -64,6 +64,22 @@ function validateEnv(): void {
 
 validateEnv();
 
+// Last-resort handlers so an unattended kiosk logs stray async errors instead of
+// dying silently. A rejected promise is logged but not fatal; a truly uncaught
+// exception leaves the process in an unknown state, so log and exit for a clean
+// tray-watchdog restart.
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection', {
+    reason: reason instanceof Error ? (reason.stack ?? reason.message) : String(reason),
+  });
+});
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception — exiting for a clean restart', {
+    error: err instanceof Error ? (err.stack ?? err.message) : String(err),
+  });
+  process.exit(1);
+});
+
 const app = express();
 
 // Security & parsing middleware
