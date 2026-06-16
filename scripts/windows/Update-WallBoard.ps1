@@ -11,6 +11,28 @@ $logDir = Get-EnvValue 'LOGS_DIR' 'C:\ProgramData\VRSIWallBoard\logs'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
 Start-Transcript -Path (Join-Path $logDir 'update.log') -Append | Out-Null
 
+# Re-enable the tray task (if it was running) and start the server again. Used on
+# the success path AND on failure recovery, so a half-failed update never leaves
+# the kiosk down with the tray task disabled.
+function Restart-WallBoardServer {
+    param([bool]$TrayWasRunning)
+    if ($TrayWasRunning) {
+        Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
+        $trayBat = Join-Path $RepoRoot 'Start-TrayApp.bat'
+        if (Test-Path $trayBat) {
+            Start-Process 'cmd.exe' -ArgumentList "/c `"$trayBat`"" -WindowStyle Hidden
+            return
+        }
+        Write-Warning "Start-TrayApp.bat not found at $trayBat  - falling back to headless service."
+    }
+    $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
+    Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$serviceScript`""
+}
+
+$serverStopped = $false
+$restarted = $false
+$trayWasRunning = $false
+
 try {
 
 Write-Host ''
@@ -75,6 +97,7 @@ Pop-Location
 # 3. Stop the running server
 Write-Step 'Stopping WallBoard server'
 Stop-WallBoardServer | Out-Null
+$serverStopped = $true
 
 # 4. Build (delegates to Build-Production.ps1 to avoid duplication)
 #    $LASTEXITCODE is NOT checked here  - PowerShell script invocation does not
@@ -86,21 +109,8 @@ Write-Step 'Rebuilding (shared -> server -> client)'
 # 5. Restart: prefer tray (which owns server lifecycle) when it was present;
 #    fall back to headless service only when no tray was running.
 Write-Step 'Restarting server'
-if ($trayWasRunning) {
-    # Re-enable the scheduled task now that the new build is in place.
-    Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
-    $trayBat = Join-Path $RepoRoot 'Start-TrayApp.bat'
-    if (Test-Path $trayBat) {
-        Start-Process 'cmd.exe' -ArgumentList "/c `"$trayBat`"" -WindowStyle Hidden
-    } else {
-        Write-Warning "Start-TrayApp.bat not found at $trayBat  - falling back to headless service."
-        $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
-        Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$serviceScript`""
-    }
-} else {
-    $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
-    Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$serviceScript`""
-}
+Restart-WallBoardServer -TrayWasRunning $trayWasRunning
+$restarted = $true
 
 # 6. Wait for server to be healthy
 Write-Step 'Waiting for server to be ready'
@@ -132,6 +142,19 @@ Write-Host 'Update complete. WallBoard is running the new version.' -ForegroundC
 Write-Host ''
 if (-not $Unattended) { Start-Sleep -Seconds 3 }
 
+} catch {
+    Write-Warning "Update failed: $($_.Exception.Message)"
+    # If we stopped the server but never reached the restart, bring the existing
+    # version back up so the board is not left down with the tray task disabled.
+    if ($serverStopped -and -not $restarted) {
+        Write-Warning 'Restarting the existing version so the board is not left down...'
+        try {
+            Restart-WallBoardServer -TrayWasRunning $trayWasRunning
+        } catch {
+            Write-Warning "Recovery restart also failed: $($_.Exception.Message)."
+        }
+    }
+    throw
 } finally {
     Stop-Transcript | Out-Null
 }

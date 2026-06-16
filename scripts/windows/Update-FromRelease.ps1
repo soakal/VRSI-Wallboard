@@ -13,6 +13,31 @@ $logDir = Get-EnvValue 'LOGS_DIR' 'C:\ProgramData\VRSIWallBoard\logs'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
 Start-Transcript -Path (Join-Path $logDir 'update.log') -Append | Out-Null
 
+# Re-enable the tray task (if it was running) and start the server again. Used on
+# the success path AND on failure recovery, so a half-failed update never leaves
+# the kiosk down with the tray task disabled.
+function Restart-WallBoardServer {
+    param([bool]$TrayWasRunning)
+    if ($TrayWasRunning) {
+        Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
+        $trayBat = Join-Path $RepoRoot 'Start-TrayApp.bat'
+        if (Test-Path $trayBat) {
+            Start-Process 'cmd.exe' -ArgumentList "/c `"$trayBat`"" -WindowStyle Hidden
+            return
+        }
+        Write-Warning "Start-TrayApp.bat not found at $trayBat - falling back to headless service."
+    }
+    $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
+    Start-Process "$env:SystemRoot\System32\conhost.exe" `
+        -ArgumentList "--headless $env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`""
+}
+
+# Recovery state: if we stop the server and then a later step throws, the catch
+# block must bring the existing version back up.
+$serverStopped = $false
+$restarted = $false
+$trayWasRunning = $false
+
 try {
     Write-Host ''
     Write-Host '  VRSI WallBoard - Update from GitHub release' -ForegroundColor Cyan
@@ -59,6 +84,7 @@ try {
     }
     Stop-WallBoardServer | Out-Null
     Start-Sleep -Seconds 1
+    $serverStopped = $true
 
     # 4. Copy the new files over the install (data lives in ProgramData and
     #    server\.env is not part of the release zip, so both are untouched)
@@ -80,22 +106,8 @@ try {
 
     # 6. Restart: prefer the tray when it was running; otherwise headless
     Write-Step 'Restarting server'
-    if ($trayWasRunning) {
-        Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
-        $trayBat = Join-Path $RepoRoot 'Start-TrayApp.bat'
-        if (Test-Path $trayBat) {
-            Start-Process 'cmd.exe' -ArgumentList "/c `"$trayBat`"" -WindowStyle Hidden
-        } else {
-            Write-Warning "Start-TrayApp.bat not found at $trayBat - falling back to headless service."
-            $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
-            Start-Process "$env:SystemRoot\System32\conhost.exe" `
-                -ArgumentList "--headless $env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`""
-        }
-    } else {
-        $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
-        Start-Process "$env:SystemRoot\System32\conhost.exe" `
-            -ArgumentList "--headless $env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`""
-    }
+    Restart-WallBoardServer -TrayWasRunning $trayWasRunning
+    $restarted = $true
 
     # 7. Wait for the server to come back
     Write-Step 'Waiting for server to be ready'
@@ -128,6 +140,20 @@ try {
     Write-Host "Update to $($rel.tag_name) complete." -ForegroundColor Green
     Write-Host ''
     if (-not $Unattended) { Start-Sleep -Seconds 3 }
+} catch {
+    Write-Warning "Update failed: $($_.Exception.Message)"
+    # If we already stopped the server but never reached the restart, bring the
+    # existing (old) version back up so the kiosk is not left down with the tray
+    # task disabled. Manual recovery would otherwise be required.
+    if ($serverStopped -and -not $restarted) {
+        Write-Warning 'Restarting the existing version so the board is not left down...'
+        try {
+            Restart-WallBoardServer -TrayWasRunning $trayWasRunning
+        } catch {
+            Write-Warning "Recovery restart also failed: $($_.Exception.Message). Re-run Update-FromRelease.bat as Administrator."
+        }
+    }
+    throw
 } finally {
     Stop-Transcript | Out-Null
 }
