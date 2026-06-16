@@ -29,11 +29,26 @@ function Restart-WallBoardServer {
     Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$serviceScript`""
 }
 
+function Assert-NodeCompatible {
+    $nodeMin = 20
+    $nodeMax = 26
+    $ver = $null
+    try { $ver = (& node -v) 2>$null } catch { }
+    if (-not $ver) { throw 'Node.js not found on PATH - cannot update.' }
+    $major = 0
+    if ("$ver" -match 'v?(\d+)\.') { $major = [int]$Matches[1] }
+    if ($major -lt $nodeMin -or $major -gt $nodeMax) {
+        throw "Node.js $ver is unsupported (need v$nodeMin-v$nodeMax for better-sqlite3). Update aborted; the current version keeps running."
+    }
+}
+
 $serverStopped = $false
 $restarted = $false
 $trayWasRunning = $false
 
 try {
+
+Assert-NodeCompatible
 
 Write-Host ''
 Write-Host '  VRSI WallBoard - Update' -ForegroundColor Cyan

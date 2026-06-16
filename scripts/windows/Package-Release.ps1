@@ -102,6 +102,12 @@ if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path $ReleaseDir -DestinationPath $zipPath -Force
 $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
 
+# Publish a SHA256 sidecar so the in-app updater can verify the download.
+# Format: "<hash>  <zipname>" (sha256sum-style). Upload BOTH assets to the release.
+$zipHash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
+$shaPath = "$zipPath.sha256"
+"$zipHash  $zipName" | Set-Content -Path $shaPath -Encoding ascii -NoNewline
+
 # Summary
 $serverSize = [math]::Round((Get-ChildItem (Join-Path $ReleaseDir 'server\dist') -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
 $clientSize = [math]::Round((Get-ChildItem (Join-Path $ReleaseDir 'client\dist') -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
