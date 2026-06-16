@@ -13,6 +13,10 @@ export interface JobStateEntry {
   shipDateOverride: string | null;
   shipDateOverrideNote: string | null;
   binderPrinted: boolean;
+  /** True once a user sets the status by hand — import never overwrites a locked status. */
+  statusManual?: boolean;
+  /** True once a user toggles the binder checkbox by hand — import never overwrites it. */
+  binderManual?: boolean;
   version?: number; // persisted in SQLite; optional when reading legacy JSON
   notes: JobNote[];
   updatedAt: string;

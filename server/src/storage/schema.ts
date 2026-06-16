@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS board_state (
   ship_date_override TEXT,
   ship_date_override_note TEXT,
   binder_printed INTEGER NOT NULL DEFAULT 0,
+  status_manual INTEGER NOT NULL DEFAULT 0,
+  binder_manual INTEGER NOT NULL DEFAULT 0,
   version INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL,
   updated_by TEXT

@@ -542,6 +542,8 @@ const emptyJobState = (): JobStateEntry => ({
   shipDateOverride: null,
   shipDateOverrideNote: null,
   binderPrinted: false,
+  statusManual: false,
+  binderManual: false,
   notes: [],
   updatedAt: '',
 })
@@ -566,6 +568,8 @@ export async function applyBoardImport(
 
     for (const [jobNumber, status] of Object.entries(importedStatuses)) {
       const existing = state[jobNumber] ?? emptyJobState()
+      // Manual wins: a status the user set by hand is never reverted by import.
+      if (existing.statusManual) continue
       if (existing.status === status) continue
       state[jobNumber] = { ...existing, status, version: (existing.version ?? 0) + 1, updatedAt: now }
       if (status === 'shipped') shippedApplied++
@@ -578,6 +582,8 @@ export async function applyBoardImport(
       const job = jobByNumber.get(jobNumber)
       if (job && isSpareJob(job, config)) continue
       const existing = state[jobNumber] ?? emptyJobState()
+      // Manual wins: a binder checkmark the user set by hand is never reverted by import.
+      if (existing.binderManual) continue
       if (existing.binderPrinted === printed) continue
       state[jobNumber] = { ...existing, binderPrinted: printed, version: (existing.version ?? 0) + 1, updatedAt: now }
       if (printed) binderPrintedApplied++
@@ -632,6 +638,8 @@ type JobStateEntry = {
   shipDateOverride: string | null
   shipDateOverrideNote: string | null
   binderPrinted: boolean
+  statusManual?: boolean
+  binderManual?: boolean
   version?: number
   notes: JobNote[]
   updatedAt: string
@@ -651,6 +659,8 @@ export function getBoardStateFile(): Record<string, JobStateEntry> {
       shipDateOverride: v.shipDateOverride,
       shipDateOverrideNote: v.shipDateOverrideNote ?? null,
       binderPrinted: v.binderPrinted,
+      statusManual: v.statusManual ?? false,
+      binderManual: v.binderManual ?? false,
       version: v.version,
       notes: v.notes,
       updatedAt: v.updatedAt,
@@ -696,6 +706,7 @@ export function setJobBinderPrinted(
     state[jobNumber] = {
       ...existing,
       binderPrinted,
+      binderManual: true,
       version: (existing.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
       updatedBy: actor?.name,
@@ -718,6 +729,7 @@ export function setJobStatus(jobNumber: string, status: JobStatus, actor?: Actor
     state[jobNumber] = {
       ...existing,
       status,
+      statusManual: true,
       version: (existing.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
       updatedBy: actor?.name,

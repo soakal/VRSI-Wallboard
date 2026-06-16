@@ -135,6 +135,8 @@ Break this rule = you've created a future rewrite. At every session start, verif
     "shipDateOverride": null,
     "shipDateOverrideNote": null,
     "binderPrinted": false,
+    "statusManual": false,
+    "binderManual": false,
     "version": 1,
     "notes": [
       {
@@ -158,6 +160,10 @@ Break this rule = you've created a future rewrite. At every session start, verif
 - Soft deletes only — never hard-delete board state with notes (`deleted: true` flag)
 - Ops Schedule notes (`authorId === "system:ops-schedule"`) replaced on each import, read-only in UI
 - Orphaned board state WITH notes: never pruned (data safety rule — must be preserved)
+- `statusManual` / `binderManual`: set `true` once a user changes status / the binder checkbox by hand.
+  When set, import never overwrites that field (see §7). New/untouched jobs (flag `false`) still
+  auto-fill from the spreadsheet. Set on first column-add for any pre-existing row with a non-empty
+  `updatedBy` (those were user-touched under the old code).
 
 ### Config (`config.json`) and Board Config (`board-config.json`)
 Preserve all existing fields exactly. See master build plan §Data Model for full field lists.
@@ -213,6 +219,9 @@ Preserve all existing fields exactly. See master build plan §Data Model for ful
 1. New jobs (not in DB) → insert
 2. Existing jobs → update from spreadsheet data
 3. Board state (status, notes, overrides) → never touched by import
+   - 3a. A status or binder checkbox the user set by hand (`statusManual` / `binderManual` true) is
+     never reverted by import; new/untouched jobs still take the spreadsheet's status/binder.
+   - 3b. User-added notes → never touched by import.
 4. Ops Schedule notes → replaced by latest import
 5. Orphaned board state WITH notes → never pruned
 
@@ -477,5 +486,6 @@ Location: `docs/ai-memory.md`
 | 2026-06-11 | BK+AI | Update-button permission fix (root cause found on the test kiosk): the in-app updater runs as the non-admin kiosk user, which cannot overwrite files under `C:\Program Files` — `Update-FromRelease.ps1` stopped the server then died at the copy step with "Access is denied" on `client\dist\index.html`, leaving the board down (server stopped + tray task disabled). Fix: `Install-WallBoard.ps1` now grants the console user Modify on the install tree via `icacls "$RepoRoot" /grant "<user>:(OI)(CI)M" /T` (admin-gated, inherits to files from future updates). Existing kiosks repaired with the same one-time icacls grant; the v0.8.3 success was a one-off, NOT proof the button was immune. Ships in next release. | The "in-app button is immune because the updater runs as the server's own user" assumption was wrong — that user lacked write permission to Program Files |
 | 2026-06-11 | BK+AI | v0.9.0 also: audit_log retention — entries older than 90 days deleted at startup and daily at 3:30 AM (`startAuditPruneCron` in auditService, `pruneAuditLog` on BoardPersistence); `idx_audit_timestamp` index added via idempotent SCHEMA_SQL (applies to existing DBs on next start) | Audit log was the only unbounded table — would slow the Monitoring panel after years of kiosk uptime |
 | 2026-06-12 | BK+AI | Added `e2e/` Playwright **visual tours** (first browser-automation harness in the repo): two paced + narrated walkthroughs (screenshots + universal MP4 via ffmpeg) — `01-upgrade` (in-app Update UI, API stubbed so no real update runs; install/script-fallback in `e2e/UPGRADE-RUNBOOK.md`) and `02-feature-tour` (calendar/agenda/settings/files-toggle/monitoring/board/users). Own server on :3100, mock mode, throwaway data dir wiped before start, demo data seeded via `/api/board/import` (no direct DB writes). `@playwright/test` root devDep; `npm run e2e:tour`/`e2e:report`/`e2e:video`. Docs-only verification asset, no app/runtime changes | BK wanted shareable walkthroughs of install→upgrade and all features on mock data; follow-ups: slow enough to watch + a universal (MP4) format |
+| 2026-06-16 | BK+AI | v0.9.3: import-preservation hotfix — re-import no longer reverts a user's manual status/binder. `applyBoardImport` applied imported status whenever it differed (silently violating §7.3): a job manually marked `shipped` was dragged back out of Archive when the spreadsheet still said in-progress. Fix: `board_state.status_manual` / `binder_manual` flags (added via a new guarded `ensureColumns()` PRAGMA-checked ALTER in `localProvider` — the repo had no ADD COLUMN pattern), set by the status/binder setters, honored by both import loops, carried through `getBoardStateFile`/`writeBoardState`/`_mergeFromBackup` (old backups default to 0). On first column-add, any pre-existing row with a non-empty `updatedBy` is backfilled as locked so the very first post-upgrade import can't revert existing manual edits. New/untouched jobs still auto-fill. Verified: 8/8 merge checks pass. | Active data-loss bug — Brian's manual ships/checkmarks were reverted on every import |
 | 2026-06-10 | BK+AI | v0.8.0: note drafts join the Apply flow — typed-but-unsent note makes the card dirty, "Apply all" saves status+binder+date+note in one click; un-applied edits tracked globally (appStore.dirtyJobs) with inline amber warning, confirm dialogs on tab switch / user switch / Calendar link / Settings nav, and beforeunload guard on refresh/close; Projects search treats "new" as a keyword matching NEW-flagged jobs | BK: warn when changes aren't applied, save multiple changes at once, find new jobs by typing "new" |
 

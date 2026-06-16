@@ -31,8 +31,42 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     this.db = new Database(file);
     this.db.pragma('journal_mode = WAL');
     this.db.exec(SCHEMA_SQL);
+    this.ensureColumns();
     migrateJsonToSqliteIfNeeded(this);
     this.ensureJobsMetaRow();
+  }
+
+  /**
+   * Add columns introduced after a table was first created. SCHEMA_SQL only runs
+   * `CREATE TABLE IF NOT EXISTS`, so existing kiosk databases never pick up new
+   * columns from it — `ALTER TABLE` is required and is NOT idempotent, so each add
+   * is guarded by a PRAGMA table_info check. No-op once every column exists.
+   * Table names below are hardcoded literals (never user input).
+   */
+  private ensureColumns(): void {
+    const columnNames = (table: string): Set<string> =>
+      new Set(
+        (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(
+          (c) => c.name
+        )
+      );
+
+    const boardCols = columnNames('board_state');
+    if (!boardCols.has('status_manual')) {
+      this.db.exec(`ALTER TABLE board_state ADD COLUMN status_manual INTEGER NOT NULL DEFAULT 0`);
+      // Backfill: any pre-existing row a user has touched by hand (updated_by set) is
+      // treated as manually locked, so the first import after this upgrade does not
+      // revert manual status changes made under the old code.
+      this.db.exec(
+        `UPDATE board_state SET status_manual = 1 WHERE updated_by IS NOT NULL AND updated_by <> ''`
+      );
+    }
+    if (!boardCols.has('binder_manual')) {
+      this.db.exec(`ALTER TABLE board_state ADD COLUMN binder_manual INTEGER NOT NULL DEFAULT 0`);
+      this.db.exec(
+        `UPDATE board_state SET binder_manual = 1 WHERE updated_by IS NOT NULL AND updated_by <> ''`
+      );
+    }
   }
 
   private ensureJobsMetaRow(): void {
@@ -125,6 +159,8 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       ship_date_override: string | null;
       ship_date_override_note: string | null;
       binder_printed: number;
+      status_manual: number;
+      binder_manual: number;
       version: number;
       updated_at: string;
       updated_by: string | null;
@@ -167,6 +203,8 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         shipDateOverride: s.ship_date_override,
         shipDateOverrideNote: s.ship_date_override_note ?? null,
         binderPrinted: s.binder_printed === 1,
+        statusManual: s.status_manual === 1,
+        binderManual: s.binder_manual === 1,
         version: s.version,
         notes: notesByJob.get(s.job_number) ?? [],
         updatedAt: s.updated_at,
@@ -183,8 +221,8 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
 
       const insState = this.db.prepare(
         `INSERT INTO board_state (job_number, status, ship_date_override, ship_date_override_note,
-          binder_printed, version, updated_at, updated_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          binder_printed, status_manual, binder_manual, version, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       const insNote = this.db.prepare(
         `INSERT INTO notes (id, job_number, text, author_id, author_name, created_at, updated_at, is_ops_schedule)
@@ -198,6 +236,8 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
           entry.shipDateOverride,
           entry.shipDateOverrideNote ?? null,
           entry.binderPrinted ? 1 : 0,
+          entry.statusManual ? 1 : 0,
+          entry.binderManual ? 1 : 0,
           entry.version ?? 1,
           entry.updatedAt,
           entry.updatedBy ?? null
@@ -603,6 +643,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       type StateRow = {
         job_number: string; status: string; ship_date_override: string | null;
         ship_date_override_note: string | null; binder_printed: number;
+        status_manual?: number; binder_manual?: number;
         version: number; updated_at: string; updated_by: string | null;
       };
       const srcStates = srcDb.prepare('SELECT * FROM board_state').all() as StateRow[];
@@ -615,18 +656,22 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       const upsertState = this.db.prepare(
         `INSERT INTO board_state
            (job_number, status, ship_date_override, ship_date_override_note,
-            binder_printed, version, updated_at, updated_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            binder_printed, status_manual, binder_manual, version, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(job_number) DO UPDATE SET
            status = excluded.status,
            ship_date_override = excluded.ship_date_override,
            ship_date_override_note = excluded.ship_date_override_note,
            binder_printed = excluded.binder_printed,
+           status_manual = excluded.status_manual,
+           binder_manual = excluded.binder_manual,
            version = excluded.version,
            updated_at = excluded.updated_at,
            updated_by = excluded.updated_by`
       );
 
+      // Older backups predate the manual-lock columns; SELECT * omits them, so
+      // default to 0 (unlocked) rather than letting undefined bind as NULL.
       for (const src of srcStates) {
         const live = liveStates.get(src.job_number);
         if (!live) {
@@ -634,6 +679,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
           upsertState.run(
             src.job_number, src.status, src.ship_date_override,
             src.ship_date_override_note, src.binder_printed,
+            src.status_manual ?? 0, src.binder_manual ?? 0,
             src.version, src.updated_at, src.updated_by
           );
           continue;
@@ -648,6 +694,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
           upsertState.run(
             src.job_number, src.status, src.ship_date_override,
             src.ship_date_override_note, src.binder_printed,
+            src.status_manual ?? 0, src.binder_manual ?? 0,
             src.version, src.updated_at, src.updated_by
           );
         }
