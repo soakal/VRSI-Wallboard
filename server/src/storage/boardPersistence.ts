@@ -6,6 +6,8 @@ export interface JobsFile {
   importedAt: string;
   sourceFile: string;
   newJobNumbers: string[];
+  /** Job numbers whose Ops Schedule note was added/changed by the latest import. */
+  changedNoteJobNumbers?: string[];
 }
 
 export interface JobStateEntry {
@@ -17,6 +19,10 @@ export interface JobStateEntry {
   statusManual?: boolean;
   /** True once a user toggles the binder checkbox by hand — import never overwrites it. */
   binderManual?: boolean;
+  /** Manual triage flag — never set/cleared by import. */
+  blocked?: boolean;
+  blockedAt?: string | null;
+  blockedReason?: string | null;
   version?: number; // persisted in SQLite; optional when reading legacy JSON
   notes: JobNote[];
   updatedAt: string;

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useBoardJobs, useBoardConfig, useBoardUsers } from '../../hooks/useBoard'
 import { useAppStore, confirmDiscardUnsaved } from '../../store/appStore'
-import { tabColor, filterJobsForTab } from './boardColors'
+import { tabColor, filterJobsForTab, BLOCKED_TAB_COLOR } from './boardColors'
 
 export function BoardHeader() {
   const { jobs } = useBoardJobs()
@@ -12,10 +12,12 @@ export function BoardHeader() {
   const projectJobs = filterJobsForTab(jobs, 'project', config)
   const spareJobs = filterJobsForTab(jobs, 'spare-parts', config)
   const archiveJobs = filterJobsForTab(jobs, 'archive', config)
+  const blockedJobs = filterJobsForTab(jobs, 'blocked', config)
 
   const projectColor = tabColor(projectJobs, config)
   const spareColor = tabColor(spareJobs, config)
   const archiveColor = config.statusColors.shipped
+  const blockedColor = BLOCKED_TAB_COLOR
 
   const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     // Switching user remounts the job list — pending edits would be lost
@@ -119,6 +121,21 @@ export function BoardHeader() {
           }
         >
           Archive{archiveJobs.length > 0 ? ` (${archiveJobs.length})` : ''}
+        </NavLink>
+
+        <NavLink
+          to="/board/blocked"
+          onClick={guardNav}
+          className={({ isActive }) =>
+            `px-3 py-2 text-sm font-medium rounded-t transition-colors ${
+              isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+            }`
+          }
+          style={({ isActive }) =>
+            isActive ? { borderBottom: `2px solid ${blockedColor}`, backgroundColor: blockedColor + '18' } : {}
+          }
+        >
+          Blocked{blockedJobs.length > 0 ? ` (${blockedJobs.length})` : ''}
         </NavLink>
 
       </div>

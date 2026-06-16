@@ -32,7 +32,7 @@ export interface CalendarEvent {
   bodyPreview: string;
   location?: string;
   /** Ship-date events: which Projects tab owns this job */
-  boardTab?: 'project' | 'spare-parts' | 'archive';
+  boardTab?: 'project' | 'spare-parts' | 'archive' | 'blocked';
   /** Ship-date events: true when the job is newly imported */
   isNew?: boolean;
   /** Ship-date events: canonical PM / Materials Manager for per-user filtering */

@@ -9,6 +9,7 @@ import {
   useSetJobStatus,
   useSetJobShipDate,
   useSetJobBinderPrinted,
+  useSetJobBlocked,
   useAddJobNote,
   useUpdateJobNote,
   useDeleteJobNote,
@@ -65,7 +66,30 @@ export function JobCard({
   const setJobStatus = useSetJobStatus()
   const setJobShipDate = useSetJobShipDate()
   const setJobBinderPrinted = useSetJobBinderPrinted()
+  const setJobBlocked = useSetJobBlocked()
   const addJobNote = useAddJobNote()
+
+  // Block control — manual triage, independent of the Apply flow
+  const [showBlockInput, setShowBlockInput] = useState(false)
+  const [blockReasonInput, setBlockReasonInput] = useState(job.blockedReason ?? '')
+  useEffect(() => {
+    if (!showBlockInput) setBlockReasonInput(job.blockedReason ?? '')
+  }, [job.blockedReason, showBlockInput])
+
+  const handleBlock = () => {
+    if (!activeUser) return
+    setJobBlocked.mutate({
+      jobNumber: job.jobNumber,
+      blocked: true,
+      reason: blockReasonInput.trim() || null,
+      actor: activeUser,
+    })
+    setShowBlockInput(false)
+  }
+  const handleUnblock = () => {
+    if (!activeUser) return
+    setJobBlocked.mutate({ jobNumber: job.jobNumber, blocked: false, reason: null, actor: activeUser })
+  }
   const updateJobNote = useUpdateJobNote()
   const deleteJobNote = useDeleteJobNote()
   const [noteActionError, setNoteActionError] = useState<string | null>(null)
@@ -191,6 +215,11 @@ export function JobCard({
               New
             </span>
           )}
+          {job.hasNewNote && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+              New note
+            </span>
+          )}
           {job.customer.trim() && (
             <span
               className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white truncate max-w-[200px] sm:max-w-xs"
@@ -274,6 +303,66 @@ export function JobCard({
         </span>
       </div>
 
+      {/* Block control — manual triage; a blocked job moves to the Blocked tab */}
+      <div className="mt-3">
+        {job.blocked ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2">
+            <span className="text-red-400 text-xs font-semibold uppercase tracking-wide shrink-0">⛔ Blocked</span>
+            {job.blockedReason && (
+              <span className="text-red-200/90 text-xs min-w-0 break-words">— {job.blockedReason}</span>
+            )}
+            <button
+              type="button"
+              onClick={handleUnblock}
+              disabled={!activeUser || setJobBlocked.isPending}
+              className="ml-auto rounded-md border border-red-500/50 px-2.5 py-1 text-xs font-medium text-red-200 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+            >
+              Unblock
+            </button>
+          </div>
+        ) : showBlockInput ? (
+          <div className="flex flex-col gap-2 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+            <input
+              type="text"
+              value={blockReasonInput}
+              onChange={(e) => setBlockReasonInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleBlock() }}
+              placeholder="Why is this blocked? (e.g. waiting on parts, sitting in shipping)"
+              maxLength={1000}
+              autoFocus
+              className="w-full bg-slate-900 border border-slate-700 text-slate-200 placeholder-slate-500 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-slate-500"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowBlockInput(false); setBlockReasonInput(job.blockedReason ?? '') }}
+                className="text-slate-400 hover:text-slate-200 text-xs px-2 py-1"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBlock}
+                disabled={!activeUser || setJobBlocked.isPending}
+                className="rounded-md border border-red-500/50 bg-red-600/80 px-3 py-1 text-xs font-semibold text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                Block
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowBlockInput(true)}
+            disabled={!activeUser}
+            title="Block this job — moves it to the Blocked tab with a reason"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300 hover:border-red-500/60 hover:text-red-300 transition-colors disabled:opacity-50"
+          >
+            ⛔ Block
+          </button>
+        )}
+      </div>
+
       {/* Line 4: ship date editor (modified) */}
       <div className="mt-3">
         <ShipDateEditor
@@ -307,6 +396,7 @@ export function JobCard({
           <NotesSection
             notes={job.notes}
             activeUser={activeUser}
+            highlightNewNote={job.hasNewNote}
             draft={noteDraft}
             onDraftChange={setNoteDraft}
             onAddNote={handleAddNote}

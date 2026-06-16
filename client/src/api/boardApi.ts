@@ -107,6 +107,20 @@ export async function setJobBinderPrinted(
   return unwrap<BoardJob>(response);
 }
 
+export async function setJobBlocked(
+  jobNumber: string,
+  blocked: boolean,
+  reason: string | null,
+  actor: Actor
+): Promise<BoardJob> {
+  const response = await fetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/blocked`, {
+    method: 'PATCH',
+    headers: boardHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ blocked, reason, actor })
+  });
+  return unwrap<BoardJob>(response);
+}
+
 export async function addJobNote(
   jobNumber: string,
   text: string,

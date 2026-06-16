@@ -5,6 +5,8 @@ import { JobNote, BoardUser, OPS_SCHEDULE_NOTE_AUTHOR_ID } from '@vrsi/wallboard
 interface Props {
   notes: JobNote[]
   activeUser: BoardUser | null
+  /** True when the latest import added/changed the Ops Schedule note — highlight it */
+  highlightNewNote?: boolean
   /** Draft lives in JobCard so an unsent note counts as an un-applied change */
   draft: string
   onDraftChange: (text: string) => void
@@ -18,6 +20,7 @@ interface Props {
 export default function NotesSection({
   notes,
   activeUser,
+  highlightNewNote,
   draft,
   onDraftChange,
   onAddNote,
@@ -85,12 +88,17 @@ export default function NotesSection({
             const isAuthor = activeUser?.id === note.authorId
             const canManage = !fromOpsSchedule && isAuthor
             const isEditing = editingId === note.id
+            const opsNoteIsNew = fromOpsSchedule && !!highlightNewNote
 
             return (
               <div
                 key={note.id}
-                className={`border-l-2 pl-3 py-1 mb-2 ${
-                  fromOpsSchedule ? 'border-amber-600/60' : 'border-slate-700'
+                className={`border-l-2 pl-3 py-1 mb-2 rounded-r ${
+                  opsNoteIsNew
+                    ? 'border-amber-400 bg-amber-500/10'
+                    : fromOpsSchedule
+                      ? 'border-amber-600/60'
+                      : 'border-slate-700'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -101,6 +109,11 @@ export default function NotesSection({
                     {fromOpsSchedule && (
                       <span className="text-amber-500/90 text-[10px] uppercase tracking-wide font-medium shrink-0">
                         from ops schedule
+                      </span>
+                    )}
+                    {opsNoteIsNew && (
+                      <span className="rounded bg-amber-500/20 px-1 text-[10px] font-bold uppercase tracking-wide text-amber-300 shrink-0">
+                        new
                       </span>
                     )}
                     <span className="text-slate-500 text-xs shrink-0">

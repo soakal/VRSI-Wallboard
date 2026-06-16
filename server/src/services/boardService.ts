@@ -300,13 +300,18 @@ export interface JobsFile {
   importedAt: string
   sourceFile: string
   newJobNumbers: string[]
+  changedNoteJobNumbers?: string[]
 }
 
 export function loadJobsFile(): JobsFile | null {
   return getPersistence().loadJobsFile()
 }
 
-export async function saveJobsFile(jobs: Job[], sourceFile: string): Promise<void> {
+export async function saveJobsFile(
+  jobs: Job[],
+  sourceFile: string,
+  changedNoteJobNumbers: string[] = [],
+): Promise<void> {
   const existing = loadJobsFile()
   const existingNumbers = new Set(existing?.jobs.map((j) => j.jobNumber) ?? [])
 
@@ -322,6 +327,7 @@ export async function saveJobsFile(jobs: Job[], sourceFile: string): Promise<voi
     importedAt: new Date().toISOString(),
     sourceFile,
     newJobNumbers,
+    changedNoteJobNumbers,
   }
   getPersistence().saveJobsFile(data)
 
@@ -339,8 +345,10 @@ function pruneOrphanedBoardState(validJobNumbers: Set<string>): void {
   let changed = false
   for (const jobNumber of Object.keys(state)) {
     if (!validJobNumbers.has(jobNumber)) {
-      // Preserve entries that have user notes — notes are the only irreplaceable data
+      // Preserve entries that have user notes or are manually blocked — both are
+      // irreplaceable user data a re-imported (or reused) job number must not inherit.
       if (state[jobNumber].notes && state[jobNumber].notes.length > 0) continue
+      if (state[jobNumber].blocked) continue
       delete state[jobNumber]
       changed = true
     }
@@ -544,6 +552,9 @@ const emptyJobState = (): JobStateEntry => ({
   binderPrinted: false,
   statusManual: false,
   binderManual: false,
+  blocked: false,
+  blockedAt: null,
+  blockedReason: null,
   notes: [],
   updatedAt: '',
 })
@@ -559,6 +570,9 @@ export async function applyBoardImport(
   const config = getBoardConfig()
   const jobByNumber = new Map(jobs.map((j) => [j.jobNumber, j]))
   const now = new Date().toISOString()
+  // Jobs whose Ops Schedule note was added/changed by THIS import — drives the
+  // "new note" flag. Populated inside the lock below, read after it resolves.
+  const changedNoteJobs: string[] = []
 
   const applyResult = await runExclusive(() => {
     const state = getBoardStateFile()
@@ -614,6 +628,7 @@ export async function applyBoardImport(
         updatedAt: now,
       }
       notesImported++
+      changedNoteJobs.push(jobNumber)
     }
 
     writeBoardState(state)
@@ -626,7 +641,7 @@ export async function applyBoardImport(
     }
   })
 
-  await saveJobsFile(jobs, sourceFile)
+  await saveJobsFile(jobs, sourceFile, changedNoteJobs)
   return applyResult
 }
 
@@ -640,6 +655,9 @@ type JobStateEntry = {
   binderPrinted: boolean
   statusManual?: boolean
   binderManual?: boolean
+  blocked?: boolean
+  blockedAt?: string | null
+  blockedReason?: string | null
   version?: number
   notes: JobNote[]
   updatedAt: string
@@ -661,6 +679,9 @@ export function getBoardStateFile(): Record<string, JobStateEntry> {
       binderPrinted: v.binderPrinted,
       statusManual: v.statusManual ?? false,
       binderManual: v.binderManual ?? false,
+      blocked: v.blocked ?? false,
+      blockedAt: v.blockedAt ?? null,
+      blockedReason: v.blockedReason ?? null,
       version: v.version,
       notes: v.notes,
       updatedAt: v.updatedAt,
@@ -695,14 +716,7 @@ export function setJobBinderPrinted(
 ): Promise<void> {
   return runExclusive(() => {
     const state = getBoardStateFile()
-    const existing = state[jobNumber] ?? {
-      status: 'none' as JobStatus,
-      shipDateOverride: null,
-      shipDateOverrideNote: null,
-      binderPrinted: false,
-      notes: [],
-      updatedAt: '',
-    }
+    const existing = state[jobNumber] ?? emptyJobState()
     state[jobNumber] = {
       ...existing,
       binderPrinted,
@@ -718,18 +732,34 @@ export function setJobBinderPrinted(
 export function setJobStatus(jobNumber: string, status: JobStatus, actor?: Actor): Promise<void> {
   return runExclusive(() => {
     const state = getBoardStateFile()
-    const existing = state[jobNumber] ?? {
-      status: 'none' as JobStatus,
-      shipDateOverride: null,
-      shipDateOverrideNote: null,
-      binderPrinted: false,
-      notes: [],
-      updatedAt: '',
-    }
+    const existing = state[jobNumber] ?? emptyJobState()
     state[jobNumber] = {
       ...existing,
       status,
       statusManual: true,
+      version: (existing.version ?? 0) + 1,
+      updatedAt: new Date().toISOString(),
+      updatedBy: actor?.name,
+    }
+    writeBoardState(state)
+  })
+}
+
+/** Manually block/unblock a job (triage). Never set or cleared by import. */
+export function setJobBlocked(
+  jobNumber: string,
+  blocked: boolean,
+  reason: string | null,
+  actor?: Actor,
+): Promise<void> {
+  return runExclusive(() => {
+    const state = getBoardStateFile()
+    const existing = state[jobNumber] ?? emptyJobState()
+    state[jobNumber] = {
+      ...existing,
+      blocked,
+      blockedAt: blocked ? new Date().toISOString() : null,
+      blockedReason: blocked ? ((reason ?? '').trim() || null) : null,
       version: (existing.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
       updatedBy: actor?.name,
@@ -746,14 +776,7 @@ export function setShipDateOverride(
 ): Promise<void> {
   return runExclusive(() => {
     const state = getBoardStateFile()
-    const existing = state[jobNumber] ?? {
-      status: 'none' as JobStatus,
-      shipDateOverride: null,
-      shipDateOverrideNote: null,
-      binderPrinted: false,
-      notes: [],
-      updatedAt: '',
-    }
+    const existing = state[jobNumber] ?? emptyJobState()
     state[jobNumber] = {
       ...existing,
       shipDateOverride: date,
@@ -774,14 +797,7 @@ export function setShipDateOverride(
 export function addNote(jobNumber: string, text: string, actor: Actor): Promise<JobNote> {
   return runExclusive(() => {
     const state = getBoardStateFile()
-    const existing = state[jobNumber] ?? {
-      status: 'none' as JobStatus,
-      shipDateOverride: null,
-      shipDateOverrideNote: null,
-      binderPrinted: false,
-      notes: [],
-      updatedAt: '',
-    }
+    const existing = state[jobNumber] ?? emptyJobState()
 
     const note: JobNote = {
       id: generateNoteId(),
@@ -905,6 +921,7 @@ export function getMergedJobs(): BoardJob[] {
   const state = getBoardStateFile()
   const config = getBoardConfig()
   const newSet = new Set(jobsFile.newJobNumbers ?? [])
+  const changedNoteSet = new Set(jobsFile.changedNoteJobNumbers ?? [])
 
   return jobsFile.jobs.map((job): BoardJob => {
     const jobState = state[job.jobNumber] ?? {
@@ -932,6 +949,9 @@ export function getMergedJobs(): BoardJob[] {
       shipDateOverridden,
       shipDateOverrideNote: jobState.shipDateOverrideNote ?? null,
       isNew: newSet.has(job.jobNumber),
+      hasNewNote: changedNoteSet.has(job.jobNumber),
+      blocked: jobState.blocked ?? false,
+      blockedReason: jobState.blockedReason ?? null,
     }
   })
 }
@@ -939,7 +959,7 @@ export function getMergedJobs(): BoardJob[] {
 // ---------------------------------------------------------------------------
 // Board tab routing (calendar → correct Projects tab)
 // ---------------------------------------------------------------------------
-export type BoardTab = 'project' | 'spare-parts' | 'archive'
+export type BoardTab = 'project' | 'spare-parts' | 'archive' | 'blocked'
 
 export function isSpareJob(job: Pick<Job, 'jobNumber' | 'pm'>, config: BoardConfig): boolean {
   const jn = job.jobNumber.toLowerCase()
@@ -947,9 +967,10 @@ export function isSpareJob(job: Pick<Job, 'jobNumber' | 'pm'>, config: BoardConf
 }
 
 export function getJobBoardTab(
-  job: { jobNumber: string; pm: string; status: JobStatus },
+  job: { jobNumber: string; pm: string; status: JobStatus; blocked?: boolean },
   config: BoardConfig,
 ): BoardTab {
+  if (job.blocked) return 'blocked'
   if (job.status === 'shipped') return 'archive'
   if (isSpareJob(job, config)) return 'spare-parts'
   return 'project'

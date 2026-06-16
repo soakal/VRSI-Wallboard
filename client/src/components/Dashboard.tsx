@@ -119,7 +119,10 @@ const Dashboard: React.FC<DashboardProps> = ({
       const jobNumber = ev.id.replace('board-ship-', '');
       const tab = ev.boardTab ?? 'project';
       const base =
-        tab === 'spare-parts' ? '/board/spare-parts' : tab === 'archive' ? '/board/archive' : '/board';
+        tab === 'blocked' ? '/board/blocked'
+        : tab === 'spare-parts' ? '/board/spare-parts'
+        : tab === 'archive' ? '/board/archive'
+        : '/board';
       navigate(`${base}?job=${encodeURIComponent(jobNumber)}`);
     }
   }, [navigate]);

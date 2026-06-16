@@ -32,6 +32,12 @@ export interface JobState {
   statusManual?: boolean;
   /** True once a user toggles the binder checkbox by hand — import never overwrites it. */
   binderManual?: boolean;
+  /** Manual triage flag — a blocked job shows only in the Blocked tab. Never set/cleared by import. */
+  blocked?: boolean;
+  /** ISO timestamp when the job was blocked (null when not blocked). */
+  blockedAt?: string | null;
+  /** Short reason the job is blocked (e.g. "waiting on parts"). */
+  blockedReason?: string | null;
   version: number;
   notes: JobNote[];
   updatedAt: string;
@@ -47,6 +53,12 @@ export interface BoardJob extends Job {
   shipDateOverridden: boolean;
   shipDateOverrideNote: string | null;
   isNew: boolean;
+  /** True when the latest import added or changed this job's Ops Schedule note. */
+  hasNewNote: boolean;
+  /** Manual triage flag — a blocked job shows only in the Blocked tab. */
+  blocked: boolean;
+  /** Short reason the job is blocked (null when not blocked). */
+  blockedReason: string | null;
 }
 
 export interface BoardUser {

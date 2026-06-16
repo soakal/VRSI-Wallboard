@@ -30,7 +30,7 @@ export interface NormalizedEvent {
   calendarName: string;
   calendarColor: string;
   /** Present for ship-date events from the project board */
-  boardTab?: 'project' | 'spare-parts' | 'archive';
+  boardTab?: 'project' | 'spare-parts' | 'archive' | 'blocked';
   /** Ship-date events: true when the job is newly imported */
   isNew?: boolean;
   /** Ship-date events: canonical PM / Materials Manager for per-user filtering */

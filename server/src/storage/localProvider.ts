@@ -67,6 +67,21 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         `UPDATE board_state SET binder_manual = 1 WHERE updated_by IS NOT NULL AND updated_by <> ''`
       );
     }
+    if (!boardCols.has('blocked')) {
+      this.db.exec(`ALTER TABLE board_state ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0`);
+    }
+    if (!boardCols.has('blocked_at')) {
+      this.db.exec(`ALTER TABLE board_state ADD COLUMN blocked_at TEXT`);
+    }
+    if (!boardCols.has('blocked_reason')) {
+      this.db.exec(`ALTER TABLE board_state ADD COLUMN blocked_reason TEXT`);
+    }
+
+    if (!columnNames('jobs_import_meta').has('changed_note_job_numbers')) {
+      this.db.exec(
+        `ALTER TABLE jobs_import_meta ADD COLUMN changed_note_job_numbers TEXT NOT NULL DEFAULT '[]'`
+      );
+    }
   }
 
   private ensureJobsMetaRow(): void {
@@ -97,8 +112,15 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     if (rows.length === 0) return null;
 
     const meta = this.db
-      .prepare('SELECT imported_at, source_file, new_job_numbers FROM jobs_import_meta WHERE id = 1')
-      .get() as { imported_at: string; source_file: string; new_job_numbers: string };
+      .prepare(
+        'SELECT imported_at, source_file, new_job_numbers, changed_note_job_numbers FROM jobs_import_meta WHERE id = 1'
+      )
+      .get() as {
+      imported_at: string;
+      source_file: string;
+      new_job_numbers: string;
+      changed_note_job_numbers: string | null;
+    };
 
     return {
       jobs: rows.map((r) => ({
@@ -113,6 +135,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       importedAt: meta.imported_at,
       sourceFile: meta.source_file,
       newJobNumbers: JSON.parse(meta.new_job_numbers || '[]') as string[],
+      changedNoteJobNumbers: JSON.parse(meta.changed_note_job_numbers || '[]') as string[],
     };
   }
 
@@ -144,9 +167,15 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       }
       this.db
         .prepare(
-          `UPDATE jobs_import_meta SET imported_at = ?, source_file = ?, new_job_numbers = ? WHERE id = 1`
+          `UPDATE jobs_import_meta SET imported_at = ?, source_file = ?, new_job_numbers = ?,
+             changed_note_job_numbers = ? WHERE id = 1`
         )
-        .run(data.importedAt, data.sourceFile, JSON.stringify(data.newJobNumbers));
+        .run(
+          data.importedAt,
+          data.sourceFile,
+          JSON.stringify(data.newJobNumbers),
+          JSON.stringify(data.changedNoteJobNumbers ?? [])
+        );
     });
     tx();
     this.logAudit('file_write', 'Saved jobs to SQLite', dbPath(this.dataDir));
@@ -161,6 +190,9 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       binder_printed: number;
       status_manual: number;
       binder_manual: number;
+      blocked: number;
+      blocked_at: string | null;
+      blocked_reason: string | null;
       version: number;
       updated_at: string;
       updated_by: string | null;
@@ -205,6 +237,9 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         binderPrinted: s.binder_printed === 1,
         statusManual: s.status_manual === 1,
         binderManual: s.binder_manual === 1,
+        blocked: s.blocked === 1,
+        blockedAt: s.blocked_at,
+        blockedReason: s.blocked_reason,
         version: s.version,
         notes: notesByJob.get(s.job_number) ?? [],
         updatedAt: s.updated_at,
@@ -221,8 +256,9 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
 
       const insState = this.db.prepare(
         `INSERT INTO board_state (job_number, status, ship_date_override, ship_date_override_note,
-          binder_printed, status_manual, binder_manual, version, updated_at, updated_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          binder_printed, status_manual, binder_manual, blocked, blocked_at, blocked_reason,
+          version, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       const insNote = this.db.prepare(
         `INSERT INTO notes (id, job_number, text, author_id, author_name, created_at, updated_at, is_ops_schedule)
@@ -238,6 +274,9 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
           entry.binderPrinted ? 1 : 0,
           entry.statusManual ? 1 : 0,
           entry.binderManual ? 1 : 0,
+          entry.blocked ? 1 : 0,
+          entry.blockedAt ?? null,
+          entry.blockedReason ?? null,
           entry.version ?? 1,
           entry.updatedAt,
           entry.updatedBy ?? null
@@ -628,14 +667,20 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         if (!liveMeta || srcWins) {
           this.db
             .prepare(
-              `INSERT INTO jobs_import_meta (id, imported_at, source_file, new_job_numbers)
-               VALUES (1, ?, ?, ?)
+              `INSERT INTO jobs_import_meta (id, imported_at, source_file, new_job_numbers, changed_note_job_numbers)
+               VALUES (1, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                  imported_at = excluded.imported_at,
                  source_file = excluded.source_file,
-                 new_job_numbers = excluded.new_job_numbers`
+                 new_job_numbers = excluded.new_job_numbers,
+                 changed_note_job_numbers = excluded.changed_note_job_numbers`
             )
-            .run(srcMeta.imported_at, srcMeta.source_file, srcMeta.new_job_numbers);
+            .run(
+              srcMeta.imported_at,
+              srcMeta.source_file,
+              srcMeta.new_job_numbers,
+              srcMeta.changed_note_job_numbers ?? '[]'
+            );
         }
       }
 
@@ -644,6 +689,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         job_number: string; status: string; ship_date_override: string | null;
         ship_date_override_note: string | null; binder_printed: number;
         status_manual?: number; binder_manual?: number;
+        blocked?: number; blocked_at?: string | null; blocked_reason?: string | null;
         version: number; updated_at: string; updated_by: string | null;
       };
       const srcStates = srcDb.prepare('SELECT * FROM board_state').all() as StateRow[];
@@ -656,8 +702,9 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       const upsertState = this.db.prepare(
         `INSERT INTO board_state
            (job_number, status, ship_date_override, ship_date_override_note,
-            binder_printed, status_manual, binder_manual, version, updated_at, updated_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            binder_printed, status_manual, binder_manual, blocked, blocked_at, blocked_reason,
+            version, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(job_number) DO UPDATE SET
            status = excluded.status,
            ship_date_override = excluded.ship_date_override,
@@ -665,6 +712,9 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
            binder_printed = excluded.binder_printed,
            status_manual = excluded.status_manual,
            binder_manual = excluded.binder_manual,
+           blocked = excluded.blocked,
+           blocked_at = excluded.blocked_at,
+           blocked_reason = excluded.blocked_reason,
            version = excluded.version,
            updated_at = excluded.updated_at,
            updated_by = excluded.updated_by`
@@ -680,6 +730,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
             src.job_number, src.status, src.ship_date_override,
             src.ship_date_override_note, src.binder_printed,
             src.status_manual ?? 0, src.binder_manual ?? 0,
+            src.blocked ?? 0, src.blocked_at ?? null, src.blocked_reason ?? null,
             src.version, src.updated_at, src.updated_by
           );
           continue;
@@ -695,6 +746,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
             src.job_number, src.status, src.ship_date_override,
             src.ship_date_override_note, src.binder_printed,
             src.status_manual ?? 0, src.binder_manual ?? 0,
+            src.blocked ?? 0, src.blocked_at ?? null, src.blocked_reason ?? null,
             src.version, src.updated_at, src.updated_by
           );
         }

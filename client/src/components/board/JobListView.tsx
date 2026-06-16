@@ -10,7 +10,7 @@ import { BoardJob } from '@vrsi/wallboard-shared'
 import { canonicalPersonName, samePerson } from '@vrsi/person-identity'
 
 interface Props {
-  tab: 'project' | 'spare-parts' | 'archive'
+  tab: 'project' | 'spare-parts' | 'archive' | 'blocked'
 }
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
@@ -347,7 +347,7 @@ export function JobListView({ tab }: Props) {
     new Set(tabFiltered.map((j) => canonicalPersonName(j.materialsManager)).filter(Boolean)),
   ).sort((a, b) => a.localeCompare(b))
 
-  const showPersonFilters = tab === 'project' || tab === 'spare-parts'
+  const showPersonFilters = tab === 'project' || tab === 'spare-parts' || tab === 'blocked'
   const personFilterActive = filterPms.length > 0 || filterMms.length > 0
 
   const toggleProjectManager = (name: string, anchorJobNumber?: string) => {
@@ -387,11 +387,21 @@ export function JobListView({ tab }: Props) {
     )
   }
 
+  if (tab === 'blocked' && tabFiltered.length === 0) {
+    return (
+      <p className="text-slate-500 text-sm mt-6">
+        No blocked jobs. Use the <span className="text-red-400">Block</span> button on any job card to park a
+        problem child here (waiting on parts, sitting in shipping, etc.) with a reason.
+      </p>
+    )
+  }
+
   // Role filter — skipped when a Project Manager / Materials Manager quick filter is active
   let filtered: BoardJob[]
   if (
     tab === 'spare-parts' ||
     tab === 'archive' ||
+    tab === 'blocked' ||
     !activeUser ||
     isSuper ||
     showAll ||
@@ -411,8 +421,8 @@ export function JobListView({ tab }: Props) {
   const q = search.trim().toLowerCase()
   const searched = q
     ? filtered.filter((j) =>
-        // Searching "new" surfaces every job flagged NEW from the last import
-        (q === 'new' && j.isNew) ||
+        // Searching "new" surfaces jobs flagged NEW or with a new/changed import note
+        (q === 'new' && (j.isNew || j.hasNewNote)) ||
         j.jobNumber.toLowerCase().includes(q) ||
         j.customer.toLowerCase().includes(q) ||
         j.pm.toLowerCase().includes(q) ||
@@ -420,9 +430,9 @@ export function JobListView({ tab }: Props) {
       )
     : filtered
 
-  const newMatched = newOnly ? searched.filter((j) => j.isNew) : searched
+  const newMatched = newOnly ? searched.filter((j) => j.isNew || j.hasNewNote) : searched
   const sorted = sortBoardJobsByShipDate(newMatched, tab)
-  const newCount = tabFiltered.filter((j) => j.isNew).length
+  const newCount = tabFiltered.filter((j) => j.isNew || j.hasNewNote).length
 
   const activeFilterCount = filterPms.length + filterMms.length
 
@@ -445,7 +455,7 @@ export function JobListView({ tab }: Props) {
     document.getElementById('board-ship-agenda')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const canToggle = tab !== 'spare-parts' && tab !== 'archive' && !!activeUser && !isSuper && activeUser.role !== 'manual'
+  const canToggle = tab !== 'spare-parts' && tab !== 'archive' && tab !== 'blocked' && !!activeUser && !isSuper && activeUser.role !== 'manual'
   const spareNotConfigured = tab === 'spare-parts' && !spare
 
   const filterSummary = (() => {
@@ -655,7 +665,7 @@ export function JobListView({ tab }: Props) {
       )}
 
       {/* Mobile: full-tab 30-day ship agenda (not limited to My Jobs / search filters) */}
-      {tab !== 'archive' && tabFiltered.length > 0 && (
+      {tab !== 'archive' && tab !== 'blocked' && tabFiltered.length > 0 && (
         <div id="board-ship-agenda" className="md:hidden mt-6 pt-4 border-t border-slate-800 scroll-mt-4">
           <BoardShipAgenda
             jobs={tabFiltered}
@@ -667,7 +677,7 @@ export function JobListView({ tab }: Props) {
         </div>
       )}
 
-      {tab !== 'archive' && tabFiltered.length > 0 && (
+      {tab !== 'archive' && tab !== 'blocked' && tabFiltered.length > 0 && (
         <button
           type="button"
           onClick={scrollToAgenda}

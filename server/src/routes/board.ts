@@ -12,6 +12,7 @@ import {
   setJobStatus,
   setShipDateOverride,
   setJobBinderPrinted,
+  setJobBlocked,
   addNote,
   updateNote,
   deleteNote,
@@ -411,6 +412,36 @@ boardRouter.patch('/jobs/:jobNumber/binder-printed', async (req: Request, res: R
     }
 
     await setJobBinderPrinted(req.params.jobNumber, binderPrinted, actor)
+
+    const job = getMergedJobs().find((j) => j.jobNumber === req.params.jobNumber)
+    res.json({ data: job })
+  } catch (err: unknown) {
+    next(err)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// PATCH /jobs/:jobNumber/blocked — manual triage flag (never touched by import)
+// ---------------------------------------------------------------------------
+boardRouter.patch('/jobs/:jobNumber/blocked', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { blocked, reason, actor } = req.body as { blocked?: boolean; reason?: string | null; actor?: Actor }
+
+    if (typeof blocked !== 'boolean') {
+      res.status(400).json({ error: { code: 'missing_fields', message: 'blocked (boolean) required' } })
+      return
+    }
+    if (reason != null && typeof reason === 'string' && reason.length > 1000) {
+      res.status(400).json({ error: { code: 'reason_too_long', message: 'Block reason exceeds maximum length of 1000 characters' } })
+      return
+    }
+
+    if (!getMergedJobs().some((j) => j.jobNumber === req.params.jobNumber)) {
+      res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } })
+      return
+    }
+
+    await setJobBlocked(req.params.jobNumber, blocked, reason ?? null, actor)
 
     const job = getMergedJobs().find((j) => j.jobNumber === req.params.jobNumber)
     res.json({ data: job })

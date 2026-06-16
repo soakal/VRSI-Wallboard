@@ -338,6 +338,14 @@ function AppInner() {
             }
           />
           <Route
+            path="blocked"
+            element={
+              <Suspense fallback={null}>
+                <JobListView key={`blocked-${activeUser?.id ?? 'none'}`} tab="blocked" />
+              </Suspense>
+            }
+          />
+          <Route
             path="users"
             element={
               <Suspense fallback={null}>

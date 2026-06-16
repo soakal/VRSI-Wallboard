@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS jobs_import_meta (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   imported_at TEXT NOT NULL,
   source_file TEXT NOT NULL DEFAULT '',
-  new_job_numbers TEXT NOT NULL DEFAULT '[]'
+  new_job_numbers TEXT NOT NULL DEFAULT '[]',
+  changed_note_job_numbers TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS board_state (
@@ -25,6 +26,9 @@ CREATE TABLE IF NOT EXISTS board_state (
   binder_printed INTEGER NOT NULL DEFAULT 0,
   status_manual INTEGER NOT NULL DEFAULT 0,
   binder_manual INTEGER NOT NULL DEFAULT 0,
+  blocked INTEGER NOT NULL DEFAULT 0,
+  blocked_at TEXT,
+  blocked_reason TEXT,
   version INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL,
   updated_by TEXT

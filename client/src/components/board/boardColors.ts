@@ -54,19 +54,27 @@ export function isSpareJob(job: BoardJob, config: BoardConfig): boolean {
   return samePerson(job.pm, config.spareCarrier) || jn.startsWith('sp-') || jn.startsWith('sp ')
 }
 
-export type BoardTab = 'project' | 'spare-parts' | 'archive'
+export type BoardTab = 'project' | 'spare-parts' | 'archive' | 'blocked'
 
-/** Same rules as JobListView — keeps header counts and lists in sync. */
+/** Distinct colour for the Blocked tab (manual triage lane). */
+export const BLOCKED_TAB_COLOR = '#ef4444'
+
+/**
+ * Same rules as JobListView — keeps header counts and lists in sync.
+ * A blocked job is removed from Project / Spare Parts / Archive and shows ONLY
+ * in the Blocked tab, so manual triage takes it out of the normal flow.
+ */
 export function filterJobsForTab(
   jobs: BoardJob[],
   tab: BoardTab,
   config: BoardConfig
 ): BoardJob[] {
-  if (tab === 'archive') return jobs.filter((j) => j.status === 'shipped')
+  if (tab === 'blocked') return jobs.filter((j) => j.blocked)
+  if (tab === 'archive') return jobs.filter((j) => !j.blocked && j.status === 'shipped')
   if (tab === 'spare-parts') {
-    return jobs.filter((j) => isSpareJob(j, config) && j.status !== 'shipped')
+    return jobs.filter((j) => !j.blocked && isSpareJob(j, config) && j.status !== 'shipped')
   }
-  return jobs.filter((j) => !isSpareJob(j, config) && j.status !== 'shipped')
+  return jobs.filter((j) => !j.blocked && !isSpareJob(j, config) && j.status !== 'shipped')
 }
 
 /**

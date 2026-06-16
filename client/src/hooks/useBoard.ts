@@ -9,6 +9,7 @@ import {
   setJobStatus,
   setJobShipDate,
   setJobBinderPrinted,
+  setJobBlocked,
   addJobNote,
   updateJobNote,
   deleteJobNote,
@@ -130,6 +131,27 @@ export function useSetJobBinderPrinted() {
     }) => setJobBinderPrinted(jobNumber, binderPrinted, actor),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['board', 'jobs'] });
+    },
+  });
+}
+
+export function useSetJobBlocked() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      jobNumber,
+      blocked,
+      reason,
+      actor,
+    }: {
+      jobNumber: string
+      blocked: boolean
+      reason: string | null
+      actor: Actor
+    }) => setJobBlocked(jobNumber, blocked, reason, actor),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['board', 'jobs'] });
+      qc.invalidateQueries({ queryKey: ['events'] });
     },
   });
 }
