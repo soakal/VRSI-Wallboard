@@ -22,7 +22,7 @@ interface DashboardProps {
   dataUpdatedAt: number;
   calendarError?: boolean;
   needsReauth?: boolean;
-  displayMode: 'day' | 'week' | 'month';
+  displayMode: 'day' | 'week' | 'month' | 'twoWeek';
   onOpenSettings: () => void;
   onOpenFiles: () => void;
 }
@@ -67,8 +67,12 @@ const Dashboard: React.FC<DashboardProps> = ({
   // Today jumps back. The agenda rail follows the displayed month.
   const stepViewDate = useCallback(
     (dir: 1 | -1) => {
-      const step = displayMode === 'month' ? addMonths : displayMode === 'week' ? addWeeks : addDays;
-      setViewDate(step(viewDate, dir));
+      const next =
+        displayMode === 'month' ? addMonths(viewDate, dir)
+        : displayMode === 'week' ? addWeeks(viewDate, dir)
+        : displayMode === 'twoWeek' ? addDays(viewDate, dir * 14)
+        : addDays(viewDate, dir);
+      setViewDate(next);
     },
     [displayMode, viewDate, setViewDate],
   );
@@ -78,13 +82,13 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (displayMode === 'day') {
       return viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     }
-    if (displayMode === 'week') {
-      // Show the full Sun–Sat (or Mon–Sun when weekends are hidden) span the week
-      // covers, e.g. "Jun 15 – 21, 2026" or "Jun 29 – Jul 5, 2026", instead of just
-      // the month — a week often straddles two months and the bare month was vague.
+    if (displayMode === 'week' || displayMode === 'twoWeek') {
+      // Show the date span the view covers, e.g. "Jun 15 – 21, 2026" or, across
+      // months, "Jun 29 – Jul 5, 2026" — a week/fortnight often straddles two
+      // months and the bare month name was vague.
       const weekStartsOn = config.showWeekends ? 0 : 1;
       const start = startOfWeek(viewDate, { weekStartsOn });
-      const end = addDays(start, 6);
+      const end = addDays(start, displayMode === 'twoWeek' ? 13 : 6);
       const sameMonth = start.getMonth() === end.getMonth();
       const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const endStr = sameMonth
@@ -292,12 +296,13 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div className="flex items-center gap-2">
           <select
             value={displayMode}
-            onChange={(e) => setDisplayMode(e.target.value as 'day' | 'week' | 'month')}
+            onChange={(e) => setDisplayMode(e.target.value as 'day' | 'week' | 'month' | 'twoWeek')}
             className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-300 bg-[#1a1f2e] border border-white/10 hover:border-white/20 focus:outline-none transition-colors cursor-pointer"
-            title="Switch calendar view (D/W/M)"
+            title="Switch calendar view (D/W/T/M)"
           >
             <option value="day">Day</option>
             <option value="week">Week</option>
+            <option value="twoWeek">2 Weeks</option>
             <option value="month">Month</option>
           </select>
           <button
@@ -398,11 +403,12 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div className="flex gap-1.5">
           <select
             value={displayMode}
-            onChange={(e) => setDisplayMode(e.target.value as 'day' | 'week' | 'month')}
+            onChange={(e) => setDisplayMode(e.target.value as 'day' | 'week' | 'month' | 'twoWeek')}
             className="bg-slate-700/60 border border-slate-600 text-slate-200 px-2 py-1.5 rounded text-xs font-medium focus:outline-none cursor-pointer"
           >
             <option value="day">Day</option>
             <option value="week">Week</option>
+            <option value="twoWeek">2 Weeks</option>
             <option value="month">Month</option>
           </select>
           <button

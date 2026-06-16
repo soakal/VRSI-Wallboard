@@ -89,7 +89,7 @@ function fromClientConfig(flat: Record<string, unknown>): Partial<AppConfig> {
 
   // ui sub-object — collect all UI-only fields
   const uiFields: Partial<UiConfig> = {};
-  if ('displayMode' in flat && (flat.displayMode === 'day' || flat.displayMode === 'week' || flat.displayMode === 'month')) {
+  if ('displayMode' in flat && (flat.displayMode === 'day' || flat.displayMode === 'week' || flat.displayMode === 'month' || flat.displayMode === 'twoWeek')) {
     uiFields.displayMode = flat.displayMode;
   }
   if ('showWeekends' in flat) {

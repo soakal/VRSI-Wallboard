@@ -8,7 +8,7 @@ export function useEvents(
   calendarIds: string[],
   enabled: boolean,
   refreshSec: number,
-  displayMode: 'day' | 'week' | 'month' = 'week',
+  displayMode: 'day' | 'week' | 'month' | 'twoWeek' = 'week',
   viewDate?: Date
 ): {
   events: CalendarEvent[];
@@ -26,10 +26,18 @@ export function useEvents(
     // rest-of-month horizon, in every display mode. When the calendar is
     // navigated to another month, stretch the window so it covers that whole
     // month too (earlier of the two starts, later of the two ends).
-    const start = startOfMonth(anchor < now ? anchor : now);
+    let start = startOfMonth(anchor < now ? anchor : now);
     const aheadEnd = addDays(now, 45);
     const anchorEnd = endOfMonth(anchor);
-    const end = anchorEnd > aheadEnd ? anchorEnd : aheadEnd;
+    let end = anchorEnd > aheadEnd ? anchorEnd : aheadEnd;
+    // The 2-week view can start a week before the anchor and run 14 days out, which
+    // may fall outside the month window above — widen by a week of slack each side.
+    if (displayMode === 'twoWeek') {
+      const twoWeekStart = addDays(anchor, -7);
+      if (twoWeekStart < start) start = twoWeekStart;
+      const twoWeekEnd = addDays(anchor, 15);
+      if (twoWeekEnd > end) end = twoWeekEnd;
+    }
     return {
       weekStart: formatISO(start),
       weekEnd: formatISO(end),

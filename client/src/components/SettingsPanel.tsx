@@ -270,6 +270,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
                       className="rounded-lg bg-white/5 border border-white/10 text-sm text-slate-200 px-2 py-1.5 focus:outline-none focus:border-blue-500/50 hover:border-white/20 transition-colors min-w-0">
                       <option value="day" className="bg-[#1e2536]">Day</option>
                       <option value="week" className="bg-[#1e2536]">Week</option>
+                      <option value="twoWeek" className="bg-[#1e2536]">2 Weeks</option>
                       <option value="month" className="bg-[#1e2536]">Month</option>
                     </select>
                   </div>

@@ -9,6 +9,7 @@ import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS } from 'date-fns/locale/en-US';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { CalendarEvent } from '../types/index';
+import TwoWeekView from './calendar/TwoWeekView';
 
 const locales = { 'en-US': enUS };
 
@@ -35,7 +36,7 @@ interface RBCCalendarEvent extends RBCEvent {
 
 interface CalendarViewProps {
   events: CalendarEvent[];
-  displayMode: 'day' | 'week' | 'month';
+  displayMode: 'day' | 'week' | 'month' | 'twoWeek';
   /** Date the calendar shows — controlled by the footer ‹ › / Today buttons */
   date: Date;
   showWeekends: boolean;
@@ -154,12 +155,18 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   // Always use native week (7 columns). work_week crashes when events land on
   // Sat/Sun; Mon-start week + CSS clip gives a stable Mon–Fri layout instead.
-  const rbcView: 'day' | 'week' | 'month' =
-    displayMode === 'day' ? 'day' : displayMode === 'month' ? 'month' : 'week';
+  // 'twoWeek' is a custom month-style view registered on the Calendar below.
+  const rbcView: string =
+    displayMode === 'day' ? 'day'
+    : displayMode === 'month' ? 'month'
+    : displayMode === 'twoWeek' ? 'twoWeek'
+    : 'week';
 
   const localizer = showWeekends ? localizerSun : localizerMon;
 
-  const weekendsHidden = !showWeekends && (displayMode === 'month' || displayMode === 'week');
+  // twoWeek renders month-style 7-column rows, so the weekend clip applies to it too.
+  const weekendsHidden =
+    !showWeekends && (displayMode === 'month' || displayMode === 'week' || displayMode === 'twoWeek');
 
   return (
     <div
@@ -330,7 +337,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         key={`${showWeekends}-${displayMode}`}
         localizer={localizer}
         events={rbcEvents}
-        view={rbcView}
+        views={{ month: true, week: true, day: true, twoWeek: TwoWeekView } as never}
+        view={rbcView as never}
         onView={() => {}}
         date={date}
         onNavigate={() => {}}

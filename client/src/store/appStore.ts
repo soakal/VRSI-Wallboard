@@ -7,7 +7,7 @@ interface AppState {
   isSettingsOpen: boolean;
   isFilesOpen: boolean;
   isMonitoringOpen: boolean;
-  displayMode: 'day' | 'week' | 'month';
+  displayMode: 'day' | 'week' | 'month' | 'twoWeek';
   /** Date the calendar is showing — navigated with the ‹ › / Today controls */
   viewDate: Date;
   theme: 'dark' | 'light';
@@ -19,7 +19,7 @@ interface AppState {
   setIsSettingsOpen: (value: boolean) => void;
   setIsFilesOpen: (value: boolean) => void;
   setIsMonitoringOpen: (value: boolean) => void;
-  setDisplayMode: (mode: 'day' | 'week' | 'month') => void;
+  setDisplayMode: (mode: 'day' | 'week' | 'month' | 'twoWeek') => void;
   setViewDate: (date: Date) => void;
   setTheme: (theme: 'dark' | 'light') => void;
   setConfig: (config: AppConfig) => void;

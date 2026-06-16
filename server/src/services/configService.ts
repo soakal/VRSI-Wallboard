@@ -28,7 +28,7 @@ export interface SharePointConfig {
  * nested config objects.  Stored under the "ui" key in config.json.
  */
 export interface UiConfig {
-  displayMode: 'day' | 'week' | 'month';
+  displayMode: 'day' | 'week' | 'month' | 'twoWeek';
   showWeekends: boolean;
   startHour: number;
   endHour: number;

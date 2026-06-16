@@ -42,7 +42,7 @@ export interface CalendarEvent {
 
 export interface AppConfig {
   calendarIds: string[];
-  displayMode: 'day' | 'week' | 'month';
+  displayMode: 'day' | 'week' | 'month' | 'twoWeek';
   refreshInterval: number;
   theme: 'dark' | 'light';
   timezone: string;

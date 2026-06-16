@@ -204,6 +204,10 @@ function AppInner() {
         setDisplayMode('week');
         return;
       }
+      if (e.key === 't') {
+        setDisplayMode('twoWeek');
+        return;
+      }
       if (e.key === 'm') {
         setDisplayMode('month');
         return;
