@@ -122,6 +122,36 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
   });
 });
 
+/** Download the combined server log (tail-capped) so IT can diagnose remotely. */
+storageRouter.get('/logs-export', (_req: Request, res: Response) => {
+  try {
+    const file = path.join(resolveLogsDir(), 'combined.log');
+    if (!fs.existsSync(file)) {
+      res.status(404).json({ error: { code: 'not_found', message: 'No log file yet' } });
+      return;
+    }
+    const MAX_BYTES = 5 * 1024 * 1024; // return at most the last 5 MB
+    const { size } = fs.statSync(file);
+    const start = size > MAX_BYTES ? size - MAX_BYTES : 0;
+    const fd = fs.openSync(file, 'r');
+    try {
+      const length = size - start;
+      const buf = Buffer.alloc(length);
+      fs.readSync(fd, buf, 0, length, start);
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="wallboard-log-${stamp}.txt"`);
+      if (start > 0) res.write(`[…truncated to last ${Math.round(MAX_BYTES / 1024 / 1024)} MB…]\n`);
+      res.end(buf);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (e) {
+    logger.warn('Log export failed', { error: e });
+    res.status(500).json({ error: { code: 'log_export_failed', message: 'Could not read logs' } });
+  }
+});
+
 storageRouter.get('/audit-log', (req: Request, res: Response) => {
   const limit = Math.min(parseInt(String(req.query.limit ?? '200'), 10) || 200, 1000);
   const entries = getPersistence().getAuditLog(limit);

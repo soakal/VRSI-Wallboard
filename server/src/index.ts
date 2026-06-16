@@ -51,6 +51,15 @@ function validateEnv(): void {
     );
     process.exit(1);
   }
+
+  // Warn (don't crash a running kiosk) if the token-encryption secret is weak.
+  const secret = process.env.ENCRYPTION_SECRET;
+  if (!azureDisabled && secret && secret.length < 32) {
+    logger.warn(
+      `ENCRYPTION_SECRET is only ${secret.length} characters — use 32+ random characters ` +
+        `for AES-256 token encryption. Rotate it in .env when convenient.`
+    );
+  }
 }
 
 validateEnv();

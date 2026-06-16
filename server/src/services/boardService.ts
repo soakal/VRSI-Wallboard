@@ -1,4 +1,7 @@
-import * as XLSX from 'xlsx'
+// Default import (not `* as`) so the CJS `SSF` date-format helper is reachable —
+// the namespace import drops it, which made parseDateValue throw on numeric date
+// cells. esModuleInterop maps this to the full xlsx module object.
+import XLSX from 'xlsx'
 import { getPersistence } from '../storage/factory.js'
 import { randomUUID } from 'crypto'
 import {
@@ -113,7 +116,7 @@ function formatLocalDate(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
-function parseDateValue(value: unknown): string | null {
+export function parseDateValue(value: unknown): string | null {
   if (value == null) return null
   // xlsx with cellDates:true + raw:true returns JS Date objects for date cells
   if (value instanceof Date) {
@@ -146,6 +149,8 @@ function parseDateValue(value: unknown): string | null {
   }
   if (typeof value === 'number') {
     if (value < 1 || value > 109574) return null
+    // Defensive: never let a date cell crash the whole import if SSF is unavailable.
+    if (!XLSX.SSF || typeof XLSX.SSF.format !== 'function') return null
     const formatted = XLSX.SSF.format('yyyy-mm-dd', value)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(formatted)) return null
     return formatted
@@ -182,7 +187,7 @@ export function parseSpreadsheetCompleteFlag(value: unknown): boolean {
   return false
 }
 
-function detectColumns(headers: unknown[]): { colMap: ColumnMap; warnings: string[] } {
+export function detectColumns(headers: unknown[]): { colMap: ColumnMap; warnings: string[] } {
   const colMap: ColumnMap = {
     jobNumber: null,
     pm: null,

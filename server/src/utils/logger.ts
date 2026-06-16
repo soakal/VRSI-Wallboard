@@ -24,12 +24,19 @@ const logger = winston.createLogger({
         })
       ),
     }),
+    // Size-based rotation so logs can't fill the disk on a long-running kiosk.
     new winston.transports.File({
       filename: path.join(logsDir, 'error.log'),
       level: 'error',
+      maxsize: 5 * 1024 * 1024, // 5 MB per file
+      maxFiles: 3,
+      tailable: true,
     }),
     new winston.transports.File({
       filename: path.join(logsDir, 'combined.log'),
+      maxsize: 10 * 1024 * 1024, // 10 MB per file
+      maxFiles: 5,
+      tailable: true,
     }),
   ],
 });

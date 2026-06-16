@@ -11,6 +11,7 @@ import {
   type BackupsResponse,
   type SecurityReport,
 } from '../api/storageApi';
+import { useUpdateCheck } from '../hooks/useUpdateCheck';
 
 interface MonitoringPanelProps {
   isOpen: boolean;
@@ -35,6 +36,7 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
   const [auditError, setAuditError] = useState<string | null>(null);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('all');
+  const { currentVersion } = useUpdateCheck();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -174,6 +176,22 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
     URL.revokeObjectURL(url);
   };
 
+  const downloadLogs = async () => {
+    try {
+      const res = await fetch('/api/storage/logs-export');
+      if (!res.ok) throw new Error('Log download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vrsi-wallboard-log-${new Date().toISOString().slice(0, 10)}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setReportError('Could not download logs — is the server running?');
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -183,7 +201,10 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
         <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
           <div>
             <h2 className="text-sm font-semibold text-slate-100">System &amp; IT Report</h2>
-            <p className="text-[11px] text-slate-500">Backups, audit log, safety summary</p>
+            <p className="text-[11px] text-slate-500">
+              Backups, audit log, safety summary
+              {currentVersion ? ` · WallBoard v${currentVersion}` : ''}
+            </p>
           </div>
           <button
             type="button"
@@ -428,6 +449,14 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
             className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
           >
             Export report for IT
+          </button>
+          <button
+            type="button"
+            onClick={downloadLogs}
+            className="text-xs px-3 py-1.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600"
+            title="Download the recent server log for diagnostics"
+          >
+            Download logs
           </button>
           <span className="text-[10px] text-slate-600 self-center ml-auto">Ctrl+M</span>
         </footer>
