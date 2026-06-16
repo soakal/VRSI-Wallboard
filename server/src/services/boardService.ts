@@ -697,16 +697,7 @@ export function writeBoardState(state: ReturnType<typeof getBoardStateFile>): vo
 
 export function getJobState(jobNumber: string): JobStateEntry {
   const state = getBoardStateFile()
-  return (
-    state[jobNumber] ?? {
-      status: 'none' as JobStatus,
-      shipDateOverride: null,
-      shipDateOverrideNote: null,
-      binderPrinted: false,
-      notes: [],
-      updatedAt: '',
-    }
-  )
+  return state[jobNumber] ?? emptyJobState()
 }
 
 export function setJobBinderPrinted(
