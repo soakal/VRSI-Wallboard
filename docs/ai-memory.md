@@ -1,6 +1,7 @@
 # VRSI WallBoard — AI Memory
 
 **Last saved:** 2026-06-16
+**Vault record (full session log + remaining work):** Obsidian vault → `10-Projects/VRSI-Wallboard-Session-2026-06-16-v0.9.3-to-v0.14.1.md` (write/read via the `obsidian-vault` MCP server). Covers every release v0.9.3→v0.14.1 and the deferred "network-readiness" backlog.
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\` (dev: `server/data`)
 
