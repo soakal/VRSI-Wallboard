@@ -235,16 +235,45 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         }
         .nexus-calendar-wrapper .rbc-date-cell {
           color: #94a3b8;
-          font-size: 12px;
+          font-size: 11px;
+          padding: 1px 4px 0 0;
+          line-height: 1.15;
         }
         .nexus-calendar-wrapper .rbc-date-cell.rbc-now {
           color: #60a5fa;
           font-weight: 600;
         }
+        /*
+         * Month / two-week cells: force every event chip to a uniform single line.
+         * RBC decides how many chips fit (and when to show "+N more") by measuring
+         * one chip's height once at mount; if a long title wraps to two lines the
+         * math is off and the last chip gets clipped mid-text. A fixed 18px,
+         * no-wrap chip keeps the measurement exact so overflow rolls cleanly into
+         * "+N more" with no truncated text.
+         */
+        .nexus-calendar-wrapper .rbc-month-view .rbc-event {
+          height: 18px;
+          min-height: 18px;
+          line-height: 15px;
+          padding: 1px 4px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .nexus-calendar-wrapper .rbc-month-view .rbc-event-content {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .nexus-calendar-wrapper .rbc-row-segment {
+          padding: 0 2px 1px 2px;
+        }
         .nexus-calendar-wrapper .rbc-show-more {
           color: #60a5fa;
           background: transparent;
           font-size: 11px;
+          line-height: 15px;
+          padding: 0 4px;
           cursor: pointer;
         }
         .rbc-overlay {

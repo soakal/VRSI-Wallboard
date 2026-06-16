@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { addDays, addWeeks, addMonths, isSameDay, isSameMonth } from "date-fns";
+import { addDays, addWeeks, addMonths, isSameDay, isSameMonth, startOfWeek } from "date-fns";
 import type { CalendarEvent, AppConfig, SharePointFile } from "../types/index";
 import Clock from "./Clock";
 import NextEventBadge from "./NextEventBadge";
@@ -74,10 +74,26 @@ const Dashboard: React.FC<DashboardProps> = ({
   );
   const isViewingToday = isSameDay(viewDate, new Date());
   const isViewingCurrentMonth = isSameMonth(viewDate, new Date());
-  const viewLabel =
-    displayMode === 'day'
-      ? viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-      : viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const viewLabel = (() => {
+    if (displayMode === 'day') {
+      return viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+    if (displayMode === 'week') {
+      // Show the full Sun–Sat (or Mon–Sun when weekends are hidden) span the week
+      // covers, e.g. "Jun 15 – 21, 2026" or "Jun 29 – Jul 5, 2026", instead of just
+      // the month — a week often straddles two months and the bare month was vague.
+      const weekStartsOn = config.showWeekends ? 0 : 1;
+      const start = startOfWeek(viewDate, { weekStartsOn });
+      const end = addDays(start, 6);
+      const sameMonth = start.getMonth() === end.getMonth();
+      const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const endStr = sameMonth
+        ? end.toLocaleDateString('en-US', { day: 'numeric' })
+        : end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `${startStr} – ${endStr}, ${end.getFullYear()}`;
+    }
+    return viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  })();
   const agendaMonthLabel = viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const handleSelectUserId = useCallback(
