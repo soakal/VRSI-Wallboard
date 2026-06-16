@@ -93,6 +93,15 @@ try { $appVersion = (Get-Content (Join-Path $ServerDir 'package.json') -Raw | Co
     commit  = $commitHash
 } | ConvertTo-Json | Set-Content (Join-Path $ReleaseDir 'release-info.json') -Encoding utf8
 
+# Always produce the installable zip so a release is never published without one.
+# Named with the app version, e.g. VRSI-WallBoard-v0.12.0.zip, in the repo root.
+$zipName = if ($appVersion) { "VRSI-WallBoard-v$appVersion.zip" } else { 'VRSI-WallBoard.zip' }
+$zipPath = Join-Path $RepoRoot $zipName
+Write-Step "Creating install zip: $zipName"
+if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+Compress-Archive -Path $ReleaseDir -DestinationPath $zipPath -Force
+$zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
+
 # Summary
 $serverSize = [math]::Round((Get-ChildItem (Join-Path $ReleaseDir 'server\dist') -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
 $clientSize = [math]::Round((Get-ChildItem (Join-Path $ReleaseDir 'client\dist') -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
@@ -102,9 +111,10 @@ Write-Host '==========================================' -ForegroundColor Green
 Write-Host '  Release package ready' -ForegroundColor Green
 Write-Host '==========================================' -ForegroundColor Green
 Write-Host ''
-Write-Host "  Location : $ReleaseDir"
-Write-Host "  Server   : $serverSize MB  (dist/)"
-Write-Host "  Client   : $clientSize MB  (dist/)"
+Write-Host "  Location    : $ReleaseDir"
+Write-Host "  Install zip : $zipPath  ($zipSize MB)"
+Write-Host "  Server      : $serverSize MB  (dist/)"
+Write-Host "  Client      : $clientSize MB  (dist/)"
 Write-Host ''
 Write-Host '  To deploy to a new PC:' -ForegroundColor Cyan
 Write-Host "    1. Copy the entire  $(Split-Path $ReleaseDir -Leaf)\  folder to the target PC"
