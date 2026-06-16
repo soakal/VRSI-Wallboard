@@ -356,7 +356,7 @@ export function JobCard({
             onClick={() => setShowBlockInput(true)}
             disabled={!activeUser}
             title="Block this job — moves it to the Blocked tab with a reason"
-            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300 hover:border-red-500/60 hover:text-red-300 transition-colors disabled:opacity-50"
+            className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-1.5 text-sm font-semibold text-red-300 hover:bg-red-500/20 hover:border-red-500/70 transition-colors disabled:opacity-40"
           >
             ⛔ Block
           </button>

@@ -5,6 +5,7 @@ interface StalenessIndicatorProps {
   minutesSinceUpdate: number | null;
   calendarError?: boolean;
   needsReauth?: boolean;
+  backupStale?: boolean;
 }
 
 const StalenessIndicator: React.FC<StalenessIndicatorProps> = ({
@@ -12,6 +13,7 @@ const StalenessIndicator: React.FC<StalenessIndicatorProps> = ({
   minutesSinceUpdate,
   calendarError = false,
   needsReauth = false,
+  backupStale = false,
 }) => {
   if (needsReauth) {
     return (
@@ -36,6 +38,15 @@ const StalenessIndicator: React.FC<StalenessIndicatorProps> = ({
       <div className="flex items-center justify-center gap-2 bg-red-900/60 px-4 py-1.5 text-sm text-red-200">
         <span className="h-2 w-2 rounded-full bg-red-400" />
         <span>Offline — displaying cached data</span>
+      </div>
+    );
+  }
+
+  if (backupStale) {
+    return (
+      <div className="flex items-center justify-center gap-2 bg-amber-900/50 px-4 py-1.5 text-sm text-amber-200">
+        <span className="h-2 w-2 rounded-full bg-amber-400" />
+        <span>No successful backup in over 24 hours — check that the backup drive is connected.</span>
       </div>
     );
   }

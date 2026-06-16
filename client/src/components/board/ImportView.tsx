@@ -14,6 +14,15 @@ export default function ImportView() {
 
   const handleImport = () => {
     if (!selectedFile) return
+    const ok = window.confirm(
+      `Import "${selectedFile.name}"?\n\n` +
+        'This refreshes the job list from the spreadsheet. New jobs are added and ' +
+        'spreadsheet details update, but your manual changes are kept:\n' +
+        '• jobs you marked by hand keep their status and checkmarks\n' +
+        '• your notes and Blocked jobs are never removed\n\n' +
+        'Continue?',
+    )
+    if (!ok) return
     importJobs.mutate(selectedFile)
   }
 
@@ -25,7 +34,8 @@ export default function ImportView() {
       <h2 className="text-slate-200 font-semibold text-base mb-1">Import Jobs</h2>
       <p className="text-slate-500 text-sm mb-3">
         Upload an XLSM or XLSX file exported from your project tracking spreadsheet.
-        This replaces all current jobs.
+        New jobs are added and spreadsheet details refresh — your manual changes
+        (hand-set status &amp; checkmarks, notes, and Blocked jobs) are kept.
       </p>
       <p className="text-slate-600 text-xs mb-6 leading-relaxed">
         <span className="text-slate-500 font-medium">Status column:</span>{' '}

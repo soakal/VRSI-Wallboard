@@ -22,6 +22,7 @@ interface DashboardProps {
   dataUpdatedAt: number;
   calendarError?: boolean;
   needsReauth?: boolean;
+  backupStale?: boolean;
   displayMode: 'day' | 'week' | 'month' | 'twoWeek';
   onOpenSettings: () => void;
   onOpenFiles: () => void;
@@ -38,6 +39,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   dataUpdatedAt,
   calendarError = false,
   needsReauth = false,
+  backupStale = false,
   displayMode,
   onOpenSettings,
   onOpenFiles,
@@ -152,6 +154,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     needsReauth ||
     calendarError ||
     !isOnline ||
+    backupStale ||
     (dataUpdatedAt > 0 && nowMs - dataUpdatedAt > STALE_THRESHOLD_MS);
 
   return (
@@ -165,6 +168,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           minutesSinceUpdate={minutesSinceUpdate}
           calendarError={calendarError}
           needsReauth={needsReauth}
+          backupStale={backupStale}
         />
       )}
 

@@ -836,6 +836,16 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     return conflicts;
   }
 
+  /** ISO timestamp of the most recent SUCCESSFUL backup, or null if none recorded. */
+  getLastSuccessfulBackupAt(): string | null {
+    const row = this.db
+      .prepare(
+        `SELECT timestamp FROM audit_log WHERE type = 'backup' AND success = 1 ORDER BY id DESC LIMIT 1`
+      )
+      .get() as { timestamp: string } | undefined;
+    return row?.timestamp ?? null;
+  }
+
   getAuditLog(limit = 200): Array<Record<string, unknown>> {
     return this.db
       .prepare(

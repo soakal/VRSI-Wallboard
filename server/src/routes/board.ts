@@ -375,6 +375,17 @@ boardRouter.patch('/jobs/:jobNumber/ship-date', async (req: Request, res: Respon
       actor?: Actor
     }
 
+    // Only null or a strict YYYY-MM-DD is allowed — a malformed date stored here
+    // would make new Date(...).toISOString() throw and break the whole ICS export.
+    if (
+      shipDateOverride !== null &&
+      shipDateOverride !== undefined &&
+      !/^\d{4}-\d{2}-\d{2}$/.test(shipDateOverride)
+    ) {
+      res.status(400).json({ error: { code: 'invalid_date', message: 'Ship date must be YYYY-MM-DD' } })
+      return
+    }
+
     if (!getMergedJobs().some((j) => j.jobNumber === req.params.jobNumber)) {
       res.status(404).json({ error: { code: 'not_found', message: 'Job not found' } })
       return

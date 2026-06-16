@@ -1,6 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStatus } from './hooks/useAuth';
+import { useHealth } from './hooks/useHealth';
 import { useConfig } from './hooks/useConfig';
 import { useEvents } from './hooks/useEvents';
 import { useRecentFiles } from './hooks/useRecentFiles';
@@ -61,6 +62,7 @@ function AppInner() {
 
   // Auth — always polling
   const { isAuthenticated, needsReauth, isLoading: authLoading } = useAuthStatus(true);
+  const { backupStale } = useHealth();
 
   // Tracks consecutive unauthenticated polls so a brief server restart (which
   // returns 401/unauthenticated for a few seconds) does not bounce us to /setup.
@@ -290,6 +292,7 @@ function AppInner() {
                 dataUpdatedAt={dataUpdatedAt}
                 calendarError={calendarError}
                 needsReauth={needsReauth}
+                backupStale={backupStale}
                 displayMode={displayMode}
                 onOpenSettings={() => setIsSettingsOpen(true)}
                 onOpenFiles={() => setIsFilesOpen(true)}

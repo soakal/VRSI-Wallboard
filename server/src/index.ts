@@ -104,12 +104,28 @@ app.use('/api/update', updateRouter);
 app.get('/health', (_req: Request, res: Response) => {
   // Report readiness, not just liveness, so external monitoring can detect the
   // silent auth-failure state (token refresh died, kiosk showing no live data).
+  // Backup staleness: warn only once backups WERE happening and then stopped for
+  // >24h (drive unplugged / scheduled task failing) — a never-backed-up fresh
+  // install or dev box must not nag. Guarded so /health never fails if the DB is down.
+  let lastBackupAt: string | null = null;
+  let backupStale = false;
+  try {
+    lastBackupAt = getPersistence().getLastSuccessfulBackupAt();
+    if (lastBackupAt) {
+      const ageMs = Date.now() - Date.parse(lastBackupAt);
+      backupStale = Number.isFinite(ageMs) && ageMs > 24 * 60 * 60 * 1000;
+    }
+  } catch {
+    // ignore — health must stay responsive even if storage is unavailable
+  }
   res.json({
     status: 'ok',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     authenticated: isAuthenticated(),
     needsReauth: needsReauthentication(),
+    lastBackupAt,
+    backupStale,
     testMode: process.env.DISABLE_AZURE === 'true',
     // Initialization is "done" once the token is resolved one way or another:
     // test mode, a live token, or a known re-auth state. Lets auto-update.sh
