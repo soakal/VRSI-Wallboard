@@ -174,12 +174,12 @@ if (-not $healthy) {
     Write-Host "Server healthy at $WallBoardUrl" -ForegroundColor Green
 }
 
-# 7. Restart kiosk browser so it loads the new version.
-#    Only kill browser processes that were launched in kiosk mode pointing at
-#    localhost:3001  - never kill unrelated Edge/Chrome sessions by name alone.
-Write-Step 'Restarting kiosk browser'
+# 7. Restart the board browser so it loads the new version.
+#    Only kill the dedicated board WINDOW (--app= or legacy --kiosk) pointing at
+#    localhost:3001  - never a regular browser where the board is just one tab.
+Write-Step 'Restarting board browser'
 Get-CimInstance Win32_Process -Filter "Name='msedge.exe' OR Name='chrome.exe'" |
-    Where-Object { $_.CommandLine -like '*--kiosk*localhost:3001*' } |
+    Where-Object { $_.CommandLine -like '*localhost:3001*' -and ($_.CommandLine -like '*--app*' -or $_.CommandLine -like '*--kiosk*') } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Seconds 2
 & (Join-Path $PSScriptRoot 'Start-Kiosk.ps1')

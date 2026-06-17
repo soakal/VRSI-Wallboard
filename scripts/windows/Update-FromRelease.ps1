@@ -245,11 +245,12 @@ try {
         }
     }
 
-    # 8. Restart the kiosk browser so it loads the new version. Only kill
-    #    browsers launched in kiosk mode against localhost:3001.
-    Write-Step 'Restarting kiosk browser'
+    # 8. Restart the board browser so it loads the new version. Only kill the
+    #    dedicated board WINDOW (--app= or legacy --kiosk) pointing at
+    #    localhost:3001 — never a regular browser where the board is just one tab.
+    Write-Step 'Restarting board browser'
     $kioskBrowsers = Get-CimInstance Win32_Process -Filter "Name='msedge.exe' OR Name='chrome.exe'" |
-        Where-Object { $_.CommandLine -like '*--kiosk*localhost:3001*' }
+        Where-Object { $_.CommandLine -like '*localhost:3001*' -and ($_.CommandLine -like '*--app*' -or $_.CommandLine -like '*--kiosk*') }
     if ($kioskBrowsers) {
         $kioskBrowsers | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
         Start-Sleep -Seconds 2
