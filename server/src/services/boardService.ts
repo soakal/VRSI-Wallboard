@@ -93,7 +93,9 @@ export function mapSpreadsheetStatusToJobStatus(raw: string): JobStatus | null {
 
   if (s === 'build') return 'build'
 
-  if (s === 'labor only' || s === 'in progress' || s === 'in-progress') return 'in_progress'
+  if (s === 'labor only') return 'build'
+
+  if (s === 'in progress' || s === 'in-progress') return 'in_progress'
 
   return null
 }
