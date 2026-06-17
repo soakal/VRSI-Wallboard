@@ -16,6 +16,7 @@ import { boardRouter } from './routes/board.js';
 import { storageRouter } from './routes/storage.js';
 import { updateRouter } from './routes/update.js';
 import { getPersistence } from './storage/factory.js';
+import { getDbIntegrityStatus } from './storage/localProvider.js';
 import { resolveDataDir, resolveLogsDir, resolveBackupDir } from './lib/paths.js';
 import { auditApiMiddleware } from './middleware/auditMiddleware.js';
 import { logAudit, startAuditPruneCron } from './services/auditService.js';
@@ -152,6 +153,7 @@ app.get('/health', (_req: Request, res: Response) => {
     lastBackupAt,
     backupStale,
     testMode: process.env.DISABLE_AZURE === 'true',
+    dbIntegrity: getDbIntegrityStatus(),
     // Initialization is "done" once the token is resolved one way or another:
     // test mode, a live token, or a known re-auth state. Lets auto-update.sh
     // poll for ready:true to know token init finished (even if needsReauth).

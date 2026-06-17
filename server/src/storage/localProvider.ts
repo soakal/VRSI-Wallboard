@@ -15,6 +15,20 @@ import { migrateJsonToSqliteIfNeeded } from './migrate.js';
 const CONFIG_APP_KEY = 'app_config';
 const CONFIG_BOARD_KEY = 'board_config';
 
+// Cached at construction time; exported so /health can surface it without
+// going back through the StorageProvider interface or re-running the check.
+let _dbIntegrityStatus: 'ok' | 'corrupt' | 'unchecked' = 'unchecked';
+export function getDbIntegrityStatus(): 'ok' | 'corrupt' | 'unchecked' {
+  return _dbIntegrityStatus;
+}
+
+// How close two timestamps must be (in ms) to be considered a "simultaneous"
+// edit that should block a restore. Default 60 s — tune via RESTORE_CONFLICT_WINDOW_MS.
+const RESTORE_CONFLICT_WINDOW_MS = (() => {
+  const v = parseInt(process.env.RESTORE_CONFLICT_WINDOW_MS ?? '', 10);
+  return Number.isFinite(v) && v >= 0 ? v : 60_000;
+})();
+
 /** Convert an ISO-8601 string to a millisecond epoch. Returns NaN for blank or unparseable values. */
 function isoToEpoch(value: string): number {
   return new Date(value).getTime();
@@ -41,14 +55,18 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     try {
       const row = this.db.prepare('PRAGMA integrity_check').get() as { integrity_check?: string };
       if (row?.integrity_check && row.integrity_check !== 'ok') {
+        _dbIntegrityStatus = 'corrupt';
         logger.error('SQLite integrity_check failed — database may be corrupt', {
           result: row.integrity_check,
           dbPath: file,
         });
         this.logAudit('system', `Database integrity_check failed: ${row.integrity_check}`, file, false);
+      } else {
+        _dbIntegrityStatus = 'ok';
       }
     } catch (e) {
       logger.warn('Could not run integrity_check', { error: e instanceof Error ? e.message : String(e) });
+      // _dbIntegrityStatus stays 'unchecked'
     }
 
     // Periodically truncate the WAL so it can't grow without bound on a kiosk that
@@ -844,8 +862,12 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         });
         continue;
       }
-      const bothModified = Math.abs(backupTime - liveTime) < 60_000;
+      const bothModified = Math.abs(backupTime - liveTime) < RESTORE_CONFLICT_WINDOW_MS;
       if (!bothModified) continue;
+      logger.info(
+        `Restore conflict: job ${src.job_number} backup (${src.updated_at}) and live (${live.updated_at}) ` +
+        `both modified within ${RESTORE_CONFLICT_WINDOW_MS}ms — blocking restore for user resolution`
+      );
       conflicts.push({
         jobNumber: src.job_number,
         backup: {

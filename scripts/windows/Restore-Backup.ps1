@@ -114,6 +114,21 @@ foreach ($suffix in '-wal', '-shm') {
 Write-Host ''
 Write-Host "Restored from: $source" -ForegroundColor Green
 Write-Host "Database:      $dbPath" -ForegroundColor Green
+
+# Offer to restore the token sidecar so the kiosk doesn't need a device-code re-authentication.
+$tokensSidecar = [System.IO.Path]::ChangeExtension($source, '.tokens.json')
+if (Test-Path $tokensSidecar) {
+    Write-Host ''
+    Write-Host "A backed-up auth token was found alongside this backup: $(Split-Path $tokensSidecar -Leaf)" -ForegroundColor Yellow
+    $restoreTokens = Read-Host 'Restore it now to skip re-authentication on first launch? [Y/N]'
+    if ($restoreTokens -eq 'Y' -or $restoreTokens -eq 'y') {
+        Copy-Item -Path $tokensSidecar -Destination (Join-Path $dataDir 'tokens.json') -Force
+        Write-Host 'Auth token restored.' -ForegroundColor Green
+    } else {
+        Write-Host 'Token not restored — you will be prompted to authenticate on first launch.' -ForegroundColor DarkGray
+    }
+}
+
 Write-Host ''
 
 if ($restartTray) {
