@@ -111,9 +111,10 @@ async function refreshViaEndpoint(rt: string): Promise<RefreshResponse> {
 
   if (!response.ok) {
     const errorText = await response.text();
-    // 4xx (esp. invalid_grant) = permanent: token revoked/expired/MFA, needs
-    // human re-auth. 5xx / 429 = transient Azure-side error, safe to retry.
-    const permanent = response.status >= 400 && response.status < 500;
+    // invalid_grant (400) = permanent: token revoked/expired/MFA, re-auth required.
+    // 429 Too Many Requests = transient: Azure throttling, retry with backoff.
+    // 5xx = transient Azure-side error, safe to retry.
+    const permanent = response.status >= 400 && response.status < 500 && response.status !== 429;
     throw new RefreshError(
       `Token refresh failed: ${response.status} ${response.statusText} — ${errorText}`,
       permanent

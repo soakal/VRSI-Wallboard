@@ -163,7 +163,7 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 // Static file serving — active whenever client/dist exists (production or explicit NODE_ENV)
-import { existsSync } from 'fs';
+import { existsSync, accessSync, constants as fsConstants } from 'fs';
 
 // Unknown /api/* routes must return JSON 404, never the SPA index.html or a
 // redirect to Vite — otherwise the client tries to JSON.parse HTML.
@@ -198,6 +198,24 @@ async function bootstrap(): Promise<void> {
     storage: 'local',
   });
   getPersistence();
+
+  // Early writability probe: if the DB file exists but the server can't open
+  // it read-write, every board mutation fails with a bare 500.  A non-writable
+  // file is the most common symptom of a kiosk where the elevated installer
+  // created the DB but never granted the kiosk user Modify permission.
+  const dbPath = path.join(resolveDataDir(), 'wallboard.db');
+  if (existsSync(dbPath)) {
+    try {
+      accessSync(dbPath, fsConstants.W_OK);
+    } catch {
+      logger.warn(
+        `Database is not writable: ${dbPath}. ` +
+        `All board writes (block/unblock/notes/status) will fail. ` +
+        `Fix with (elevated): icacls "${resolveDataDir()}" /grant "<domain\\\\user>:(OI)(CI)M" /T`
+      );
+    }
+  }
+
   startAuditPruneCron();
   logAudit('system', 'VRSI WallBoard server started', resolveDataDir(), true);
   logAudit(
