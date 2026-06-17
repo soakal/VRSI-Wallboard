@@ -80,8 +80,8 @@ export interface Actor {
 }
 
 export const DEFAULT_BOARD_CONFIG: BoardConfig = {
-  spareCarrier: 'matto@vrs-inc.com',
-  superUsers: ['Jon Shantry'],
+  spareCarrier: '',
+  superUsers: [],
   statusColors: {
     none: '#475569',
     in_progress: '#facc15',
@@ -90,11 +90,6 @@ export const DEFAULT_BOARD_CONFIG: BoardConfig = {
   },
   extraUsers: [],
 };
-
-export interface Actor {
-  id: string;
-  name: string;
-}
 
 export interface JobFilter {
   pm?: string[];

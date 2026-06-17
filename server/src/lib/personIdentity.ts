@@ -1,11 +1,27 @@
 /**
  * Merge spreadsheet shorthand names with email identities for the same person.
  * Each group canonicalizes to the email form when present.
+ *
+ * Site-specific aliases are NOT committed to source. Configure them via the
+ * PERSON_ALIASES environment variable as a JSON array of alias groups:
+ *   PERSON_ALIASES=[["phil g","philg@vrsinc","philg@vrs-inc.com"],["ted h","tedh","tedh@vrs-inc.com"]]
  */
-const ALIAS_GROUPS: readonly (readonly string[])[] = [
-  ['phil g', 'philg@vrsinc', 'philg@vrs-inc.com'],
-  ['ted h', 'tedh', 'tedh@vrs-inc.com'],
-];
+function loadEnvAliases(): readonly (readonly string[])[] {
+  const raw = process.env.PERSON_ALIASES;
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as unknown[]).filter(
+      (g): g is string[] =>
+        Array.isArray(g) && (g as unknown[]).every((s) => typeof s === 'string'),
+    );
+  } catch {
+    return [];
+  }
+}
+
+const ALIAS_GROUPS: readonly (readonly string[])[] = loadEnvAliases();
 
 const CANONICAL_BY_KEY = new Map<string, string>();
 
