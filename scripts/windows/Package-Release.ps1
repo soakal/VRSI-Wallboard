@@ -3,8 +3,11 @@
 . "$PSScriptRoot\_common.ps1"
 $ErrorActionPreference = 'Stop'
 
-$SharedDir  = Join-Path $RepoRoot 'shared'
-$ReleaseDir = Join-Path $RepoRoot 'VRSI WallBoard'
+$SharedDir   = Join-Path $RepoRoot 'shared'
+$ReleasesDir = Join-Path $RepoRoot 'releases'
+# Stage into a temp dir so no 'VRSI WallBoard\' folder litters the repo root.
+$StagingRoot = Join-Path $env:TEMP "vrsi-release-$(Get-Date -Format 'yyyyMMddHHmmss')"
+$ReleaseDir  = Join-Path $StagingRoot 'VRSI WallBoard'
 
 Write-Host ''
 Write-Host '==========================================' -ForegroundColor Cyan
@@ -19,11 +22,8 @@ Write-Step 'Running production build'
 # Build-Production.ps1 (which runs with $ErrorActionPreference='Stop').
 & (Join-Path $PSScriptRoot 'Build-Production.ps1')
 
-Write-Step "Preparing release folder: $ReleaseDir"
-if (Test-Path $ReleaseDir) {
-    Write-Host '  Removing previous release...' -ForegroundColor DarkGray
-    Remove-Item $ReleaseDir -Recurse -Force
-}
+New-Item -ItemType Directory -Path $ReleasesDir -Force | Out-Null
+Write-Step "Staging release in temp: $StagingRoot"
 
 function New-Dir([string]$Path) {
     New-Item -ItemType Directory -Path $Path -Force | Out-Null
@@ -93,19 +93,23 @@ try { $appVersion = (Get-Content (Join-Path $ServerDir 'package.json') -Raw | Co
     commit  = $commitHash
 } | ConvertTo-Json | Set-Content (Join-Path $ReleaseDir 'release-info.json') -Encoding utf8
 
-# Always produce the installable zip so a release is never published without one.
-# Named with the app version, e.g. VRSI-WallBoard-v0.12.0.zip, in the repo root.
+# Always produce the installable zip. Named with the app version, e.g.
+# VRSI-WallBoard-v0.15.0.zip, placed in releases\ (gitignored).
+# To publish: gh release create vX.Y.Z "releases\VRSI-WallBoard-vX.Y.Z.zip" "releases\VRSI-WallBoard-vX.Y.Z.zip.sha256"
 $zipName = if ($appVersion) { "VRSI-WallBoard-v$appVersion.zip" } else { 'VRSI-WallBoard.zip' }
-$zipPath = Join-Path $RepoRoot $zipName
-Write-Step "Creating install zip: $zipName"
+$zipPath = Join-Path $ReleasesDir $zipName
+Write-Step "Creating install zip: releases\$zipName"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path $ReleaseDir -DestinationPath $zipPath -Force
+
+# Clean up the temp staging dir — the zip is the deliverable.
+Remove-Item $StagingRoot -Recurse -Force -ErrorAction SilentlyContinue
 $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
 
 # Publish a SHA256 sidecar so the in-app updater can verify the download.
 # Format: "<hash>  <zipname>" (sha256sum-style). Upload BOTH assets to the release.
 $zipHash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
-$shaPath = "$zipPath.sha256"
+$shaPath = Join-Path $ReleasesDir "$zipName.sha256"
 "$zipHash  $zipName" | Set-Content -Path $shaPath -Encoding ascii -NoNewline
 
 # Summary
@@ -117,13 +121,15 @@ Write-Host '==========================================' -ForegroundColor Green
 Write-Host '  Release package ready' -ForegroundColor Green
 Write-Host '==========================================' -ForegroundColor Green
 Write-Host ''
-Write-Host "  Location    : $ReleaseDir"
 Write-Host "  Install zip : $zipPath  ($zipSize MB)"
+Write-Host "  SHA256      : $shaPath"
 Write-Host "  Server      : $serverSize MB  (dist/)"
 Write-Host "  Client      : $clientSize MB  (dist/)"
 Write-Host ''
 Write-Host '  To deploy to a new PC:' -ForegroundColor Cyan
-Write-Host "    1. Copy the entire  $(Split-Path $ReleaseDir -Leaf)\  folder to the target PC"
-Write-Host '    2. On the target PC, double-click  INSTALL.bat'
+Write-Host "    1. Extract  releases\$zipName  to the target PC"
+Write-Host '    2. Inside the extracted folder, double-click  INSTALL.bat'
 Write-Host '    3. Node.js will be installed automatically if needed'
+Write-Host '  To publish to GitHub:' -ForegroundColor Cyan
+Write-Host "    gh release create v$appVersion ""releases\$zipName"" ""releases\$zipName.sha256"""
 Write-Host ''

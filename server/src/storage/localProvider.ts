@@ -79,6 +79,28 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       }
     }, 60 * 60 * 1000);
     this.checkpointTimer.unref();
+
+    this.pruneOldMigratedFiles();
+  }
+
+  // Delete .migrated marker files older than 30 days — they're one-time
+  // migration sentinels and accumulate forever on long-running kiosks.
+  private pruneOldMigratedFiles(): void {
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    try {
+      const entries = fs.readdirSync(this.dataDir).filter((f) => f.endsWith('.migrated'));
+      for (const file of entries) {
+        const filePath = path.join(this.dataDir, file);
+        const stat = fs.statSync(filePath);
+        if (Date.now() - stat.mtimeMs > THIRTY_DAYS_MS) {
+          fs.unlinkSync(filePath);
+          this.logAudit('system', `Pruned stale migration marker: ${file}`, filePath, true);
+          logger.info(`Pruned stale migration marker: ${file}`);
+        }
+      }
+    } catch (e) {
+      logger.warn('Could not prune .migrated files', { error: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   /**

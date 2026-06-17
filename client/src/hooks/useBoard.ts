@@ -162,9 +162,7 @@ export function useAddJobNote() {
     mutationFn: ({ jobNumber, text, actor }: { jobNumber: string; text: string; actor: Actor }) =>
       addJobNote(jobNumber, text, actor),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['board', 'jobs'] }),
-    onError: () => {
-      console.error('Failed to save note — server may be unavailable')
-    },
+    onError: () => { /* error surfaced via mutation.isError at call site */ },
   });
 }
 

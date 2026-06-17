@@ -100,7 +100,10 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
     return viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   })();
-  const agendaMonthLabel = viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const agendaMonthLabel = useMemo(
+    () => viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    [viewDate]
+  );
 
   const handleSelectUserId = useCallback(
     (id: string) => {

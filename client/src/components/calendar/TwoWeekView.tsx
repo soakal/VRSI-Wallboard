@@ -1,6 +1,10 @@
 import { Navigate } from 'react-big-calendar'
 import { startOfWeek as dfStartOfWeek, addDays, getDay } from 'date-fns'
-// react-big-calendar's MonthView is an internal module with no published types.
+// react-big-calendar's MonthView is an INTERNAL module with no published types.
+// It can break on any RBC minor/patch bump. Before upgrading RBC, verify the
+// 2-week view still renders by checking: (a) 2 rows of 7 cells appear, (b) the
+// "+N more" popup opens, (c) there are no React warnings in the console.
+//
 // We subclass it so the 2-week view inherits ALL of RBC's month rendering —
 // the DateContentRow wiring, accessors/getters/components, the "+N more" popup
 // overlay, and the row-height measurement — and override only the rendered date

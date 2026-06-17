@@ -146,6 +146,10 @@ updateRouter.get('/status', (_req: Request, res: Response) => {
   try {
     const statusPath = path.join(resolveLogsDir(), 'update-status.json');
     if (!fs.existsSync(statusPath)) return res.json({ data: null });
+    if (fs.statSync(statusPath).size > 100 * 1024) {
+      logger.warn('update-status.json exceeds 100 KB — ignoring to avoid reading a corrupt file');
+      return res.json({ data: null });
+    }
     const parsed: unknown = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
     if (!isUpdateStatus(parsed)) return res.json({ data: null });
     return res.json({ data: parsed });

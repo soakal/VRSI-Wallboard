@@ -1,4 +1,4 @@
-import React, { ErrorInfo } from 'react';
+import React from 'react';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -22,8 +22,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error('[ErrorBoundary] Uncaught error:', error, info);
+  componentDidCatch(_error: Error, _info: React.ErrorInfo): void {
     this.startCountdown();
   }
 

@@ -46,6 +46,12 @@ Write-Host ''
 Write-Warning 'DISASTER RECOVERY RESTORE: This performs a full file-level overwrite of wallboard.db.'
 Write-Warning 'For a merge-safe restore with conflict checks, use the in-app restore (Monitoring panel) instead.'
 Write-Host ''
+$confirm = Read-Host 'Type YES (in capitals) to confirm the full overwrite'
+if ($confirm -ne 'YES') {
+    Write-Host 'Restore cancelled.' -ForegroundColor Yellow
+    exit 0
+}
+Write-Host ''
 
 # Check whether the system tray monitor (Start-TrayApp.ps1) is running.
 # If it is, its 5-second watchdog timer will auto-restart the server during
