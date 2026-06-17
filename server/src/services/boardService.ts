@@ -751,11 +751,37 @@ export function setJobBlocked(
   return runExclusive(() => {
     const state = getBoardStateFile()
     const existing = state[jobNumber] ?? emptyJobState()
+    const trimmedReason = (reason ?? '').trim() || null
+
+    // When blocking with a reason, drop a permanent note into the notes section
+    // so the reason becomes part of the job's history — it stays visible after
+    // the job is unblocked (unblock clears blockedReason but never the notes).
+    // Only on a genuinely new block event (or a changed reason) so re-saving the
+    // same blocked state does not pile up duplicate notes.
+    const isNewBlockEvent =
+      blocked &&
+      trimmedReason !== null &&
+      (!existing.blocked || existing.blockedReason !== trimmedReason)
+    const notes =
+      isNewBlockEvent && actor
+        ? [
+            ...existing.notes,
+            {
+              id: generateNoteId(),
+              authorId: actor.id,
+              authorName: actor.name,
+              text: `⛔ Blocked: ${trimmedReason}`,
+              createdAt: new Date().toISOString(),
+            } as JobNote,
+          ]
+        : existing.notes
+
     state[jobNumber] = {
       ...existing,
       blocked,
       blockedAt: blocked ? new Date().toISOString() : null,
-      blockedReason: blocked ? ((reason ?? '').trim() || null) : null,
+      blockedReason: blocked ? trimmedReason : null,
+      notes,
       version: (existing.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
       updatedBy: actor?.name,

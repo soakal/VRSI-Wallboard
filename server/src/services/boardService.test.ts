@@ -105,6 +105,30 @@ test('import never clears blocked, and unblock routes back by status', async () 
   assert.equal(getJobBoardTab(find('100')!, getBoardConfig()), 'project')
 })
 
+test('blocking with a reason adds a note that survives unblock', async () => {
+  await applyBoardImport([job('100')], 'ops.xlsm', { '100': 'in_progress' }, {})
+  await setJobBlocked('100', true, 'waiting on parts', actor)
+  const noted = find('100')!.notes.filter((n) => n.text.includes('waiting on parts'))
+  assert.equal(noted.length, 1, 'block reason captured as a note')
+  assert.ok(noted[0].text.startsWith('⛔ Blocked:'), 'note labelled as a block')
+  assert.equal(noted[0].authorName, 'Brian Kalsic', 'attributed to the blocking user')
+  // Unblock — blockedReason clears but the note stays in the history.
+  await setJobBlocked('100', false, null, actor)
+  assert.equal(find('100')!.blockedReason, null)
+  assert.equal(
+    find('100')!.notes.filter((n) => n.text.includes('waiting on parts')).length,
+    1,
+    'block note still present after unblock',
+  )
+})
+
+test('re-saving the same blocked reason does not duplicate the note', async () => {
+  await applyBoardImport([job('100')], 'ops.xlsm', { '100': 'in_progress' }, {})
+  await setJobBlocked('100', true, 'parked', actor)
+  await setJobBlocked('100', true, 'parked', actor)
+  assert.equal(find('100')!.notes.filter((n) => n.text.includes('parked')).length, 1)
+})
+
 test('a blocked job dropped from the spreadsheet is preserved; a plain one is pruned', async () => {
   await applyBoardImport([job('100'), job('200')], 'ops.xlsm', { '100': 'in_progress', '200': 'in_progress' }, {})
   await setJobBlocked('100', true, 'parked', actor)
