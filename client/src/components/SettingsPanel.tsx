@@ -6,6 +6,11 @@ import { useCalendars } from "../hooks/useCalendars";
 import { useUpdateConfig } from "../hooks/useConfig";
 import { useUpdateCheck, fetchUpdateStatus } from "../hooks/useUpdateCheck";
 import { confirmDiscardUnsaved } from "../store/appStore";
+import { useBoardConfig, useUpdateBoardConfig } from "../hooks/useBoard";
+import { DEFAULT_BOARD_CONFIG, JobStatus } from "@vrsi/wallboard-shared";
+import { statusLabel } from "./board/boardColors";
+
+const STATUS_LIST: JobStatus[] = ["none", "in_progress", "ready_to_ship", "shipped"];
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -63,6 +68,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
   const updateConfig = useUpdateConfig();
   const onSave = async (partial: Partial<AppConfig>) => { await updateConfig.mutateAsync(partial); };
   const [local, setLocal] = useState<AppConfig>({ ...config });
+  const { config: boardConfig } = useBoardConfig();
+  const updateBoardConfig = useUpdateBoardConfig();
+  const [localColors, setLocalColors] = useState<Record<JobStatus, string>>(
+    () => ({ ...DEFAULT_BOARD_CONFIG.statusColors, ...boardConfig.statusColors })
+  );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [zipInput, setZipInput] = useState("");
@@ -81,6 +91,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setLocal({ ...config }); setZipInput(""); setZipStatus(null); }, [config]);
+  useEffect(() => {
+    setLocalColors({ ...DEFAULT_BOARD_CONFIG.statusColors, ...boardConfig.statusColors });
+  }, [boardConfig.statusColors]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -195,12 +208,22 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
   const handleSave = async () => {
     setSaving(true);
     setSaveError(null);
-    try { await onSave(local); onClose(); }
+    try {
+      await Promise.all([
+        onSave(local),
+        updateBoardConfig.mutateAsync({ statusColors: localColors }),
+      ]);
+      onClose();
+    }
     catch (err) { setSaveError(err instanceof Error ? err.message : "Failed to save settings"); }
     finally { setSaving(false); }
   };
 
-  const handleDiscard = () => { setLocal({ ...config }); onClose(); };
+  const handleDiscard = () => {
+    setLocal({ ...config });
+    setLocalColors({ ...DEFAULT_BOARD_CONFIG.statusColors, ...boardConfig.statusColors });
+    onClose();
+  };
 
   const hourOptions = Array.from({ length: 24 }, (_, i) => ({
     value: String(i),
@@ -246,10 +269,27 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
                 >
                   <span>
                     <span className="block text-sm text-slate-200">Users</span>
-                    <span className="block text-[11px] text-slate-500 mt-0.5">Pick who you are, super users, extra users, colors</span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5">Pick who you are, super users, extra users</span>
                   </span>
                   <span className="text-slate-500">→</span>
                 </button>
+                <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                  <span className="block text-sm text-slate-200 mb-2">Status colors</span>
+                  <div className="flex flex-col gap-1.5">
+                    {STATUS_LIST.map((status) => (
+                      <div key={status} className="flex items-center justify-between">
+                        <span className="text-[12px] text-slate-400">{statusLabel(status)}</span>
+                        <input
+                          type="color"
+                          value={localColors[status]}
+                          onChange={(e) => setLocalColors((prev) => ({ ...prev, [status]: e.target.value }))}
+                          className="w-7 h-7 cursor-pointer rounded border border-white/10 bg-transparent p-0.5"
+                          title={`Color for ${statusLabel(status)}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => goTo("/board/import")}

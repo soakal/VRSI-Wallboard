@@ -2,10 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useBoardUsers, useBoardConfig, useUpdateBoardConfig } from '../../hooks/useBoard'
 import { useAppStore } from '../../store/appStore'
-import { JobStatus, BoardUser, DEFAULT_BOARD_CONFIG } from '@vrsi/wallboard-shared'
-import { statusLabel } from './boardColors'
-
-const STATUS_LIST: JobStatus[] = ['none', 'in_progress', 'ready_to_ship', 'shipped']
+import { BoardUser } from '@vrsi/wallboard-shared'
 
 function roleLabel(role: BoardUser['role']): string {
   switch (role) {
@@ -32,18 +29,6 @@ export default function UsersView() {
     setActiveUser(user)
     if (selectPrompt && user) navigate('/board')
   }
-
-  // ── color state ───────────────────────────────────────────────────────────
-  const [localColors, setLocalColors] = useState<Record<JobStatus, string>>(
-    () => ({ ...DEFAULT_BOARD_CONFIG.statusColors, ...config.statusColors })
-  )
-
-  // Sync localColors when config loads / changes
-  useEffect(() => {
-    setLocalColors({ ...DEFAULT_BOARD_CONFIG.statusColors, ...config.statusColors })
-  }, [config.statusColors])
-
-  const [savedFlash, setSavedFlash] = useState(false)
 
   // ── super users state ─────────────────────────────────────────────────────
   const superUsers = config.superUsers ?? []
@@ -105,18 +90,6 @@ export default function UsersView() {
   const handleRemoveUser = (name: string) => {
     const current = config.extraUsers ?? []
     updateConfig.mutate({ extraUsers: current.filter((u) => u !== name) })
-  }
-
-  const handleSaveColors = () => {
-    updateConfig.mutate(
-      { statusColors: localColors },
-      {
-        onSuccess: () => {
-          setSavedFlash(true)
-          setTimeout(() => setSavedFlash(false), 2000)
-        },
-      }
-    )
   }
 
   return (
@@ -288,43 +261,6 @@ export default function UsersView() {
         {spareSavedFlash && (
           <span className="text-green-400 text-xs">Saved!</span>
         )}
-      </div>
-
-      {/* ── Section 5: Tab Status Colors ──────────────────────────────────────── */}
-      <div className="py-4 px-1">
-        <h3 className="text-slate-300 font-semibold text-sm mb-3">Tab Status Colors</h3>
-
-        <div className="flex flex-col gap-2 mb-3">
-          {STATUS_LIST.map((status) => (
-            <div key={status} className="flex items-center gap-3">
-              <span className="text-slate-400 text-sm w-32 shrink-0">
-                {statusLabel(status)}
-              </span>
-              <input
-                type="color"
-                value={localColors[status]}
-                onChange={(e) =>
-                  setLocalColors((prev) => ({ ...prev, [status]: e.target.value }))
-                }
-                className="w-8 h-8 cursor-pointer rounded border border-slate-700 bg-transparent p-0.5"
-                title={`Color for ${statusLabel(status)}`}
-              />
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSaveColors}
-            disabled={updateConfig.isPending}
-            className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded disabled:opacity-50 transition-colors"
-          >
-            {updateConfig.isPending ? 'Saving...' : 'Save Colors'}
-          </button>
-          {savedFlash && (
-            <span className="text-green-400 text-xs">Saved!</span>
-          )}
-        </div>
       </div>
 
     </div>
