@@ -26,6 +26,9 @@ import { requireAdminToken } from '../middleware/adminAuth.js'
 
 export const boardRouter = Router()
 
+const MAX_JOB_NUMBER_LEN = 100
+const MAX_NOTE_ID_LEN = 100
+
 // ---------------------------------------------------------------------------
 // GET /export/ship-dates.ics  — public, no admin token needed
 // Ship dates are already visible on the wallboard display; this is a
@@ -169,6 +172,10 @@ function validateJobsArray(raw: unknown[]): {
       errors.push(`Row ${i}: missing jobNumber`)
       return
     }
+    if (jobNumber.length > 100) {
+      errors.push(`Row ${i}: jobNumber too long (max 100 characters)`)
+      return
+    }
     if (isCancelledSpreadsheetStatus(toStr(o.status))) {
       return
     }
@@ -176,9 +183,9 @@ function validateJobsArray(raw: unknown[]): {
     if (mapped) importedStatuses[jobNumber] = mapped
     jobs.push({
       jobNumber,
-      pm: toStr(o.pm),
-      customer: toStr(o.customer),
-      materialsManager: toStr(o.materialsManager),
+      pm: toStr(o.pm).slice(0, 1000),
+      customer: toStr(o.customer).slice(0, 1000),
+      materialsManager: toStr(o.materialsManager).slice(0, 1000),
       pabsComplete: toDateOrNull(o.pabsComplete),
       shipToPm: toDateOrNull(o.shipToPm),
       shipToCustomer: toDateOrNull(o.shipToCustomer),
@@ -318,6 +325,27 @@ boardRouter.get('/config', async (_req: Request, res: Response, next: NextFuncti
 // ---------------------------------------------------------------------------
 boardRouter.post('/config', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const body = req.body as Record<string, unknown>
+    if (typeof body.spareCarrier === 'string' && body.spareCarrier.length > 200) {
+      res.status(400).json({ error: { code: 'field_too_long', message: 'spareCarrier exceeds 200 characters' } })
+      return
+    }
+    if (Array.isArray(body.superUsers)) {
+      for (const u of body.superUsers as unknown[]) {
+        if (typeof u !== 'string' || u.length > 200) {
+          res.status(400).json({ error: { code: 'field_too_long', message: 'superUsers entries must be strings ≤ 200 characters' } })
+          return
+        }
+      }
+    }
+    if (Array.isArray(body.extraUsers)) {
+      for (const u of body.extraUsers as unknown[]) {
+        if (typeof u !== 'string' || u.length > 200) {
+          res.status(400).json({ error: { code: 'field_too_long', message: 'extraUsers entries must be strings ≤ 200 characters' } })
+          return
+        }
+      }
+    }
     const updated = saveBoardConfig(req.body)
     res.json({ data: updated })
   } catch (err: unknown) {
@@ -343,6 +371,10 @@ boardRouter.get('/users', async (_req: Request, res: Response, next: NextFunctio
 // ---------------------------------------------------------------------------
 boardRouter.patch('/jobs/:jobNumber/status', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.params.jobNumber.length > MAX_JOB_NUMBER_LEN) {
+      res.status(400).json({ error: { code: 'invalid_job_number', message: 'Job number too long' } })
+      return
+    }
     const { status, actor } = req.body as { status: string; actor?: Actor }
 
     if (!(STATUS_ORDER as readonly string[]).includes(status)) {
@@ -369,6 +401,10 @@ boardRouter.patch('/jobs/:jobNumber/status', async (req: Request, res: Response,
 // ---------------------------------------------------------------------------
 boardRouter.patch('/jobs/:jobNumber/ship-date', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.params.jobNumber.length > MAX_JOB_NUMBER_LEN) {
+      res.status(400).json({ error: { code: 'invalid_job_number', message: 'Job number too long' } })
+      return
+    }
     const { shipDateOverride, shipDateOverrideNote, actor } = req.body as {
       shipDateOverride?: string | null
       shipDateOverrideNote?: string | null
@@ -410,6 +446,10 @@ boardRouter.patch('/jobs/:jobNumber/ship-date', async (req: Request, res: Respon
 // ---------------------------------------------------------------------------
 boardRouter.patch('/jobs/:jobNumber/binder-printed', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.params.jobNumber.length > MAX_JOB_NUMBER_LEN) {
+      res.status(400).json({ error: { code: 'invalid_job_number', message: 'Job number too long' } })
+      return
+    }
     const { binderPrinted, actor } = req.body as { binderPrinted?: boolean; actor?: Actor }
 
     if (typeof binderPrinted !== 'boolean') {
@@ -436,6 +476,10 @@ boardRouter.patch('/jobs/:jobNumber/binder-printed', async (req: Request, res: R
 // ---------------------------------------------------------------------------
 boardRouter.patch('/jobs/:jobNumber/blocked', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.params.jobNumber.length > MAX_JOB_NUMBER_LEN) {
+      res.status(400).json({ error: { code: 'invalid_job_number', message: 'Job number too long' } })
+      return
+    }
     const { blocked, reason, actor } = req.body as { blocked?: boolean; reason?: string | null; actor?: Actor }
 
     if (typeof blocked !== 'boolean') {
@@ -466,6 +510,10 @@ boardRouter.patch('/jobs/:jobNumber/blocked', async (req: Request, res: Response
 // ---------------------------------------------------------------------------
 boardRouter.post('/jobs/:jobNumber/notes', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.params.jobNumber.length > MAX_JOB_NUMBER_LEN) {
+      res.status(400).json({ error: { code: 'invalid_job_number', message: 'Job number too long' } })
+      return
+    }
     const { text, actor } = req.body as { text?: string; actor?: Actor }
 
     if (!text || !actor) {
@@ -494,6 +542,14 @@ boardRouter.post('/jobs/:jobNumber/notes', async (req: Request, res: Response, n
 // ---------------------------------------------------------------------------
 boardRouter.patch('/jobs/:jobNumber/notes/:noteId', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.params.jobNumber.length > MAX_JOB_NUMBER_LEN) {
+      res.status(400).json({ error: { code: 'invalid_job_number', message: 'Job number too long' } })
+      return
+    }
+    if (req.params.noteId.length > MAX_NOTE_ID_LEN) {
+      res.status(400).json({ error: { code: 'invalid_note_id', message: 'Note ID too long' } })
+      return
+    }
     const { text, actor } = req.body as { text?: string; actor?: Actor }
     if (!text || !actor) {
       res.status(400).json({ error: { code: 'missing_fields', message: 'text and actor required' } })
@@ -523,6 +579,14 @@ boardRouter.patch('/jobs/:jobNumber/notes/:noteId', async (req: Request, res: Re
 // ---------------------------------------------------------------------------
 boardRouter.delete('/jobs/:jobNumber/notes/:noteId', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.params.jobNumber.length > MAX_JOB_NUMBER_LEN) {
+      res.status(400).json({ error: { code: 'invalid_job_number', message: 'Job number too long' } })
+      return
+    }
+    if (req.params.noteId.length > MAX_NOTE_ID_LEN) {
+      res.status(400).json({ error: { code: 'invalid_note_id', message: 'Note ID too long' } })
+      return
+    }
     const { actor } = req.body as { actor?: Actor }
     if (!actor) {
       res.status(400).json({ error: { code: 'missing_fields', message: 'actor required' } })

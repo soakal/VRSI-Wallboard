@@ -66,8 +66,9 @@ test('parseSpreadsheetCompleteFlag: truthy and falsy variants', () => {
 
 // ── spare detection + tab routing ───────────────────────────────────────
 test('isSpareJob: spare carrier PM or sp- / "sp " prefix', () => {
-  const cfg = DEFAULT_BOARD_CONFIG
-  assert.equal(isSpareJob({ jobNumber: '100', pm: cfg.spareCarrier }, cfg), true)
+  // Use an explicit spare carrier so the test doesn't depend on DEFAULT_BOARD_CONFIG's value.
+  const cfg = { ...DEFAULT_BOARD_CONFIG, spareCarrier: 'spare@example.com' }
+  assert.equal(isSpareJob({ jobNumber: '100', pm: 'spare@example.com' }, cfg), true)
   assert.equal(isSpareJob({ jobNumber: 'SP-200', pm: 'phil@x' }, cfg), true)
   assert.equal(isSpareJob({ jobNumber: 'sp 300', pm: 'phil@x' }, cfg), true)
   assert.equal(isSpareJob({ jobNumber: '9201', pm: 'phil@x' }, cfg), false)
