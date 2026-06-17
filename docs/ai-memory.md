@@ -9,9 +9,9 @@
 
 ## Current State
 
-**Version:** v1.1.1 (root + server + client + shared all in sync). Pushed and released on GitHub.
+**Version:** v1.1.2 (root + server + client + shared all in sync). Pushed and released on GitHub.
 
-**Last completed task:** Fix kiosk self-update (v1.1.1) — three-part fix to update routing, guard, and Package-Release.ps1.
+**Last completed task:** Out-of-box defaults — 2-week calendar, weather on (Plymouth MI 48170), files off, spare carrier matto@vrs-inc.com (v1.1.2).
 
 **Next task:** None assigned. Kiosk recovery still needed (see below).
 
@@ -55,6 +55,7 @@ After that, the in-app Update button works normally forever.
 
 | Version | What |
 |---------|------|
+| v1.1.2 | Out-of-box defaults: 2-week view, weather on (48170), files off, spare carrier set |
 | v1.1.1 | Fix kiosk self-update (update routing, guard, package script) |
 | v1.1.0 | New job statuses (parts_on_order, design, build); status colors in Settings |
 | v1.0.0 | First numbered release (council audit remediation complete: Phases 1–4) |

@@ -80,7 +80,7 @@ export interface Actor {
 }
 
 export const DEFAULT_BOARD_CONFIG: BoardConfig = {
-  spareCarrier: '',
+  spareCarrier: 'matto@vrs-inc.com',
   superUsers: [],
   statusColors: {
     none: '#475569',

@@ -106,7 +106,7 @@ export const CALENDAR_COLORS: Record<string, string> = {
 
 export const DEFAULT_CONFIG: AppConfig = {
   calendarIds: [],
-  displayMode: 'month',
+  displayMode: 'twoWeek',
   refreshInterval: 300,
   theme: 'dark',
   timezone: 'America/New_York',
@@ -116,13 +116,13 @@ export const DEFAULT_CONFIG: AppConfig = {
   showAgendaRail: true,
   showWeather: true,
   showNextEvent: true,
-  weatherLat: null,
-  weatherLon: null,
+  weatherLat: 42.3709,
+  weatherLon: -83.4702,
   timeFormat: '12h',
   tempUnit: 'F',
   showRecentFiles: true,
   recentFilesCount: 8,
   sharePointSiteIds: [],
-  showFiles: true,
+  showFiles: false,
   fileOpenMode: 'same-window'
 };
