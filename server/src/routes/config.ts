@@ -22,7 +22,7 @@ function toClientConfig(cfg: AppConfig): Record<string, unknown> {
       ? cfg.calendar.enabledCalendarIds
       : [],
     // display
-    displayMode: ui.displayMode ?? 'week',
+    displayMode: ui.displayMode ?? 'twoWeek',
     refreshInterval: cfg.display?.refreshIntervalSeconds ?? 300,
     theme: cfg.display?.theme === 'auto' ? 'dark' : (cfg.display?.theme ?? 'dark'),
     timezone: cfg.display?.timezone ?? 'America/New_York',
