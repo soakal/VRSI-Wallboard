@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { logger } from '../utils/logger.js';
 import { requireAdminToken } from '../middleware/adminAuth.js';
+import { resolveLogsDir } from '../lib/paths.js';
 
 export const updateRouter = Router();
 
@@ -114,6 +115,43 @@ updateRouter.get('/check', async (_req: Request, res: Response) => {
     logger.warn('Update check failed', { err });
     cache = { checkedAt: now, latestVersion: '', releaseUrl: '', releaseName: '', ok: false };
     return res.json({ data: { currentVersion, currentReleaseUrl, updateAvailable: false } });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /status — last update outcome, written by the PS updater to
+// logs\update-status.json on BOTH its success and failure paths. The client
+// polls this during an update so a FAILED update surfaces as a red error in
+// Settings instead of silently looking like success (the old behaviour).
+// ---------------------------------------------------------------------------
+interface UpdateStatus {
+  ok: boolean;
+  message: string;
+  at: string;
+  fromVersion?: string;
+  toVersion?: string;
+}
+
+function isUpdateStatus(v: unknown): v is UpdateStatus {
+  return (
+    v !== null &&
+    typeof v === 'object' &&
+    'ok' in v && typeof (v as Record<string, unknown>).ok === 'boolean' &&
+    'message' in v && typeof (v as Record<string, unknown>).message === 'string' &&
+    'at' in v && typeof (v as Record<string, unknown>).at === 'string'
+  );
+}
+
+updateRouter.get('/status', (_req: Request, res: Response) => {
+  try {
+    const statusPath = path.join(resolveLogsDir(), 'update-status.json');
+    if (!fs.existsSync(statusPath)) return res.json({ data: null });
+    const parsed: unknown = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
+    if (!isUpdateStatus(parsed)) return res.json({ data: null });
+    return res.json({ data: parsed });
+  } catch (err) {
+    logger.warn('Failed to read update status', { err });
+    return res.json({ data: null });
   }
 });
 

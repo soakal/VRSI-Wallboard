@@ -14,7 +14,7 @@ import FileBrowserPanel from './components/FileBrowserPanel';
 import MonitoringPanel from './components/MonitoringPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useBackupOnClose } from './hooks/useBackupOnClose';
-import { useUpdateCheck } from './hooks/useUpdateCheck';
+import { useUpdateCheck, fetchUpdateStatus } from './hooks/useUpdateCheck';
 
 const BoardLayout = lazy(() => import('./components/board/BoardLayout'));
 const JobListView = lazy(() => import('./components/board/JobListView'));
@@ -28,6 +28,9 @@ function AppInner() {
   useBackupOnClose();
   const updateInfo = useUpdateCheck();
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  // A failed update detected while polling (e.g. a rollback) — surfaced as a
+  // red banner so a failure is never silent, even if Settings was closed.
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   // Resume version polling if Settings was closed before the update-triggered reload.
   useEffect(() => {
@@ -45,17 +48,26 @@ function AppInner() {
     const id = window.setInterval(async () => {
       try {
         const r = await fetch("/api/update/check");
-        if (!r.ok) return;
-        const j: unknown = await r.json();
-        if (j !== null && typeof j === "object" && "data" in j) {
-          const d = (j as { data?: { currentVersion?: string } }).data;
-          if (d && typeof d.currentVersion === "string" && d.currentVersion !== fromVersion) {
-            window.clearInterval(id);
-            localStorage.removeItem("vrsi_update_pending");
-            window.location.reload();
+        if (r.ok) {
+          const j: unknown = await r.json();
+          if (j !== null && typeof j === "object" && "data" in j) {
+            const d = (j as { data?: { currentVersion?: string } }).data;
+            if (d && typeof d.currentVersion === "string" && d.currentVersion !== fromVersion) {
+              window.clearInterval(id);
+              localStorage.removeItem("vrsi_update_pending");
+              window.location.reload();
+              return;
+            }
           }
         }
       } catch { /* server down mid-update — keep polling */ }
+      // Surface a failure (version did not change but the updater reported it).
+      const status = await fetchUpdateStatus();
+      if (status && !status.ok && Date.parse(status.at) >= startedAt - 5_000) {
+        window.clearInterval(id);
+        localStorage.removeItem("vrsi_update_pending");
+        setUpdateError(status.message || "The last update failed — check update.log.");
+      }
     }, 10_000);
     return () => window.clearInterval(id);
   }, []);
@@ -244,6 +256,21 @@ function AppInner() {
 
   return (
     <>
+      {updateError && (
+        <div className="fixed top-0 left-0 right-0 z-[9999] flex items-center justify-between gap-3 bg-red-700 px-4 py-2 text-sm text-white shadow-lg">
+          <span>
+            <strong>Update failed.</strong> {updateError} The board is still running the previous version.
+          </span>
+          <button
+            type="button"
+            onClick={() => setUpdateError(null)}
+            className="flex-shrink-0 rounded px-2 py-0.5 text-xs hover:bg-red-800 transition-colors"
+            aria-label="Dismiss update failure notification"
+          >
+            ✕ Dismiss
+          </button>
+        </div>
+      )}
       {showUpdateBanner && (
         <div className="fixed top-0 left-0 right-0 z-[9999] flex items-center justify-between gap-3 bg-blue-600 px-4 py-2 text-sm text-white shadow-lg">
           <span>

@@ -4,7 +4,7 @@ import { AppConfig } from "../types/index";
 import CalendarSelector from "./CalendarSelector";
 import { useCalendars } from "../hooks/useCalendars";
 import { useUpdateConfig } from "../hooks/useConfig";
-import { useUpdateCheck } from "../hooks/useUpdateCheck";
+import { useUpdateCheck, fetchUpdateStatus } from "../hooks/useUpdateCheck";
 import { confirmDiscardUnsaved } from "../store/appStore";
 
 interface SettingsPanelProps {
@@ -124,23 +124,40 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
 
   useEffect(() => () => { if (pollRef.current !== null) window.clearInterval(pollRef.current); }, []);
 
-  /** Start a 10-second polling loop that reloads when the server version changes. */
-  const startVersionPoll = (fromVersion: string | undefined) => {
+  /**
+   * Start a 10-second polling loop. Reloads when the server version changes
+   * (success); surfaces a red error when the updater reports a failure newer
+   * than `startedAt` (e.g. a rollback that leaves the version unchanged, which
+   * the version check alone can never detect).
+   */
+  const startVersionPoll = (fromVersion: string | undefined, startedAt: number) => {
     if (pollRef.current !== null) window.clearInterval(pollRef.current);
     pollRef.current = window.setInterval(async () => {
       try {
         const r = await fetch("/api/update/check");
-        if (!r.ok) return;
-        const j: unknown = await r.json();
-        if (j !== null && typeof j === "object" && "data" in j) {
-          const d = (j as { data?: { currentVersion?: string } }).data;
-          if (d && typeof d.currentVersion === "string" && d.currentVersion !== fromVersion) {
-            localStorage.removeItem("vrsi_update_pending");
-            window.location.reload();
+        if (r.ok) {
+          const j: unknown = await r.json();
+          if (j !== null && typeof j === "object" && "data" in j) {
+            const d = (j as { data?: { currentVersion?: string } }).data;
+            if (d && typeof d.currentVersion === "string" && d.currentVersion !== fromVersion) {
+              localStorage.removeItem("vrsi_update_pending");
+              window.location.reload();
+              return;
+            }
           }
         }
       } catch {
         // Server is down mid-update — keep polling
+      }
+      // The updater writes its outcome even when the version does not change.
+      // A failure timestamped at/after our start means this update failed.
+      const status = await fetchUpdateStatus();
+      if (status && !status.ok && Date.parse(status.at) >= startedAt - 5_000) {
+        if (pollRef.current !== null) window.clearInterval(pollRef.current);
+        pollRef.current = null;
+        localStorage.removeItem("vrsi_update_pending");
+        setUpdating(false);
+        setUpdateMsg({ type: "error", text: status.message || "Update failed — check update.log." });
       }
     }, 10_000);
   };
@@ -158,8 +175,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
         (j as { data?: { alreadyRunning?: boolean } }).data?.alreadyRunning === true;
 
       const fromVersion = updateInfo.currentVersion;
+      const startedAt = Date.now();
       // Persist so App.tsx can resume polling if Settings is closed before the reload
-      localStorage.setItem("vrsi_update_pending", JSON.stringify({ fromVersion, startedAt: Date.now() }));
+      localStorage.setItem("vrsi_update_pending", JSON.stringify({ fromVersion, startedAt }));
 
       setUpdateMsg({
         type: "ok",
@@ -167,7 +185,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
           ? "Update is already in progress. Leave the board alone and it will restart when done."
           : "Update started. The board will restart itself in a few minutes — leave it alone until then.",
       });
-      startVersionPoll(fromVersion);
+      startVersionPoll(fromVersion, startedAt);
     } catch (err) {
       setUpdating(false);
       setUpdateMsg({ type: "error", text: err instanceof Error ? `Update failed to start: ${err.message}` : "Update failed to start" });

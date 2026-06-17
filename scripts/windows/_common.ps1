@@ -60,6 +60,36 @@ function Get-DbPath {
     Join-Path (Get-DataDir) 'wallboard.db'
 }
 
+# Write the outcome of an update run to logs\update-status.json so the server's
+# GET /api/update/status can surface it to the operator. Called on BOTH the
+# success and failure paths — a silent failure (the worst property of the old
+# flow) becomes a red error in Settings instead of looking like success.
+function Write-UpdateStatus {
+    param(
+        [bool]$Ok,
+        [string]$Message,
+        [string]$FromVersion = '',
+        [string]$ToVersion = ''
+    )
+    try {
+        $logDir = Get-EnvValue 'LOGS_DIR' 'C:\ProgramData\VRSIWallBoard\logs'
+        if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+        $status = [ordered]@{
+            ok          = $Ok
+            message     = $Message
+            at          = (Get-Date).ToString('o')
+            fromVersion = $FromVersion
+            toVersion   = $ToVersion
+        }
+        # -Compress keeps it a single line; UTF8 so the Node side reads it cleanly.
+        Set-Content -Path (Join-Path $logDir 'update-status.json') `
+            -Value ($status | ConvertTo-Json -Compress) -Encoding UTF8
+    } catch {
+        # Never let a status-write failure mask the real update outcome.
+        Write-Warning "Could not write update-status.json: $($_.Exception.Message)"
+    }
+}
+
 function Stop-WallBoardServer {
     $conn = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $conn) {

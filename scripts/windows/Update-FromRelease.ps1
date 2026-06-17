@@ -49,11 +49,65 @@ function Assert-NodeCompatible {
     Write-Host "  Node.js $ver OK"
 }
 
+# Fail fast (BEFORE stopping the server) if the kiosk user lacks write access to
+# the install dir — otherwise Copy-Item fails AFTER the board is already down,
+# needing manual recovery. Missing Modify on the install folder is the Update
+# button's most common real-world failure.
+function Assert-Writable {
+    param([string]$Dir)
+    if (-not (Test-Path $Dir)) { throw "Install directory not found: $Dir" }
+    $probe = Join-Path $Dir ('.vrsi-write-test-' + [guid]::NewGuid().ToString('N'))
+    try {
+        Set-Content -Path $probe -Value 'ok' -ErrorAction Stop
+        Remove-Item $probe -Force -ErrorAction SilentlyContinue
+        Write-Host "  Write access to $Dir OK"
+    } catch {
+        throw "No write permission to '$Dir'. The kiosk user needs Modify on the install folder. Update aborted; the current version keeps running."
+    }
+}
+
+# npm install over a flaky kiosk network fails intermittently; retry a few times
+# before giving up. Throws if every attempt fails.
+function Invoke-NpmInstall {
+    param([int]$Attempts = 3)
+    for ($i = 1; $i -le $Attempts; $i++) {
+        & npm install --omit=dev --no-audit --no-fund 2>&1 | Out-Host
+        if ($LASTEXITCODE -eq 0) { return }
+        Write-Warning "npm install attempt $i/$Attempts failed (exit $LASTEXITCODE)."
+        if ($i -lt $Attempts) { Start-Sleep -Seconds 5 }
+    }
+    throw "npm install failed after $Attempts attempts."
+}
+
+# Restore the pre-update snapshot (dist + manifests) and reinstall deps so the
+# kiosk runs the previous known-good build. Shared by the unhealthy-new-build
+# path AND the catch block — the catch must roll the half-applied files back
+# rather than restart a partially-overwritten tree.
+function Invoke-Rollback {
+    if (-not $snapshotTaken -or -not $rollbackDir -or -not (Test-Path $rollbackDir)) { return }
+    Write-Warning 'Rolling back to the previous build...'
+    foreach ($item in $rollbackItems) {
+        $snap = Join-Path $rollbackDir $item
+        $dst = Join-Path $RepoRoot $item
+        if (Test-Path $snap) {
+            if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
+            New-Item -ItemType Directory -Path (Split-Path $dst -Parent) -Force | Out-Null
+            Copy-Item $snap $dst -Recurse -Force
+        }
+    }
+    Push-Location $ServerDir
+    try { Invoke-NpmInstall } catch { Write-Warning "Rollback npm install failed: $($_.Exception.Message)" }
+    Pop-Location
+}
+
 # Recovery state: if we stop the server and then a later step throws, the catch
-# block must bring the existing version back up.
+# block must bring the existing version back up (rolling back first if needed).
 $serverStopped = $false
 $restarted = $false
 $trayWasRunning = $false
+$rollbackDir = $null
+$rollbackItems = @('server\dist', 'client\dist', 'shared\dist', 'server\package.json', 'server\package-lock.json')
+$snapshotTaken = $false
 
 try {
     Write-Host ''
@@ -67,6 +121,7 @@ try {
     $_up = [System.Environment]::GetEnvironmentVariable('Path', 'User')
     $env:Path = ((@($_mp, $_up) | Where-Object { $_ }) -join ';')
     Assert-NodeCompatible
+    Assert-Writable $RepoRoot
 
     # 1. Find the latest release and its zip asset
     Write-Step 'Checking GitHub for the latest release'
@@ -132,7 +187,6 @@ try {
     #     roll back if the NEW version copies in but fails to start.
     $rollbackDir = Join-Path $tmpRoot 'rollback'
     if (Test-Path $rollbackDir) { Remove-Item $rollbackDir -Recurse -Force }
-    $rollbackItems = @('server\dist', 'client\dist', 'shared\dist', 'server\package.json', 'server\package-lock.json')
     foreach ($item in $rollbackItems) {
         $src = Join-Path $RepoRoot $item
         if (Test-Path $src) {
@@ -141,6 +195,7 @@ try {
             Copy-Item $src $dst -Recurse -Force
         }
     }
+    $snapshotTaken = $true
 
     # 4. Copy the new files over the install (data lives in ProgramData and
     #    server\.env is not part of the release zip, so both are untouched)
@@ -151,10 +206,7 @@ try {
     #    package-lock.json but no node_modules). PATH was refreshed in step 0.
     Write-Step 'Updating server dependencies'
     Push-Location $ServerDir
-    & npm install --omit=dev --no-audit --no-fund 2>&1 | Out-Host
-    $npmExit = $LASTEXITCODE
-    Pop-Location
-    if ($npmExit -ne 0) { throw "npm install failed with exit code $npmExit." }
+    try { Invoke-NpmInstall } finally { Pop-Location }
 
     # 6. Restart: prefer the tray when it was running; otherwise headless
     Write-Step 'Restarting server'
@@ -168,33 +220,28 @@ try {
         Start-Sleep -Seconds 2
         $waited += 2
     } until ((Test-WallBoardHealthy) -or ($waited -ge 60))
+    $finalOk = $false
+    $finalMsg = ''
     if (Test-WallBoardHealthy) {
         Write-Host "Server healthy at $WallBoardUrl" -ForegroundColor Green
+        $finalOk = $true
+        $finalMsg = "Update to $($rel.tag_name) complete."
     } else {
         # The new version copied in but won't come up healthy — roll back to the
         # snapshot so the kiosk runs the previous (known-good) build.
         Write-Warning 'New version did not become healthy within 60s - rolling back to the previous build.'
         Stop-WallBoardServer | Out-Null
         Start-Sleep -Seconds 1
-        foreach ($item in $rollbackItems) {
-            $snap = Join-Path $rollbackDir $item
-            $dst = Join-Path $RepoRoot $item
-            if (Test-Path $snap) {
-                if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
-                New-Item -ItemType Directory -Path (Split-Path $dst -Parent) -Force | Out-Null
-                Copy-Item $snap $dst -Recurse -Force
-            }
-        }
-        Push-Location $ServerDir
-        & npm install --omit=dev --no-audit --no-fund 2>&1 | Out-Host
-        Pop-Location
+        Invoke-Rollback
         Restart-WallBoardServer -TrayWasRunning $trayWasRunning
         $rbWaited = 0
         do { Start-Sleep -Seconds 2; $rbWaited += 2 } until ((Test-WallBoardHealthy) -or ($rbWaited -ge 60))
         if (Test-WallBoardHealthy) {
             Write-Warning "Rolled back to the previous build (healthy). The update to $($rel.tag_name) did NOT take - check update.log."
+            $finalMsg = "Update to $($rel.tag_name) failed; rolled back to the previous (working) build. Check update.log."
         } else {
             Write-Warning 'Rollback did not become healthy either. Re-run Update-FromRelease.bat as Administrator and check update.log.'
+            $finalMsg = 'Update failed AND rollback did not come back healthy. Re-run Update-FromRelease.bat as Administrator.'
         }
     }
 
@@ -213,17 +260,25 @@ try {
     Remove-Item $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
 
     Write-Host ''
-    Write-Host "Update to $($rel.tag_name) complete." -ForegroundColor Green
+    if ($finalOk) {
+        Write-Host $finalMsg -ForegroundColor Green
+    } else {
+        Write-Warning $finalMsg
+    }
+    Write-UpdateStatus -Ok $finalOk -Message $finalMsg
     Write-Host ''
     if (-not $Unattended) { Start-Sleep -Seconds 3 }
 } catch {
     Write-Warning "Update failed: $($_.Exception.Message)"
-    # If we already stopped the server but never reached the restart, bring the
-    # existing (old) version back up so the kiosk is not left down with the tray
-    # task disabled. Manual recovery would otherwise be required.
+    Write-UpdateStatus -Ok $false -Message "Update failed: $($_.Exception.Message)"
+    # If we already stopped the server but never reached the restart, roll any
+    # half-applied files back to the snapshot FIRST (so we never restart a
+    # partially-overwritten tree), then bring the previous version back up so the
+    # kiosk is not left down with the tray task disabled.
     if ($serverStopped -and -not $restarted) {
-        Write-Warning 'Restarting the existing version so the board is not left down...'
+        Write-Warning 'Restoring the previous version so the board is not left down...'
         try {
+            Invoke-Rollback
             Restart-WallBoardServer -TrayWasRunning $trayWasRunning
         } catch {
             Write-Warning "Recovery restart also failed: $($_.Exception.Message). Re-run Update-FromRelease.bat as Administrator."

@@ -6,6 +6,27 @@ if (-not $PSScriptRoot) { $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCom
 . "$PSScriptRoot\_common.ps1"
 
 $ErrorActionPreference = 'Stop'
+# PowerShell 7.3+: do not promote a native command's stderr to a terminating
+# error. Harmless/ignored on the 5.1 that ships with Windows (the Invoke-Git
+# wrapper below is what protects 5.1).
+$PSNativeCommandUseErrorActionPreference = $false
+
+# Run git with stderr de-fanged: git writes lots of INFORMATIONAL text to stderr
+# (progress, "From github.com…", "No stash entries found"), and under
+# $ErrorActionPreference='Stop' PS 5.1 turns that into a fatal NativeCommandError
+# (the exact bug that aborted every unattended update). Temporarily relaxing the
+# preference around the call lets us decide success/failure from the exit code.
+function Invoke-Git {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$GitArgs)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & git @GitArgs 2>&1 | Out-Host
+        return $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+}
 
 $logDir = Get-EnvValue 'LOGS_DIR' 'C:\ProgramData\VRSIWallBoard\logs'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
@@ -91,8 +112,8 @@ if ($dirty) {
         # nothing): gate $autoStashed on a real stash ref existing, otherwise the pop
         # below hits an empty stash and its "No stash entries found" stderr is fatal
         # under $ErrorActionPreference='Stop'.
-        git stash push --include-untracked -m 'pre-update auto-stash (unattended)' 2>&1 | Out-Host
-        git rev-parse --verify --quiet refs/stash *> $null
+        Invoke-Git stash push --include-untracked -m 'pre-update auto-stash (unattended)' | Out-Null
+        & git rev-parse --verify --quiet refs/stash *> $null
         $autoStashed = ($LASTEXITCODE -eq 0)
     } else {
         $ans = Read-Host 'Continue anyway? (Y/N)'
@@ -102,11 +123,11 @@ if ($dirty) {
 
 # 2. Pull latest code
 Write-Step 'Pulling latest code from GitHub'
-git pull --ff-only
-if ($LASTEXITCODE -ne 0) {
-    # Native git stderr (e.g. a pop conflict) must not be promoted to a terminating
-    # error here, or it would mask the real "git pull failed" message below.
-    if ($autoStashed) { try { git stash pop 2>&1 | Out-Host } catch { Write-Warning "stash pop skipped: $($_.Exception.Message)" } }
+$pullExit = Invoke-Git pull --ff-only
+if ($pullExit -ne 0) {
+    # Restore the stash if we made one; the pop is best-effort so it can never
+    # mask the real "git pull failed" message below.
+    if ($autoStashed) { Invoke-Git stash pop | Out-Null }
     Pop-Location
     throw 'git pull failed. The branch may have diverged - pull manually, then re-run this script.'
 }
@@ -114,8 +135,8 @@ if ($LASTEXITCODE -ne 0) {
 if ($autoStashed) {
     Write-Host '  Restoring auto-stash' -ForegroundColor DarkGray
     # A benign stash issue (empty/conflicting) must not abort a pull that already
-    # succeeded; downgrade it to a warning instead of a terminating error.
-    try { git stash pop 2>&1 | Out-Host } catch { Write-Warning "stash pop skipped: $($_.Exception.Message)" }
+    # succeeded; Invoke-Git keeps git's stderr non-fatal.
+    Invoke-Git stash pop | Out-Null
 }
 Pop-Location
 
@@ -146,7 +167,8 @@ do {
     $waited += 2
 } until ((Test-WallBoardHealthy) -or ($waited -ge $maxWait))
 
-if (-not (Test-WallBoardHealthy)) {
+$healthy = Test-WallBoardHealthy
+if (-not $healthy) {
     Write-Warning 'Server did not respond within 30s. Check Start-WallBoard-Service.ps1 manually.'
 } else {
     Write-Host "Server healthy at $WallBoardUrl" -ForegroundColor Green
@@ -163,12 +185,18 @@ Start-Sleep -Seconds 2
 & (Join-Path $PSScriptRoot 'Start-Kiosk.ps1')
 
 Write-Host ''
-Write-Host 'Update complete. WallBoard is running the new version.' -ForegroundColor Green
+if ($healthy) {
+    Write-Host 'Update complete. WallBoard is running the new version.' -ForegroundColor Green
+    Write-UpdateStatus -Ok $true -Message 'Update complete. WallBoard is running the new version.'
+} else {
+    Write-UpdateStatus -Ok $false -Message 'Update applied but the server did not come back healthy within 30s. Check update.log.'
+}
 Write-Host ''
 if (-not $Unattended) { Start-Sleep -Seconds 3 }
 
 } catch {
     Write-Warning "Update failed: $($_.Exception.Message)"
+    Write-UpdateStatus -Ok $false -Message "Update failed: $($_.Exception.Message)"
     # If we stopped the server but never reached the restart, bring the existing
     # version back up so the board is not left down with the tray task disabled.
     if ($serverStopped -and -not $restarted) {
