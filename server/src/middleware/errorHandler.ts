@@ -25,8 +25,9 @@ export function errorHandler(
   });
 
   const clientMessage = status >= 500 ? 'Internal Server Error' : rawMessage;
+  // Body matches the route contract exactly: { error: { code, message } }.
+  // The HTTP status line carries the status code (no redundant body field).
   res.status(status).json({
     error: { code: 'error', message: clientMessage },
-    status,
   });
 }
