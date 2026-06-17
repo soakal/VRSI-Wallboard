@@ -61,7 +61,7 @@ AI outputs one re-anchor line before responding:
 ```
 PROJECT_NAME    = VRSI WallBoard
 FORMERLY        = Nexus Kiosk (Dakboard Replacement)
-VERSION         = 0.1.0
+VERSION         = 0.15.3
 COPYRIGHT       = Copyright © VRSI. All Rights Reserved.
 NORTH_STAR      = A job board + calendar display that works standalone on
                   Windows today and upgrades to SharePoint collaboration
@@ -70,10 +70,10 @@ TARGET_USERS    = VRSI enterprise staff on Windows machines
 STACK           = React 18 + Vite + TypeScript (frontend)
                   Node.js 20+ + Express + TypeScript (backend)
                   SQLite (local) → SharePoint Lists (collaborative)
-DEPLOY_TARGET   = Windows-native (Node.js process + browser kiosk mode)
+DEPLOY_TARGET   = Windows-native (Node.js process + browser --app= window)
 STORAGE_MODE    = Local | NetworkShare | SharePoint  ← CONFIRM EACH SESSION
 AUTH            = Azure Device Code Flow (MSAL) + Entra ID
-LAST_UPDATED    = June 4, 2026
+LAST_UPDATED    = June 17, 2026
 ```
 
 ---
@@ -292,12 +292,12 @@ Every file operation and network call must be logged. This is the primary trust-
 
 ## 10. Known Issues — Fix in This Rebuild
 
-| # | Issue | Fix |
-|---|-------|-----|
-| 1 | SheetJS installed from CDN tarball (`cdn.sheetjs.com`) — `npm install` fails if CDN unreachable | Move to standard npm package |
-| 2 | XLSM source path hardcoded to VMware drag-and-drop cache (fragile, not stable) | Configurable path in settings + SharePoint auto-pull when available |
-| 3 | `personIdentity.ts` duplicated on both client and server — must stay in sync manually | Single shared module in `/shared/` or `/lib/` |
-| 4 | Board APIs fully unauthenticated on LAN | Implement `ADMIN_TOKEN` gate on all `/api/board/*` endpoints |
+| # | Issue | Fix | Status |
+|---|-------|-----|--------|
+| 1 | SheetJS installed from CDN tarball (`cdn.sheetjs.com`) — `npm install` fails if CDN unreachable | Move to standard npm package | ✅ Done |
+| 2 | XLSM source path hardcoded to VMware drag-and-drop cache (fragile, not stable) | Configurable path in settings + SharePoint auto-pull when available | Deferred (network-readiness project) |
+| 3 | `personIdentity.ts` duplicated on both client and server — must stay in sync manually | Single server module; site-specific aliases via `PERSON_ALIASES` env var (never committed) | ✅ Done v0.15.3 |
+| 4 | Board APIs fully unauthenticated on LAN | Implement `ADMIN_TOKEN` gate on all `/api/board/*` endpoints | ✅ Done |
 
 ---
 
@@ -506,4 +506,8 @@ Location: `docs/ai-memory.md`
 | 2026-06-16 | BK+AI | v0.10.0: (Phase 2) new/changed import notes flagged — `applyBoardImport` collects job numbers whose Ops Schedule note changed into `jobs_import_meta.changed_note_job_numbers` (transient, recomputed each import), surfaced as computed `BoardJob.hasNewNote`; JobCard shows a "New note" badge, NotesSection highlights the updated ops note, the "New (n)" toggle + the `new` search keyword now match `isNew || hasNewNote`. (Phase 3) Blocked tab — manual `blocked`/`blockedAt`/`blockedReason` on board state; a blocked job leaves Project/Spare/Archive and shows only under a new 4th "Blocked" tab (`/board/blocked`), with a bordered "Block"/"Unblock" control + reason on the card; new admin-gated `PATCH /api/board/jobs/:jobNumber/blocked`; import never touches blocked and `pruneOrphanedBoardState` preserves blocked jobs. New columns added via the same guarded `ensureColumns()` ALTER + carried through read/write/`_mergeFromBackup`. Write-path setters hardened to use `emptyJobState()` (council finding). Verified 20/20 merge checks; build clean. Council (correctness + security + roadmap) run — no critical issues; see ai-memory for the prioritized backlog. | BK: new-note visibility, a manual triage lane for problem children, and an independent verification pass |
 | 2026-06-16 | BK+AI | v0.9.3: import-preservation hotfix — re-import no longer reverts a user's manual status/binder. `applyBoardImport` applied imported status whenever it differed (silently violating §7.3): a job manually marked `shipped` was dragged back out of Archive when the spreadsheet still said in-progress. Fix: `board_state.status_manual` / `binder_manual` flags (added via a new guarded `ensureColumns()` PRAGMA-checked ALTER in `localProvider` — the repo had no ADD COLUMN pattern), set by the status/binder setters, honored by both import loops, carried through `getBoardStateFile`/`writeBoardState`/`_mergeFromBackup` (old backups default to 0). On first column-add, any pre-existing row with a non-empty `updatedBy` is backfilled as locked so the very first post-upgrade import can't revert existing manual edits. New/untouched jobs still auto-fill. Verified: 8/8 merge checks pass. | Active data-loss bug — Brian's manual ships/checkmarks were reverted on every import |
 | 2026-06-10 | BK+AI | v0.8.0: note drafts join the Apply flow — typed-but-unsent note makes the card dirty, "Apply all" saves status+binder+date+note in one click; un-applied edits tracked globally (appStore.dirtyJobs) with inline amber warning, confirm dialogs on tab switch / user switch / Calendar link / Settings nav, and beforeunload guard on refresh/close; Projects search treats "new" as a keyword matching NEW-flagged jobs | BK: warn when changes aren't applied, save multiple changes at once, find new jobs by typing "new" |
+| 2026-06-17 | BK+AI | Phase 1 council audit remediation (5 commits): (1) `personIdentity.ts` — removed all hardcoded employee PII; site-specific aliases now loaded from `PERSON_ALIASES` env var (JSON array of alias groups, never committed); `DEFAULT_BOARD_CONFIG.spareCarrier` and `superUsers` cleared; duplicate `Actor` interface removed. (2) `Update-FromRelease.bat` — developer warning echo so git-clone devs don't run the kiosk updater. (3) `board.ts` field-length validation — `jobNumber` ≤ 100, `noteId` ≤ 100, `spareCarrier`/`superUsers` ≤ 200, `blockedReason` ≤ 1000; import truncates display fields at 1000. (4) `index.ts` — DB writability probe at startup (warns with `icacls` remediation command); `getDbIntegrityStatus()` in `/health`. (5) `tokenRefresher.ts` — HTTP 429 treated as transient (was permanent, could permanently break auth after a rate-limit burst); `localProvider.ts` — `RESTORE_CONFLICT_WINDOW_MS` configurable (default 60 s); `Invoke-WallBoardBackup.ps1` + `Restore-Backup.ps1` — tokens.json sidecar backup alongside each DB backup (sidecar restore offer on restore to skip re-auth). `.env.example` — documented both new env vars. | Full council audit of the app; Brian requested "have the council come up with a plan to fully audit the app" |
+| 2026-06-17 | BK+AI | Phase 2 repo hygiene + hardening (1 commit): `Package-Release.ps1` — stages in `%TEMP%` (no `VRSI WallBoard\` litter in repo root); output zips + sha256 go to `releases\` (gitignored); prints `gh release create` command at end. `.gitignore` — `releases/` added. Deleted stale `VRSI WallBoard\` staging dir from disk. `ErrorBoundary.tsx` + `useBoard.ts` — removed `console.error`. `Dashboard.tsx` — `agendaMonthLabel` wrapped in `useMemo`. `TwoWeekView.tsx` — RBC upgrade checklist in fragility comment. `update.ts` — `update-status.json` size check (reject > 100 KB). `localProvider.ts` — startup sweep prunes `.migrated` files older than 30 days (audit-logged). `Restore-Backup.ps1` — requires typing `YES` before disaster-recovery overwrite. | Phase 2 council remediation plan |
+| 2026-06-17 | BK+AI | Phase 3 test coverage + CI (1 commit): `.github/workflows/test.yml` — added client TypeScript build step; added `ps-lint` job on `windows-latest` that parse-validates all `scripts/windows/*.ps1` via `[Parser]::ParseFile`. Exported `isNewer` from `update.ts`. New tests: `update.test.ts` (9 semver tests), `personIdentity.test.ts` (8 tests), `icsGenerator.test.ts` (7 tests). Suite: **47/47 pass**. | Phase 3 council remediation plan |
+| 2026-06-17 | BK+AI | Phase 4 docs sync: `VRSI-WALLBOARD-RULES.md` §1 version 0.1.0 → 0.15.3; DEPLOY_TARGET updated (browser --app= window, not kiosk mode); §10 known-issues table updated (SheetJS ✅, personIdentity ✅, ADMIN_TOKEN ✅, XLSM path deferred); §19 this entry. `docs/ai-memory.md` — rewritten to v0.15.3 state (condensed prior history, full current-state / active-plan / deferred backlog). | Docs were pinned at v0.1.0 and stale by over a month |
 

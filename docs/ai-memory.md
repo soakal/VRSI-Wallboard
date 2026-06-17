@@ -1,182 +1,206 @@
 # VRSI WallBoard — AI Memory
 
-**Last saved:** 2026-06-16
-**Vault record (full session log + remaining work):** Obsidian vault → `10-Projects/VRSI-Wallboard-Session-2026-06-16-v0.9.3-to-v0.14.1.md` (write/read via the `obsidian-vault` MCP server). Covers every release v0.9.3→v0.14.1 and the deferred "network-readiness" backlog.
+**Last saved:** 2026-06-17
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\` (dev: `server/data`)
+**Vault record (v0.9.3→v0.14.1 session log):** Obsidian vault → `10-Projects/VRSI-Wallboard-Session-2026-06-16-v0.9.3-to-v0.14.1.md`
+
+---
 
 ## Current State
 
-- Last completed task: **v0.14.3 — finished updater hardening (Tier-2, three items).** (1) **Node-version guard:** `Assert-NodeCompatible` (v20-26, matches installer NODE_MAX_MAJOR=26) runs FIRST in both update scripts (after a PATH-from-registry refresh), before stopping the server — so an incompatible Node aborts the update cleanly instead of failing npm install after the server is down. (2) **Download integrity:** `Package-Release.ps1` writes a `<zip>.sha256` sidecar (`"<hash>  <zipname>"`); `Update-FromRelease.ps1` finds a `*.sha256` release asset, downloads it, and compares `Get-FileHash` to the zip BEFORE extracting (throws on mismatch = fail-safe; skips if no sidecar, so old releases still update). **RELEASE FLOW NOW UPLOADS BOTH the zip AND the .sha256** — `gh release create vX.Y.Z "VRSI-WallBoard-vX.Y.Z.zip" "VRSI-WallBoard-vX.Y.Z.zip.sha256"`. (3) **Rollback:** before copying, the updater snapshots `server\dist`/`client\dist`/`shared\dist` + `server\package.json`/`package-lock.json` into the temp dir; if the NEW version isn't healthy within 60s after restart, it restores the snapshot, re-runs `npm install --omit=dev`, restarts, and re-checks — so a bad release rolls back to the previous build (the v0.14.2 catch only handled mid-update failure; this handles copied-but-won't-start). All scripts parse-validated via `[Parser]::ParseFile`. **CAVEAT: can't run a full update cycle from here — Brian should do one real test-kiosk update to confirm (his established practice for updater changes).** Tier-3 remaining: real cryptographic signing vs. the plain SHA256 (which doesn't stop an attacker with repo write, but does catch corruption/MITM/wrong-asset). Previous task: **v0.14.2 — updater resilience (council audited the Update button).** Verdict: the happy path WORKS — `/api/update/check` does correct semver (handles `v`/pre-release/double-digit), `/api/update/run` uses the WMI `Win32_Process.Create` launch (v0.8.3 fix, survives the server restart) and is localhost-callable, and **the release zip's nested `VRSI WallBoard\` folder is handled correctly** (`Update-FromRelease.ps1` does `$newRoot = Join-Path $tmpRoot 'VRSI WallBoard'` and validates `server\dist\index.js` before copying `$newRoot\*` → RepoRoot; `.env` not in the zip so it's preserved). **Defect found + FIXED:** the restart logic was inside the `try`, so a failure after stopping the server (copy/npm) left the kiosk DOWN with the tray task disabled (the exact prior failure mode). Refactored restart into a `Restart-WallBoardServer` function + added a `catch` recovery path (re-enable task + restart existing version) in BOTH `Update-FromRelease.ps1` (kiosk) and `Update-WallBoard.ps1` (dev). Both parse-validated via the PS Language.Parser (can't full-cycle-test an update from here). Takes effect on the update AFTER the one that ships v0.14.2. Still Tier-2: true snapshot+rollback to the NEW version, zip hash/signature verification, Node-version guard in the updater. Previous task: **v0.14.1 — Tier-1 robustness (picky-council follow-up).** A deliberately-picky 4-agent audit ran; its 3 scariest CRITICAL claims were VERIFIED FALSE: (a) "ADMIN_TOKEN committed" — only `.env.example` is tracked, real `.env`/`server/.env` are gitignored (`git check-ignore` confirms); (b) "restore wipes notes added after backup" — `_mergeFromBackup` is INSERT-OR-IGNORE/UPDATE merge, never deletes live notes (reviewer confused it with writeBoardState); (c) "import race loses edits" — all writes go through `runExclusive`, mutex-safe. Real Tier-1 fixes shipped: (1) `migrate.ts` `readJsonOrNull` guards all 4 legacy `JSON.parse` so a corrupt legacy file logs+skips instead of bricking startup; (2) `index.ts` global `process.on('unhandledRejection')` (log only) + `uncaughtException` (log + exit(1) for clean tray restart); (3) `localProvider` constructor runs `PRAGMA integrity_check` at boot (logs+audits if not 'ok') + hourly `wal_checkpoint(TRUNCATE)` via unref'd timer cleared in close(); (4) pre-restore snapshot retention 3→5 (pruneBackups slice(5)); (5) version drift fixed — client 1.0.0→0.14.1, root+server→0.14.1. Build clean, 21/21 tests, boot smoke-test (health 200, integrity silent). **DEFERRED = the "network-readiness" project (council's top discomfort, in priority order): replace/sandbox `xlsx` (SheetJS, unmaintained, unpatched proto-pollution+ReDoS — the #1 collective discomfort; matters when files arrive from untrusted sources), update-zip integrity verification + auto-rollback on failed start, per-user identity on board writes + TRUST_LOCALHOST=false + gate calendar/sharepoint reads + rate-limit + narrow icacls grant, PIN on destructive kiosk UI actions, fleet heartbeat/alerting, recovery runbook.** Previous task: **v0.14.0 — hardening + diagnosability (council backlog).** **Latent bug FIXED:** `parseDateValue` threw on a numeric Excel date serial — `import * as XLSX from 'xlsx'` dropped the `SSF` helper (undefined even in prod dist); switched to `import XLSX from 'xlsx'` (default, esModuleInterop) + a `if (!XLSX.SSF...) return null` guard. Caught by the new tests. **Tests:** added `server/src/services/boardParsing.test.ts` (12 pure-function tests: parseDateValue all formats/serials/placeholders, detectColumns incl. the PURCH-review ship-to-pm guard, mapSpreadsheetStatusToJobStatus, isCancelled, parseSpreadsheetCompleteFlag, isSpareJob, getJobBoardTab) — exported parseDateValue+detectColumns for testing; suite now **21/21**. **CI:** `.github/workflows/test.yml` builds shared+server and runs `npm test` on push/PR. **Logs:** winston rotation (error.log 5MB×3, combined.log 10MB×5, `tailable`, no new dep); admin-gated `GET /api/storage/logs-export` (last 5MB) + "Download logs" button in MonitoringPanel; running **version shown in Monitoring header** (via useUpdateCheck). **Security (safe subset):** weak-`ENCRYPTION_SECRET` startup WARNING (non-fatal, Azure mode only); installer token already 192-bit crypto-random (prior "weak token" finding was wrong). Verified: build clean, 21/21 tests, logs-export 200, backup/ship-date checks still green. **DEFERRED (network-deployment project — would risk the live kiosk or needs design):** per-user identity on board writes (the shared-kiosk uses a name dropdown, not logins — real per-user auth is a UX decision), flip TRUST_LOCALHOST default to false (breaks the localhost kiosk unless ADMIN_TOKEN set), gate calendar/sharepoint reads (would break any current LAN viewer), rate-limiting (pointless until non-localhost; could throttle kiosk polling), vite/esbuild build-time dep bump (major vite bump, risky). Previous task: **v0.13.0 — reliability + UX quick-wins (council follow-up bundle).** (1) **Backup-staleness warning:** `/health` returns `lastBackupAt` + `backupStale` (server: `localProvider.getLastSuccessfulBackupAt()` queries last `type='backup' success=1` audit row; index.ts computes stale = lastBackupAt non-null && age>24h, guarded in try/catch so /health never fails; deliberately NOT stale when never-backed-up so fresh/dev installs don't nag). Client: new `client/src/hooks/useHealth.ts` polls /health every 60s; App passes `backupStale`→Dashboard→StalenessIndicator amber banner "No successful backup in over 24 hours — check the backup drive." (2) **Ship-date validation:** PATCH `/jobs/:jn/ship-date` rejects non-`YYYY-MM-DD` (not null) with 400 — a bad stored date would break the ICS export. (3) **Import confirm + honest copy:** ImportView `window.confirm` before import; corrected the description (import MERGES, manual state kept — old "replaces all current jobs" was misleading post-v0.9.3). (4) **Block button** restyled red/larger for kiosk visibility (JobCard). Verified with a throwaway-server script: 7/7 (health backupStale present+false on fresh, lastBackupAt null; bad/garbage ship dates→400; valid + null→200) and 9/9 unit tests; build clean. Also this session: `Package-Release.ps1` now auto-creates the `VRSI-WallBoard-v<version>.zip` (no manual zip step). Council ran a full forward-looking audit — remaining backlog (NOT done): pre-network security cluster (per-user identity on board writes, TRUST_LOCALHOST=false, gate calendar/sharepoint reads, rate-limit, stronger ADMIN_TOKEN, dep bump), more import-parsing unit tests + CI, log rotation + a "download logs" button, version shown in UI, soft-delete note tombstones, a few more UX polish items (status-checkbox clarity, unsaved-note-draft warning). Previous task: **v0.12.0 — 2-week calendar view (plan Phase 5, the previously-deferred item — DONE + verified).** `client/src/components/calendar/TwoWeekView.tsx` SUBCLASSES RBC's internal `MonthView` (`import MonthViewDefault from 'react-big-calendar/lib/Month'`, @ts-expect-error for the missing types, cast to any) and overrides ONLY `render()` (computes 2 seven-day rows from `dfStartOfWeek(date,{weekStartsOn})` where weekStartsOn is derived from `localizer.startOfWeek()`) plus statics `range`/`navigate`(±14d)/`title`. Inheriting MonthView means no hand-wiring of DateContentRow/accessors/getters → no crash risk (that was why it was deferred). Registered via `views={{ month:true, week:true, day:true, twoWeek: TwoWeekView } as never}` + `view={rbcView as never}` in CalendarView. `'twoWeek'` wired into ALL sites: appStore (type+setter), client types/index, useEvents (type + window widened by ±a week for twoWeek), CalendarView (prop + rbcView + weekendsHidden), Dashboard (prop + stepViewDate `addDays(viewDate, dir*14)` + viewLabel range branch + both desktop/mobile selects), SettingsPanel option, server configService UiConfig, server config route validation, App keyboard `t`. Weekend clip (28.57%) works per 7-col row. **VERIFIED against the running app** with a headless-browser script (built server on :3199, mock mode, seeded jobs): 2 rows / 14 day cells / uniform single-line chips / "Jun 15 – 28, 2026" label / ZERO page errors; screenshot was e2e/artifacts/twoweek-view.png (gitignored). Build clean; the 9-test board suite still green. **Calendar plan (Phases 4/5/6) now fully complete.** Remaining backlog (future, from the council): pre-network security (real Azure-AD identity on board APIs vs client-supplied `actor`, TRUST_LOCALHOST=false, rate-limit /import+mutations, vite/esbuild build-time advisory), soft-delete note tombstones (needs approval), DB-readiness in /health + SQLITE_BUSY retry, broaden unit tests beyond board logic. Previous task: **v0.11.0 — calendar polish (plan Phases 4 + 6) + first unit tests.** Phase 4 (month-cell cutoff): `CalendarView.tsx` scoped CSS forces month-view event chips to a uniform 18px single line (`white-space:nowrap; overflow:hidden; text-overflow:ellipsis`) + tighter `.rbc-date-cell` — RBC measures one chip to compute the row limit / "+N more", so uniform height makes that exact and kills the mid-text clipping. Phase 6 (week label): `Dashboard.tsx` viewLabel shows the week's date range ("Jun 15 – 21, 2026"; cross-month "Jun 29 – Jul 5, 2026") honoring weekStartsOn (0 with weekends, else 1). **First automated tests:** `server/src/services/boardService.test.ts` — Node built-in test runner via the existing tsx loader (ZERO new deps), throwaway SQLite per test, 9 tests over import manual-locks / note-flag set-clear-reflag / blocked routing+import-safety+prune+round-trip; `npm test` in server/; `*.test.ts` excluded from tsc build via tsconfig. **DEFERRED — plan Phase 5 (2-week calendar view):** NOT built; a true custom react-big-calendar view must wire `react-big-calendar/lib/DateContentRow` with RBC's full accessors/getters/components contract — mis-wiring = runtime crash on the kiosk calendar, and it can't be visually verified from here. Needs an isolated spike + screenshot verification against the running app, then wire `'twoWeek'` into the 12 displayMode sites (enumerated in the plan file). All else from the council backlog still stands (no other unit-test coverage beyond board logic; pre-network security: real Azure-AD identity for board APIs + TRUST_LOCALHOST=false + rate-limit; esbuild/vite build-time advisory; soft-delete note tombstones; DB-readiness in /health). Previous task: **v0.10.0 — Phase 2 (new/changed note flagging) + Phase 3 (Blocked tab), council-reviewed.** Phase 2: `applyBoardImport` collects job numbers whose Ops Schedule note changed → `jobs_import_meta.changed_note_job_numbers` (transient, replaced each import via `saveJobsFile(jobs, sourceFile, changedNoteJobs)`) → computed `BoardJob.hasNewNote`; JobCard "New note" amber badge, NotesSection highlights the updated ops note, JobListView "New (n)" toggle + `new` search keyword now match `isNew || hasNewNote`. Phase 3: manual `blocked`/`blockedAt`/`blockedReason` on board_state; `filterJobsForTab` adds a `'blocked'` branch + `&& !j.blocked` on the other three so blocked jobs LEAVE their normal tab; new 4th tab `/board/blocked` (BoardHeader, App.tsx route, red `BLOCKED_TAB_COLOR`); JobCard bordered Block/Unblock control + reason input; `setJobBlocked` service + admin-gated `PATCH /api/board/jobs/:jobNumber/blocked`; `getJobBoardTab` returns `'blocked'` first; import never touches blocked; `pruneOrphanedBoardState` keeps blocked jobs; calendar event `boardTab` union + Dashboard nav include `'blocked'`. New columns via the same `ensureColumns()` helper, carried through read/write/`_mergeFromBackup` (old backups default 0). Write-path setters hardened to `emptyJobState()` (council finding). **Verified 20/20** with a throwaway-data script (note flag sets/clears/re-flags; blocked routes/leaves tabs/survives import+prune/unblocks). Build clean. **Council run (3 agents: correctness, security, roadmap) — NO critical issues.** Key backlog from council (NOT yet done — for a future session): (1) **no unit tests** — add a vitest harness over boardService import/merge/restore (HIGH); (2) **calendar Phases 4–6 of the plan still pending** (month-cell text cutoff fix, custom 2-week RBC view, week-label date range); (3) security: `actor` is client-supplied (fine on LAN/127.0.0.1 bind, but needs real Azure-AD identity on board APIs BEFORE network exposure; set `TRUST_LOCALHOST=false` + ADMIN_TOKEN + CORS then); client build chain has esbuild/vite HIGH advisory (build-time only, kiosk runtime unaffected — `npm audit fix --force` = vite major bump, test first); add rate-limiting on `/import` + mutations before networking; (4) soft-delete note tombstones still deferred (schema change, needs approval — no deletion data-trail today); (5) add a DB-readiness check to `/health` + SQLITE_BUSY retry. Plan file: `C:\Users\briank\.claude\plans\ok-have-council-go-lucky-dusk.md`. Reminder: client/ + server/ `@vrsi/wallboard-shared` were stale empty dirs once — if build says "Cannot find module '@vrsi/wallboard-shared'", run `npm install --prefix client` + `--prefix server`. Previous task: **v0.9.3 import-preservation hotfix (Release 1 of a council-reviewed plan).** Fixed the active data-loss bug where `applyBoardImport` reverted a user's manual status/binder on every re-import (silent §7.3 violation — a manually-shipped job got dragged back out of Archive). Added `board_state.status_manual` / `binder_manual` flags via a NEW guarded `ensureColumns()` helper in `localProvider` (PRAGMA table_info → ALTER if absent; the repo had **no** ADD COLUMN pattern — `db.exec(SCHEMA_SQL)` only does CREATE IF NOT EXISTS). Flags: set by `setJobStatus`/`setJobBinderPrinted`; honored by both loops in `applyBoardImport` (`if (existing.statusManual) continue`); carried through `boardService.getBoardStateFile`, `localProvider.getBoardStateFile`/`writeBoardState`, and `_mergeFromBackup` (old backups default to 0). On first column-add, backfilled `=1 WHERE updated_by IS NOT NULL AND updated_by <> ''` so the first post-upgrade import can't revert existing manual edits. Types added (optional) to shared `JobState`, `boardPersistence.JobStateEntry`, and the local `JobStateEntry` in boardService; `emptyJobState` defaults both false. Verified 8/8 with a throwaway-data-dir script (manual status/binder survive re-import; untouched/new jobs still auto-fill). **NOTE:** the client/ and server/ `@vrsi/wallboard-shared` file: deps were stale empty dirs — ran `npm install --prefix client` and `--prefix server` to relink before the build went green. **The remaining work (Release 2 = v0.10.0) is in the approved plan at `C:\Users\briank\.claude\plans\ok-have-council-go-lucky-dusk.md`: Phase 2 new/changed-note flagging, Phase 3 Blocked tab, Phases 4–6 calendar (month cutoff, 2-week view, week label).** Previous task: **Playwright visual tours (`e2e/`)** — two on-demand, paced + narrated walkthroughs (screenshots + universal MP4) for showing the app to IT/stakeholders. Run: `npm run build` then `npm run e2e:tour`; view HTML report `npm run e2e:report` or the MP4s in `e2e/artifacts/videos/` (`VRSI-upgrade-walkthrough.mp4` ~30s, `VRSI-feature-walkthrough.mp4` ~67s). **01-upgrade.spec** drives the in-app Update UI (version → "Update available" banner → "Update started" → auto-reload) with `/api/update/check` + `/api/update/run` **stubbed via page.route so no real updater runs**; the Windows install + script-fallback update are documented in `e2e/UPGRADE-RUNBOOK.md`. **02-feature-tour.spec** walks calendar (D/W/M, month nav, clicking a ship-date event into the board), agenda + user picker, every Settings section, the Files show/hide toggle, Monitoring/Backup/Activity-log, Projects board tabs + cards, and the Users view (super users, spare PM, tab colours). Design: boots its **own server on port 3100** (leaves a live board on 3001 alone) in mock mode (`DISABLE_AZURE`) against a throwaway `e2e/.demo-data` dir; `e2e/reset-data.cjs` wipes it **before** `npm start` (Playwright starts webServer BEFORE globalSetup, so the wipe can't live in globalSetup or the DB is locked). Demo data seeded via `POST /api/board/import` (normal merge, no direct DB writes; localhost needs no token — `TRUST_LOCALHOST` default). Paced with `launchOptions.slowMo` + on-screen caption banner (`e2e/lib/demo.ts`); `e2e/export-videos.cjs` (globalTeardown, also `npm run e2e:video`) transcodes `.webm`→MP4 H.264 via ffmpeg (winget **Gyan.FFmpeg**, installed on this machine). No `data-testid`s in the app — selectors are text/role/aria; SettingsPanel & FileBrowserPanel share the slide-over class and a closed panel is still "visible" to Playwright (transform-offscreen), so scope locators by heading. `@playwright/test` added as root devDependency. Committed + pushed (commits e4cd9b1-ish + 8058e29). Previous task: v0.9.0 — calendar month navigation: ‹ › / Today chip buttons in the Dashboard footer (desktop + mobile) step the view by the current display mode; `viewDate` lives in appStore; CalendarView is date-controlled (`date` + no-op `onNavigate`, RBC toolbar stays hidden); AgendaRail takes `viewDate` — current month keeps past-due + today→month-end behavior, any other month lists all of that month's events grouped by day (agenda heading shows "Agenda — July 2026" when not current); useEvents takes `viewDate` and stretches the fetch window (earlier of now/anchor month start → later of now+45d/anchor month end); BoardLayout Files button now respects `config.showFiles` (reads store config, defaults true). All verified headless with puppeteer-core driving Edge against the running server: month forward/back, Today return, past month, agenda follows, July/Aug board ship events fetched, Files hidden on Projects + Calendar when toggled off. Previous task: full docs refresh after the verified v0.8.3 update fix (WMI launch; never spawn powershell.exe with detached:true). NEW `docs/START-HERE.txt` (plain-language 3-step install guide, copied to release root by Package-Release.ps1); operations-guide §1.5, scripts README, root README all note the pre-v0.8.3 bootstrap (run Update-FromRelease.bat as Administrator once) and the run-as-admin requirement for manual updates; code-guide rows updated (update.ts WMI launch, SettingsPanel/App.tsx localStorage polling, Update-WallBoard auto-stash). v0.8.3 zip asset re-uploaded with the new docs (--clobber). Before that: v0.8.3 — Update button TRULY fixed and **confirmed working end-to-end on the test VM** (v0.8.2's basename/$PSScriptRoot diagnosis was wrong). Sandbox bisect proved: `powershell.exe` spawned with `detached: true` (DETACHED_PROCESS) exits 0 instantly without running the script — no console to initialize, empty stderr, looks like success. Fix in `update.ts`: non-detached short-lived PS launcher (hidden console via CREATE_NO_WINDOW works) creates the updater via WMI `Win32_Process.Create` — updater's parent is WmiPrvSE, survives server/tray/Task Scheduler kills mid-update. Verified in sandbox: spaced paths, -Unattended passthrough, $PSScriptRoot, parent-death survival. RULE: never spawn powershell.exe with detached:true. To bootstrap a kiosk on v0.8.2 or older: double-click `scripts\windows\Update-FromRelease.bat` once — button works for all future updates after that.
-- Next task: Soft-delete tombstones for notes (HIGH, deferred — schema change, needs human approval per §3)
-- Blockers: None
+**Version:** v0.15.3 (root + server + client all in sync). 12 commits ahead of remote. Not pushed — Brian is testing locally first.
+
+**Last completed task:** Phase 2 cleanup (cleanup(phase2) commit) + Phase 3A CI (add client build + PS lint job) + Phase 3B tests (update semver, personIdentity, ICS generator — 47 total tests, all pass).
+
+**Next task:** Phase 4 documentation sync — update VRSI-WALLBOARD-RULES.md (§1 version, §10 known-issues status, §19 changelog), then Phase 5 final verification.
+
+**Blockers:** None.
+
+**Machine recovery still needed on the live kiosk (elevated):**
+```
+icacls "C:\ProgramData\VRSIWallBoard\data" /grant "vrsi\briank:(OI)(CI)M" /T
+Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray'
+```
+
+---
+
+## This Session Work (2026-06-17 council audit remediation)
+
+Brian said "continue with the rest of phase 1" at session start. Session covered a complete council-audited remediation plan.
+
+### Phase 1 — Critical fixes (all done, committed)
+1. **`personIdentity.ts`** — removed hardcoded PII (real employee emails); replaced with `PERSON_ALIASES` env-var (JSON array of alias groups).
+2. **`shared/src/types/board.ts`** — cleared PII from `DEFAULT_BOARD_CONFIG` (spareCarrier → `''`, superUsers → `[]`); removed duplicate `Actor` interface.
+3. **`.env.example`** — documented `PERSON_ALIASES` and `RESTORE_CONFLICT_WINDOW_MS`.
+4. **`scripts/windows/Update-FromRelease.bat`** — added prominent warning for developers (run `Update-WallBoard.bat` on git installs, not this).
+5. **`server/src/routes/board.ts`** — field-length validation: `jobNumber` ≤ 100, `noteId` ≤ 100, `spareCarrier`/`superUsers` ≤ 200, `blockedReason` ≤ 1000; import rows truncate display fields at 1000.
+6. **`server/src/index.ts`** — DB writability probe at startup (warns with exact `icacls` fix); `dbIntegrity: getDbIntegrityStatus()` in `/health`.
+7. **`server/src/auth/tokenRefresher.ts`** — HTTP 429 is now transient, not permanent (was breaking auth after a rate-limit).
+8. **`server/src/storage/localProvider.ts`** — `getDbIntegrityStatus()` export; configurable `RESTORE_CONFLICT_WINDOW_MS` (default 60 s).
+9. **`scripts/windows/Invoke-WallBoardBackup.ps1`** — copies `tokens.json` sidecar (`<stem>.tokens.json`) after each DB backup; pruning removes matching sidecars.
+10. **`scripts/windows/Restore-Backup.ps1`** — offers sidecar token restore to skip re-authentication.
+
+### Phase 2 — Repo hygiene (all done, committed)
+- `Package-Release.ps1`: stages in `%TEMP%` (no more `VRSI WallBoard\` in repo root); output zips + sha256 go to `releases/` (gitignored); prints `gh release create` command.
+- `releases/` added to `.gitignore` (existing root-level artifact patterns retained for cleanup).
+- Deleted stale `VRSI WallBoard\` staging dir from disk.
+- `ErrorBoundary.tsx`, `useBoard.ts`: removed `console.error` calls.
+- `Dashboard.tsx`: wrapped `agendaMonthLabel` in `useMemo`.
+- `TwoWeekView.tsx`: expanded RBC internal-API fragility warning with upgrade checklist.
+- `server/src/routes/update.ts`: reject `update-status.json` > 100 KB.
+- `server/src/storage/localProvider.ts`: startup sweep deletes `.migrated` files older than 30 days (audit-logged).
+- `Restore-Backup.ps1`: requires typing `YES` before disaster-recovery file overwrite.
+
+### Phase 3 — Tests & CI (all done, committed)
+- `.github/workflows/test.yml`: added client build step + new `ps-lint` job (`windows-latest`, parse-validates all `scripts/windows/*.ps1`).
+- `server/src/routes/update.ts`: exported `isNewer` for testing.
+- New test files: `update.test.ts` (9 semver tests), `personIdentity.test.ts` (8 tests), `icsGenerator.test.ts` (7 tests). **47/47 pass.**
+- npm audit: server 5 vulns (1 low, 3 moderate, 1 high), client 2 (vite/esbuild — **build-time dev deps only, no runtime risk**). Deferred per the existing network-readiness backlog.
+
+---
 
 ## Active Plan
 
-- [x] Scaffold + StorageProvider + SQLite local provider
-- [x] JSON → SQLite migration on first run
-- [x] Port board/config persistence to SQLite
-- [x] Windows Task Scheduler backup script
-- [x] ADMIN_TOKEN gate
-- [x] ICS export for ship dates
-- [x] Footer nav as pill buttons
-- [x] Update check feature
-- [x] v0.1.0 GitHub release
-- [x] Restore conflict blocking + merge-based restore
-- [x] **System tray icon** — Start-TrayApp.ps1/bat, blue "W" GDI+ icon, STA guard, mutex, crash-loop protection, hidden form (ShowInTaskbar=false), right-click menu, balloon notifications
-- [x] **Restart-WallBoard.ps1/bat** — tray-aware restart with mutex detection
-- [x] **Pretty-icon shortcuts** — Start WallBoard.lnk + Restart WallBoard.lnk (imageres.dll)
-- [x] **Fable audit #1** — 21 code findings, 4 dead files removed, 5 release gaps fixed
-- [x] **Taskbar fix** — Application::Run($hiddenForm) with ShowInTaskbar=false; no taskbar entry
-- [x] **Fable verify pass** — 8 more findings fixed (see key decisions below)
-- [x] **PS5.1 compatibility** — removed all em-dashes + `?.` operator from PS scripts; Start-TrayApp.ps1 fully rewritten clean
-- [x] **Geocode proxy** — ZIP lookup now proxied through server (`GET /api/config/geocode`) instead of direct browser fetch (blocked on kiosk networks)
-- [x] **Hidden users** — PM/materials users with only shipped jobs hidden from user picker; super users always shown
-- [x] **Taskbar fix (VBS shim)** — superseded: see conhost --headless below
-- [x] **Super user save fix** — `deepMergeConfig` used `||` for superUser (dropped empty string); changed to `??`
-- [x] **Taskbar fix v2 (conhost --headless)** — VBS shim never shipped (Package-Release copies only *.ps1/*.bat → kiosk task pointed at missing .vbs); replaced with `conhost.exe --headless powershell.exe ...` everywhere; Start-TrayApp.vbs deleted
-- [x] **v0.2.0 release** — version bump (root + server package.json), release folder rebuilt, tagged, GitHub release published
-- [x] **Multiple super users (v0.3.0)** — `BoardConfig.superUsers: string[]` replaces `superUser: string`; legacy fold in `localProvider.getBoardConfigRaw` + `migrate.ts`; `getDerivedUsers` loops list; client `isSuper` checks list; UsersView chip-list UI with instant save (BK approved data model change)
-- [x] **Calendar per-user agenda + NEW flag + new-items filter (v0.4.0)** — `NormalizedEvent`/`CalendarEvent` gain `isNew`/`jobPm`/`jobMm`; Dashboard has user select (desktop footer + mobile nav) and filters AgendaRail board events by role (pm→jobPm, materials→jobMm; super/none/manual see all); CalendarView custom event renderer shows red NEW chip; AgendaRail shows NEW badge; JobListView `newOnly` toggle ("New (n)" button, sessionStorage-persisted, hidden on archive)
-- [x] **Files enable/disable toggle (v0.5.0)** — `UiConfig.showFiles` (server configService + config route mapping, default true); SettingsPanel Files section Toggle (fileOpenMode shown only when on); Dashboard hides Files button + Ctrl+F; App.tsx guards Ctrl+F, closes + unmounts FileBrowserPanel when off
-- [ ] Soft-delete tombstones for notes (awaiting human approval — schema change)
-- [ ] SharePoint provider (deferred)
-- [ ] Audit log UI panel (deferred)
-- [ ] XLSM configurable path (deferred)
+- [x] Phase 1 — Critical security/correctness fixes (10 items)
+- [x] Phase 2 — Repo hygiene and cleanup
+- [x] Phase 3 — Test coverage + CI
+- [ ] Phase 4 — Documentation sync (VRSI-WALLBOARD-RULES.md §1/§10/§19, operations-guide, code-guide) ← **NEXT**
+- [ ] Phase 5 — Final verification + sign-off (build, full test suite, local smoke test)
+
+---
+
+## Version History (this session)
+
+| Version | What |
+|---------|------|
+| v0.15.3 | Phase 2+3 cleanup: repo hygiene, console.* removed, CI fixed, 47 tests |
+| v0.15.2 | `blockedReason` saved as permanent note (persists after unblock) |
+| v0.15.1 | Board opens in a normal minimizable Edge/Chrome `--app=` window ("VRSI Calendar"), not fullscreen kiosk |
+| v0.15.0 | Update-reliability overhaul: empty-stash abort fixed, `update-status.json` + failure banner |
+| v0.14.3 | Updater Tier-2: Node-version guard, SHA256 download verify, rollback |
+| v0.14.2 | Updater catch: restart existing version if update fails partway |
+| v0.14.1 | Tier-1: migration parse guards, crash handlers, integrity_check, WAL checkpoint, retention 3→5 |
+| v0.14.0 | XLSX.SSF fix, +12 tests (21 total), CI, log rotation, download-logs button |
+
+---
 
 ## Key Decisions Made
 
-### Tray App Architecture
-- **Primary startup mechanism**: Task Scheduler task `VRSI WallBoard Tray` via `conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File Start-TrayApp.ps1`
-- **Script**: `scripts/windows/Start-TrayApp.ps1` — pure ASCII (PS5.1 compatible), refreshes PATH from registry at start
-- **No taskbar entry**: `conhost.exe --headless` never creates a console window, regardless of whether Windows Terminal is the default host. WinForms form also has `ShowInTaskbar=$false`. History: `cmd /c start /b` and `-WindowStyle Hidden` left a taskbar window; the `wscript.exe + .vbs` shim worked locally but the .vbs was never copied into the release folder (Package-Release.ps1 copies only *.ps1/*.bat), so kiosk startup failed — and VBScript is deprecated on Win11 24H2+ anyway. conhost --headless solves all of it with zero extra files.
-- **Icon**: Programmatic GDI+ 32x32 blue circle + white "W" via `Bitmap.GetHicon()` → `Icon.FromHandle()`
-- **Single-instance**: Named mutex `VRSIWallBoardTray`; `Restart-WallBoard.ps1` probes it to detect tray
-- **Crash-loop protection**: max 3 auto-restarts per 60 seconds; error balloon then stops retrying
-- **Port squatter detection**: if port 3001 is owned by a non-node process, shows MessageBox naming the process and exits cleanly (no EADDRINUSE crash loop)
-- **ExecutionTimeLimit([TimeSpan]::Zero)**: prevents Task Scheduler 72h kill of the tray
+### StorageProvider + data path
+- `resolveDataDir()` from `lib/paths.ts` — reads `DATA_DIR` env var; defaults to `C:\ProgramData\VRSIWallBoard\data\`
+- All routes go through `StorageProvider` — never direct DB/file I/O from route handlers
 
-### Task Scheduler Principal Fix (CRITICAL — Fable verify finding)
-- `_Register-Startup.ps1` now passes `-Principal (New-ScheduledTaskPrincipal -UserId $triggerUser -LogonType Interactive)` to `Register-ScheduledTask`
-- Without this: task ran as the elevated admin, not the kiosk user — tray never started on UAC-split machines
-- `$triggerUser` = `Win32_ComputerSystem.UserName` (console session user, not `$env:USERNAME` which is the elevated account)
+### Release flow
+1. `npm run build` at root
+2. `scripts/windows/Package-Release.ps1` (stages in `%TEMP%`, zips to `releases/`, emits `.sha256`)
+3. `gh release create vX.Y.Z "releases\VRSI-WallBoard-vX.Y.Z.zip" "releases\VRSI-WallBoard-vX.Y.Z.sha256"`
+4. Both assets MUST be uploaded (updater verifies SHA256 before extracting)
 
-### Security (Fable audits)
-- `Stop-WallBoardServer` verifies `ProcessName -eq 'node'` before killing
-- Admin token not printed to console after install; dead `$token` assignment dropped
-- `$isAdmin` guard on startup registration — friendly warning if non-admin answers Y
-- All `%~dp0` paths quoted in bat files; `_run.ps1.bat` uses absolute `%SystemRoot%\System32\WindowsPowerShell` path
-- `Restore-Backup.ps1` stops tray watchdog before restore (prevents mid-restore DB corruption)
-- `Update-WallBoard.ps1`: tray-kill uses `Name -in @('powershell.exe','pwsh.exe')` filter; mutex handle disposed; comment fixed U→P; disables/enables scheduled task around rebuild (H1 race fix)
+### Update paths
+- **Kiosk** (no `.git`, no `server/src`): `Update-FromRelease.ps1` — downloads latest GitHub release zip, verifies SHA256, snapshots current dist, copies over, npm install --omit=dev, restarts, rolls back if health check fails
+- **Dev** (git clone): `Update-WallBoard.ps1` — git pull, build, restart
+- **In-app button**: `/api/update/run` detects which path to use via `.git` presence + `server/src` presence
+- The WMI `Win32_Process.Create` launch is required — `powershell.exe` spawned with `detached:true` exits silently without running the script
 
-### Auto-Start PATH Fix + Fable Audit Fixes (2026-06-10, this session)
-- **Root cause of exit-1**: Task Scheduler with `-NoProfile` does not inherit User PATH — winget Node install writes to User PATH, making `node` invisible
-- `Start-TrayApp.ps1`: refresh Machine+User PATH from registry at script start; `Get-NodeExe` fallback covers ProgramFiles(x86), LOCALAPPDATA\Programs\nodejs, winget per-user packages; `Write-TrayLog` writes to `tray-startup.log` with 1 MB rotation; `Stop-Server` fallback now guards `ProcessName -eq 'node'`
-- `_Register-Startup.ps1`: throws loudly when `$consoleUser` is empty (no silent fallback to admin account)
-- `Restart-WallBoard.ps1`: checks port 3001 before launching headless fallback
-- **To fix kiosk PC**: copy updated `scripts\windows\Start-TrayApp.ps1` and `_Register-Startup.ps1` to `C:\Program Files\VRSI WallBoard\scripts\windows\`, then run `ENABLE-STARTUP.bat` as admin
+### Tray app architecture
+- Task Scheduler `VRSI WallBoard Tray` → `conhost.exe --headless powershell.exe ... Start-TrayApp.ps1`
+- `conhost.exe --headless` prevents taskbar entry even with Windows Terminal as default host
+- Principal: `New-ScheduledTaskPrincipal -UserId $consoleUser -LogonType Interactive` (must match logged-in kiosk user, NOT elevated admin)
+- Named mutex `VRSIWallBoardTray` for single-instance detection
+- Crash-loop protection: max 3 restarts per 60 seconds
+- **Tray task must stay ENABLED** — updater re-enables it after update; Phase 1 fix ensures it is never left Disabled
 
-### Release Folder (`VRSI WallBoard\`)
-- Root: `INSTALL.bat`, `UNINSTALL.bat`, `ENABLE-STARTUP.bat`, `Start-WallBoard.bat`, `Start-TrayApp.bat`, `operations-guide.md`, `README.md`, `release-info.json`
-- `scripts/windows/`: 44 files (Package-Release.ps1 excluded — dev-only)
-- No `.env` secrets, no `node_modules`
-- Current at commit 88feb5f (2026-06-10)
+### Board features
+- `blocked` flag: blocked jobs leave Project/Spare/Archive tabs; visible ONLY in Blocked tab. Never touched by import. `blockedReason` saved as a permanent note on block so it persists after unblock.
+- `statusManual` / `binderManual`: once set by user, import never overwrites those fields
+- `PERSON_ALIASES` env var: JSON array of alias groups; site-specific, never committed. Canonicalizes to email form.
+- `blockReason` max 1000 chars; validated at PATCH /api/board/jobs/:jobNumber/blocked
 
-### Package-Release.ps1 Changes
-- Excludes `Package-Release.ps1` from scripts copy (dev tool, not for end users)
-- Copies `docs/operations-guide.md` and `README.md` to release root
-- Includes git commit hash in `release-info.json`
+### Board opens as normal window (v0.15.1+)
+- `--app=http://localhost:3001` flag on Chrome/Edge (not `--kiosk`)
+- Window title: "VRSI Calendar"
+- Minimizable, closeable — not fullscreen-locked
 
-### Update Path for Already-Installed PCs
-- **Single-file fix**: copy `scripts\windows\Start-TrayApp.ps1` from updated release folder over existing, restart tray
-- **Full update**: copy updated `VRSI WallBoard\` folder to PC, re-run `INSTALL.bat` (safe on existing install — preserves data)
+### Package-Release output (v0.15.3+)
+- Staging: `$env:TEMP\vrsi-release-<timestamp>\VRSI WallBoard\` (cleaned up after zip)
+- Output: `releases\VRSI-WallBoard-vX.Y.Z.zip` + `releases\VRSI-WallBoard-vX.Y.Z.zip.sha256`
+- Both `releases/` and root-level artifact patterns are in `.gitignore`
 
-## Version
+### Security invariants
+- No PII in source code (PERSON_ALIASES → env var; DEFAULT_BOARD_CONFIG → empty strings)
+- No hardcoded secrets
+- ADMIN_TOKEN gate on all destructive endpoints
+- Parameterized SQL only (never string interpolation)
+- `tokens.json` AES-256-GCM encrypted; backed up as `.tokens.json` sidecar alongside each DB backup
 
-- Current: `v0.14.3` — updater hardening finished: Node-version guard, SHA256 download verification (+ Package-Release emits `.sha256`; release uploads both assets), and rollback to the previous build if the new version won't start. All three packages 0.14.3.
-- Previous: `v0.14.2` — updater resilience: a failed update restarts the existing version instead of leaving the kiosk down.
-- Previous: `v0.14.1` — Tier-1 robustness: migration parse guards, global crash handlers, DB integrity_check + WAL checkpoint, pre-restore retention 3→5, version sync (client was 1.0.0).
-- Previous: `v0.14.0` — hardening + diagnosability: fixed XLSX.SSF numeric-date crash, +12 parser unit tests (21 total), CI workflow, log rotation + download-logs button, version in Monitoring header, weak-secret warning.
-- Previous: `v0.13.0` — reliability + UX quick-wins: backup-staleness banner, ship-date validation, import-overwrite confirm, prominent Block button.
-- Previous: `v0.12.0` — 2-week calendar view (subclasses RBC MonthView; verified against running app). Calendar plan fully complete.
-- Previous: `v0.11.0` — calendar month-cell cutoff fix + week-label date range + first unit-test suite (board logic). Root + server bumped to 0.11.0.
-- Previous: `v0.10.0` — new/changed-note flagging (hasNewNote) + Blocked tab (manual triage lane). Council-reviewed, 20/20 verified.
-- Previous: `v0.9.3` — import-preservation hotfix (manual status/binder never reverted by import; `status_manual`/`binder_manual` flags + `ensureColumns()` migration + backfill). Root + server bumped to 0.9.3.
-- Previous: `v0.9.2` — tagged and released on GitHub (2026-06-11, zip asset uploaded). Adds "👤 All users" to the Projects board picker (BoardHeader) matching the calendar; carries the v0.9.1 installer permission fix. Kiosk is on v0.9.0 — update via the button to pick this up.
-- Previous: `v0.9.1` — installer permission fix (`Install-WallBoard.ps1` icacls Modify grant for the kiosk user) so the in-app Update button works without elevation on fresh installs. No app/UI changes vs 0.9.0.
-- Previous: `v0.9.0` — tagged and released (2026-06-11, commit 0ada277). Calendar month navigation + agenda follows displayed month + Files toggle respected on Projects + 90-day audit log retention. Brian tested locally and approved before release. **Confirmed installed on the test kiosk via the in-app Update button (0.8.3 → 0.9.0) after fixing the permission bug below.**
-- **Update-button permission bug (FOUND + FIXED, 2026-06-11):** On the test kiosk, clicking Update launched `Update-FromRelease.ps1` correctly (it ran as the non-admin kiosk user `DESKTOP-L1OGRFA\VRSI`), but the copy step failed with `Access to the path 'C:\Program Files\VRSI WallBoard\client\dist\index.html' is denied` — non-admin users can't write under Program Files. Because the script stops the server + disables the tray task BEFORE the copy, the failed copy left the board DOWN. The earlier belief that "the in-app button is immune because the updater runs as the server's own user" was WRONG (that user lacks Program Files write permission; v0.8.3's success was a fluke). Fix applied to `Install-WallBoard.ps1`: admin-gated `icacls "$RepoRoot" /grant "<consoleUser>:(OI)(CI)M" /T` grants the kiosk user Modify on the install tree so the updater can replace files in place (committed, ships next release). Existing/already-deployed kiosks: run the same icacls grant once as admin (`$user = (Get-CimInstance Win32_ComputerSystem).UserName; icacls 'C:\Program Files\VRSI WallBoard' /grant "${user}:(OI)(CI)M" /T`), then Enable/Start the `VRSI WallBoard Tray` task to recover from a half-failed update.
-- Previous: v0.8.3 (2026-06-11) — tagged and released. TRUE root cause fix: powershell + detached:true exits silently; WMI Win32_Process.Create launch. v0.8.2 (2026-06-11, wrong diagnosis), v0.8.1 (2026-06-11) — git pull auto-stash + transcript. v0.8.0 (2026-06-10) — unsaved-changes protection. Note: v0.5.1 tag exists with no GitHub release; v0.5.2 was never tagged.
-- Next release: bump `server/package.json` (+ root) → commit → `git tag vX.Y.Z && git push origin vX.Y.Z` → `gh release create` (needs `dangerouslyDisableSandbox`)
+---
 
-## Files Added This Session (2026-06-12) — Playwright tours
+## Known Issues Status (§10 of rules)
 
-- `e2e/playwright.config.ts` — own server on :3100, mock env + throwaway DATA_DIR, slowMo, video 1440x900, seed→tours projects, globalTeardown=export-videos
-- `e2e/reset-data.cjs` — wipes demo data dir before `npm start` (chained in webServer command)
-- `e2e/seed/demo-jobs.ts` + `e2e/seed/seed.setup.ts` — date-relative demo dataset, seeded via `/api/board/import` + status/ship-date/binder/note/config endpoints
-- `e2e/tours/01-upgrade.spec.ts` — in-app Update flow (stubbed); `e2e/tours/02-feature-tour.spec.ts` — full feature walkthrough
-- `e2e/lib/shot.ts` (numbered screenshots + report attach), `e2e/lib/demo.ts` (caption/beat pacing)
-- `e2e/export-videos.cjs` — `.webm`→MP4 H.264 transcode (ffmpeg)
-- `e2e/UPGRADE-RUNBOOK.md`, `e2e/README.md`
-- root `package.json` (+@playwright/test devDep, `e2e:tour`/`e2e:report`/`e2e:video` scripts), `.gitignore` (+e2e/artifacts, e2e/.demo-data)
+| # | Issue | Status |
+|---|-------|--------|
+| 1 | SheetJS CDN → npm package | ✅ Done (early in project) |
+| 2 | XLSM configurable path | Deferred (network-readiness project) |
+| 3 | personIdentity.ts deduplication | ✅ Done — single server module; PERSON_ALIASES env var (Phase 1) |
+| 4 | ADMIN_TOKEN gate | ✅ Done |
 
-## Files Modified This Session (2026-06-11)
+---
 
-**v0.9.0 (calendar navigation + agenda + files visibility):**
-- `client/src/store/appStore.ts` — `viewDate` + `setViewDate`
-- `client/src/components/Dashboard.tsx` — ‹ › / Today footer controls (desktop + mobile), view label, agenda heading month suffix, passes `date`/`viewDate` down
-- `client/src/components/CalendarView.tsx` — `date` prop, controlled `date`/`onNavigate` on RBC Calendar
-- `client/src/components/AgendaRail.tsx` — `viewDate` prop; non-current month lists that whole month
-- `client/src/hooks/useEvents.ts` — `viewDate` param widens fetch window to navigated month
-- `client/src/App.tsx` — passes `viewDate` from store into `useEvents`
-- `client/src/components/board/BoardLayout.tsx` — Files button hidden when `showFiles` off
+## Deferred (network-readiness project)
 
-**v0.9.0 audit retention:**
-- `server/src/storage/schema.ts` — `idx_audit_timestamp` index
-- `server/src/storage/localProvider.ts` — `pruneAuditLog(retentionDays)` (DELETE < ISO cutoff, logs result)
-- `server/src/storage/boardPersistence.ts` — interface method
-- `server/src/services/auditService.ts` — `startAuditPruneCron()` (prune at startup + cron 3:30 AM daily, 90-day retention)
-- `server/src/index.ts` — calls `startAuditPruneCron()` in bootstrap
-- Verified live: fake 100-day-old row inserted → server restart → row pruned, "Pruned 1 audit entries" record written, index created on existing DB
+These were the council's top items but require design decisions or risk the live kiosk:
+- Replace/sandbox `xlsx` (SheetJS — unmaintained, unpatched proto-pollution+ReDoS; matters when files come from untrusted sources)
+- Per-user identity on board writes (real Azure-AD identity vs. client-supplied `actor`)
+- `TRUST_LOCALHOST=false` + gate calendar/SharePoint reads + rate-limiting (breaks the LAN kiosk until CORS + ADMIN_TOKEN are fully wired)
+- PIN on destructive kiosk UI actions
+- Fleet heartbeat/alerting
+- `vite`/`esbuild` build-time dep bump (major version — needs testing first)
+- Soft-delete note tombstones (schema change — needs human approval)
+- Cryptographic signing of release zip (vs. plain SHA256)
 
-**v0.8.1 fixes:**
-- `scripts/windows/Update-WallBoard.ps1` — Start-Transcript + auto-stash dirty tree before git pull
-- `client/src/components/SettingsPanel.tsx` — localStorage pending flag, alreadyRunning message
-- `client/src/App.tsx` — resume version polling on mount from localStorage flag
+---
 
-**v0.8.2 fixes (root cause):**
-- `server/src/routes/update.ts` — use `path.basename(script)` for `-File` arg; 10s stderr capture + exit-code logging
-- `scripts/windows/Update-FromRelease.ps1` — `$PSScriptRoot` fallback guard before dot-source
-- `scripts/windows/Update-WallBoard.ps1` — same fallback guard added
+## Files Added/Modified This Session (2026-06-17)
 
-## Known Issues Status (§10)
+**Phase 1 commits (5 commits):**
+- `server/src/lib/personIdentity.ts` — PERSON_ALIASES env var; no hardcoded PII
+- `shared/src/types/board.ts` — DEFAULT_BOARD_CONFIG cleared; duplicate Actor removed
+- `.env.example` — documented PERSON_ALIASES, RESTORE_CONFLICT_WINDOW_MS
+- `scripts/windows/Update-FromRelease.bat` — developer warning echo
+- `server/src/routes/board.ts` — field-length validation
+- `server/src/index.ts` — DB writability probe; dbIntegrity in /health
+- `server/src/auth/tokenRefresher.ts` — 429 is transient
+- `server/src/storage/localProvider.ts` — getDbIntegrityStatus; RESTORE_CONFLICT_WINDOW_MS; .migrated pruner
+- `scripts/windows/Invoke-WallBoardBackup.ps1` — tokens.json sidecar backup + prune
+- `scripts/windows/Restore-Backup.ps1` — sidecar restore offer; "type YES" confirmation
 
-- [x] SheetJS CDN fix
-- [ ] XLSM configurable path (deferred)
-- [x] personIdentity.ts deduplication
-- [x] ADMIN_TOKEN gate
+**Phase 2 commit:**
+- `client/src/components/ErrorBoundary.tsx` — removed console.error
+- `client/src/hooks/useBoard.ts` — removed console.error
+- `client/src/components/Dashboard.tsx` — useMemo(agendaMonthLabel)
+- `client/src/components/calendar/TwoWeekView.tsx` — RBC upgrade checklist comment
+- `server/src/routes/update.ts` — update-status.json size check; exported isNewer
+- `scripts/windows/Package-Release.ps1` — temp staging; releases/ output; gh command
+- `scripts/windows/Restore-Backup.ps1` — YES confirmation gate
+- `.gitignore` — releases/
 
-## Open Questions
+**Phase 3 commits:**
+- `.github/workflows/test.yml` — client build + ps-lint job
+- `server/src/routes/update.test.ts` — 9 semver tests
+- `server/src/lib/personIdentity.test.ts` — 8 identity tests
+- `server/src/utils/icsGenerator.test.ts` — 7 ICS tests
 
-- Soft-delete tombstones for notes: ready to implement when Brian approves schema change
-
-### This Session Fixes (2026-06-10)
-- **PS5.1 parse errors**: All PS scripts had em-dashes (U+2014) and `?.` (PS7-only) — rewrote Start-TrayApp.ps1 clean, bulk-replaced em-dashes in all other scripts
-- **Auto-start PATH**: Task Scheduler `-NoProfile` skips user PATH; added registry PATH refresh + `Get-NodeExe` fallback in Start-TrayApp.ps1
-- **Geocode proxy**: `GET /api/config/geocode?q=` proxies ZIP lookup through server (browser on kiosk can't reach geocoding-api.open-meteo.com directly)
-- **Hidden users**: `getDerivedUsers` now uses `getMergedJobs()` and skips `status === 'shipped'` — users with only shipped jobs hidden from picker; super/manual always shown
-- **Taskbar window**: Task now uses `wscript.exe + Start-TrayApp.vbs` — SW_HIDE=0 fully hides conhost. Previous `cmd /c start /b` was insufficient.
-- **Super user save**: `deepMergeConfig` had `||` for `superUser` (dropped `""`); changed to `??`
-- **release-info.json**: now includes `version` field from `server/package.json`
+---
 
 ## Context for Next Session
 
-Run `npm start` at repo root. Health: `GET http://localhost:3001/health`.
-App is v0.8.3. `VRSI WallBoard\` folder is distribution-ready (zipped as `VRSI-WallBoard-v0.8.3.zip`).
-Agenda filtering single source of truth: `client/src/lib/agendaFilter.ts` — change it there, nowhere else.
-Kiosk update path: Settings → About & Updates → Update button now works reliably. Dev machine uses git-based Update-WallBoard.ps1 (auto-stashes dirty tree).
-Update failures: check `C:\ProgramData\VRSIWallBoard\logs\update.log`; also check server logs for "Update script exited early" or "Update script stderr" entries.
-Tray starts via Task Scheduler `VRSI WallBoard Tray` → `conhost.exe --headless powershell.exe ... Start-TrayApp.ps1`.
-The tray W icon has no taskbar entry. Right-click to restart/stop.
-To bootstrap a kiosk on v0.8.1 or older (button was broken): `powershell.exe -ExecutionPolicy Bypass -File "C:\Program Files\VRSI WallBoard\scripts\windows\Update-FromRelease.ps1"` — after that the button works for all future updates.
-To update an already-installed PC on v0.8.2+: Settings → About & Updates → Update button.
+1. Start server: `npm start` at repo root → `http://localhost:3001`
+2. Current test suite: `npm test --prefix server` → 47/47 pass
+3. 12 commits ahead of remote — Brian wants to test before any release
+4. Machine recovery still needed (elevated PowerShell on kiosk):
+   ```powershell
+   icacls "C:\ProgramData\VRSIWallBoard\data" /grant "vrsi\briank:(OI)(CI)M" /T
+   Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray'
+   ```
+5. Resume phrase: "Read VRSI-WALLBOARD-RULES.md and docs/ai-memory.md, then continue."
