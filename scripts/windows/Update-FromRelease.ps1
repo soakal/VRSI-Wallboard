@@ -121,6 +121,15 @@ try {
     Write-Host '  ===========================================' -ForegroundColor Cyan
     Write-Host ''
 
+    # GUARD: never run the release path on a git/source checkout. This path
+    # overwrites server\src with the zip's source and runs npm install --omit=dev,
+    # which would clobber a developer's working tree and strip dev deps. A dev
+    # install must update via Update-WallBoard.ps1 (git pull). Fail BEFORE touching
+    # anything (no -Force override; there is no legitimate dev use case).
+    if ((Test-Path (Join-Path $RepoRoot '.git')) -or (Test-Path (Join-Path $RepoRoot 'server\src'))) {
+        throw "Refusing to run the release updater on a source/git checkout ($RepoRoot). This would overwrite your working tree and strip dev dependencies. Use Update-WallBoard.ps1 (git pull) instead."
+    }
+
     # 0. Refresh PATH from the registry (this can run from a context without it),
     #    then fail fast if Node is missing/incompatible BEFORE touching anything.
     $_mp = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
