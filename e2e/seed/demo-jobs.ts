@@ -67,7 +67,7 @@ export const DEMO_JOBS: DemoJob[] = [
 ]
 
 /** Status overrides applied after import (canonical JobStatus values). */
-export const DEMO_STATUSES: Record<string, 'none' | 'in_progress' | 'ready_to_ship' | 'shipped'> = {
+export const DEMO_STATUSES: Record<string, import('@vrsi/wallboard-shared').JobStatus> = {
   '512-1001A': 'in_progress',
   '512-1002B': 'ready_to_ship',
   '512-1003A': 'in_progress',

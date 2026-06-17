@@ -1,5 +1,5 @@
-export type JobStatus = 'none' | 'in_progress' | 'ready_to_ship' | 'shipped';
-export const STATUS_ORDER: JobStatus[] = ['none', 'in_progress', 'ready_to_ship', 'shipped'];
+export type JobStatus = 'none' | 'parts_on_order' | 'design' | 'build' | 'in_progress' | 'ready_to_ship' | 'shipped';
+export const STATUS_ORDER: JobStatus[] = ['none', 'parts_on_order', 'design', 'build', 'in_progress', 'ready_to_ship', 'shipped'];
 
 export interface Job {
   jobNumber: string;
@@ -84,6 +84,9 @@ export const DEFAULT_BOARD_CONFIG: BoardConfig = {
   superUsers: [],
   statusColors: {
     none: '#475569',
+    parts_on_order: '#f97316',
+    design: '#a855f7',
+    build: '#14b8a6',
     in_progress: '#facc15',
     ready_to_ship: '#3b82f6',
     shipped: '#22c55e',

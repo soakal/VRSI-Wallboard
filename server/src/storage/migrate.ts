@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type { LocalStorageProvider } from './localProvider.js';
 import type { BoardConfig, Job, JobNote, JobStatus } from '@vrsi/wallboard-shared';
+import { DEFAULT_BOARD_CONFIG } from '@vrsi/wallboard-shared';
 import { logger } from '../utils/logger.js';
 
 interface LegacyJobsFile {
@@ -119,12 +120,7 @@ export function migrateJsonToSqliteIfNeeded(provider: LocalStorageProvider): voi
       provider.saveBoardConfigRaw({
         spareCarrier: raw.spareCarrier ?? 'matto@vrs-inc.com',
         superUsers: raw.superUsers ?? (raw.superUser?.trim() ? [raw.superUser.trim()] : ['Jon Shantry']),
-        statusColors: raw.statusColors ?? {
-          none: '#475569',
-          in_progress: '#facc15',
-          ready_to_ship: '#3b82f6',
-          shipped: '#22c55e',
-        },
+        statusColors: raw.statusColors ?? DEFAULT_BOARD_CONFIG.statusColors,
         extraUsers: raw.extraUsers ?? [],
       });
     }

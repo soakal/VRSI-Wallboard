@@ -95,8 +95,9 @@ eventsRouter.get(
         const boardConfig = getBoardConfig();
         const { statusColors } = boardConfig;
         const statusLabels: Record<string, string> = {
-          none: 'Not Started', in_progress: 'In Progress',
-          ready_to_ship: 'Ready to Ship', shipped: 'Shipped',
+          none: 'Not Started', parts_on_order: 'Parts on Order',
+          design: 'Design', build: 'Build',
+          in_progress: 'In Progress', ready_to_ship: 'Ready to Ship', shipped: 'Shipped',
         };
 
         // Only show jobs whose ship date falls within the requested view range,

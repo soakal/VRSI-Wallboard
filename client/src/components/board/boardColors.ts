@@ -21,16 +21,14 @@ export function tabColor(jobs: BoardJob[], config: BoardConfig): string {
 
 export function statusLabel(status: JobStatus): string {
   switch (status) {
-    case 'none':
-      return 'Not Started'
-    case 'in_progress':
-      return 'In Progress'
-    case 'ready_to_ship':
-      return 'Ready to Ship'
-    case 'shipped':
-      return 'Shipped'
-    default:
-      return ''
+    case 'none':          return 'Not Started'
+    case 'parts_on_order': return 'Parts on Order'
+    case 'design':        return 'Design'
+    case 'build':         return 'Build'
+    case 'in_progress':   return 'In Progress'
+    case 'ready_to_ship': return 'Ready to Ship'
+    case 'shipped':       return 'Shipped'
+    default:              return ''
   }
 }
 

@@ -40,8 +40,11 @@ test('mapSpreadsheetStatusToJobStatus: known statuses', () => {
   assert.equal(mapSpreadsheetStatusToJobStatus('Ready to Ship'), 'ready_to_ship')
   assert.equal(mapSpreadsheetStatusToJobStatus('RTS'), 'ready_to_ship')
   assert.equal(mapSpreadsheetStatusToJobStatus('Partially Shipped'), 'ready_to_ship')
-  assert.equal(mapSpreadsheetStatusToJobStatus('Build'), 'in_progress')
-  assert.equal(mapSpreadsheetStatusToJobStatus('Parts on order'), 'in_progress')
+  assert.equal(mapSpreadsheetStatusToJobStatus('Build'), 'build')
+  assert.equal(mapSpreadsheetStatusToJobStatus('Design'), 'design')
+  assert.equal(mapSpreadsheetStatusToJobStatus('Parts on order'), 'parts_on_order')
+  assert.equal(mapSpreadsheetStatusToJobStatus('On Order'), 'parts_on_order')
+  assert.equal(mapSpreadsheetStatusToJobStatus('Labor Only'), 'in_progress')
 })
 test('mapSpreadsheetStatusToJobStatus: On Hold / unknown / blank leave status unchanged (null)', () => {
   for (const v of ['On Hold', 'hold for parts', 'Quoting', '', '   ', 'Cancelled']) {

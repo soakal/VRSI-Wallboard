@@ -87,17 +87,13 @@ export function mapSpreadsheetStatusToJobStatus(raw: string): JobStatus | null {
     return 'ready_to_ship'
   }
 
-  if (
-    s === 'build' ||
-    s === 'design' ||
-    s === 'labor only' ||
-    s === 'parts on order' ||
-    s === 'in progress' ||
-    s === 'in-progress' ||
-    s.includes('on order')
-  ) {
-    return 'in_progress'
-  }
+  if (s === 'parts on order' || s.includes('on order')) return 'parts_on_order'
+
+  if (s === 'design') return 'design'
+
+  if (s === 'build') return 'build'
+
+  if (s === 'labor only' || s === 'in progress' || s === 'in-progress') return 'in_progress'
 
   return null
 }

@@ -7,10 +7,8 @@ import { useUpdateConfig } from "../hooks/useConfig";
 import { useUpdateCheck, fetchUpdateStatus } from "../hooks/useUpdateCheck";
 import { confirmDiscardUnsaved } from "../store/appStore";
 import { useBoardConfig, useUpdateBoardConfig } from "../hooks/useBoard";
-import { DEFAULT_BOARD_CONFIG, JobStatus } from "@vrsi/wallboard-shared";
+import { DEFAULT_BOARD_CONFIG, STATUS_ORDER } from "@vrsi/wallboard-shared";
 import { statusLabel } from "./board/boardColors";
-
-const STATUS_LIST: JobStatus[] = ["none", "in_progress", "ready_to_ship", "shipped"];
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -70,7 +68,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
   const [local, setLocal] = useState<AppConfig>({ ...config });
   const { config: boardConfig } = useBoardConfig();
   const updateBoardConfig = useUpdateBoardConfig();
-  const [localColors, setLocalColors] = useState<Record<JobStatus, string>>(
+  const [localColors, setLocalColors] = useState<Record<string, string>>(
     () => ({ ...DEFAULT_BOARD_CONFIG.statusColors, ...boardConfig.statusColors })
   );
   const [saving, setSaving] = useState(false);
@@ -276,7 +274,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, config }
                 <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
                   <span className="block text-sm text-slate-200 mb-2">Status colors</span>
                   <div className="flex flex-col gap-1.5">
-                    {STATUS_LIST.map((status) => (
+                    {STATUS_ORDER.map((status) => (
                       <div key={status} className="flex items-center justify-between">
                         <span className="text-[12px] text-slate-400">{statusLabel(status)}</span>
                         <input
