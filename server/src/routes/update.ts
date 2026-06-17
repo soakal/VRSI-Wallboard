@@ -30,8 +30,8 @@ interface CacheEntry {
 }
 let cache: CacheEntry | null = null;
 
-/** Strip pre-release suffixes (e.g. -beta, -rc.1) then compare numerically. */
-function isNewer(latest: string, current: string): boolean {
+/** Strip pre-release suffixes (e.g. -beta, -rc.1) then compare numerically. Exported for testing. */
+export function isNewer(latest: string, current: string): boolean {
   const parse = (v: string): [number, number, number] => {
     const clean = v.replace(/^v/, '').split('-')[0]; // strip pre-release
     const parts = clean.split('.').map(Number);

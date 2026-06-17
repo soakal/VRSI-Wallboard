@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      # Shared types must be built first so the server's file: dependency resolves.
+      # Shared types must be built first so the server and client file: dependencies resolve.
       - run: npm install
         working-directory: shared
       - run: npm run build
@@ -24,3 +24,28 @@ jobs:
         working-directory: server
       - run: npm test
         working-directory: server
+      # Client build — catches TypeScript errors and Vite configuration issues.
+      - run: npm install
+        working-directory: client
+      - run: npm run build
+        working-directory: client
+
+  ps-lint:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse-validate PowerShell scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem -Path scripts/windows -Filter '*.ps1' -Recurse | ForEach-Object {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errs) | Out-Null
+            if ($errs.Count -gt 0) {
+              Write-Host "PARSE ERROR: $($_.Name)"
+              $errs | ForEach-Object { Write-Host "  $_" }
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+          Write-Host "All PowerShell scripts parse-clean."
