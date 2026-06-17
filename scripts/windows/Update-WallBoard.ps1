@@ -86,7 +86,13 @@ if ($dirty) {
     Write-Host $dirty -ForegroundColor DarkYellow
     if ($Unattended) {
         Write-Host '  Auto-stashing changes for unattended update' -ForegroundColor DarkGray
-        git stash push -m 'pre-update auto-stash (unattended)' 2>&1 | Out-Host
+        # --include-untracked so release zips/.lnk/.sha256 in the repo root are actually
+        # captured. Do NOT trust `git stash`'s exit code (it returns 0 even when it saves
+        # nothing): gate $autoStashed on a real stash ref existing, otherwise the pop
+        # below hits an empty stash and its "No stash entries found" stderr is fatal
+        # under $ErrorActionPreference='Stop'.
+        git stash push --include-untracked -m 'pre-update auto-stash (unattended)' 2>&1 | Out-Host
+        git rev-parse --verify --quiet refs/stash *> $null
         $autoStashed = ($LASTEXITCODE -eq 0)
     } else {
         $ans = Read-Host 'Continue anyway? (Y/N)'
@@ -98,14 +104,18 @@ if ($dirty) {
 Write-Step 'Pulling latest code from GitHub'
 git pull --ff-only
 if ($LASTEXITCODE -ne 0) {
-    if ($autoStashed) { git stash pop 2>&1 | Out-Host }
+    # Native git stderr (e.g. a pop conflict) must not be promoted to a terminating
+    # error here, or it would mask the real "git pull failed" message below.
+    if ($autoStashed) { try { git stash pop 2>&1 | Out-Host } catch { Write-Warning "stash pop skipped: $($_.Exception.Message)" } }
     Pop-Location
     throw 'git pull failed. The branch may have diverged - pull manually, then re-run this script.'
 }
 
 if ($autoStashed) {
     Write-Host '  Restoring auto-stash' -ForegroundColor DarkGray
-    git stash pop 2>&1 | Out-Host
+    # A benign stash issue (empty/conflicting) must not abort a pull that already
+    # succeeded; downgrade it to a warning instead of a terminating error.
+    try { git stash pop 2>&1 | Out-Host } catch { Write-Warning "stash pop skipped: $($_.Exception.Message)" }
 }
 Pop-Location
 

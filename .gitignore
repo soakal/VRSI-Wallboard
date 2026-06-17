@@ -19,3 +19,9 @@ shared/src/**/*.js
 shared/src/**/*.d.ts
 e2e/artifacts/
 e2e/.demo-data/
+# Release artifacts and shortcuts that otherwise dirty the working tree and
+# break the unattended updater's auto-stash logic (see Update-WallBoard.ps1).
+VRSI-WallBoard-v*.zip
+*.zip.sha256
+*.sha256
+*.lnk
