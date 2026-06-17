@@ -102,6 +102,10 @@ Write-Step "Creating install zip: releases\$zipName"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path $ReleaseDir -DestinationPath $zipPath -Force
 
+# Measure sizes from staging before it's deleted.
+$serverSize = [math]::Round((Get-ChildItem (Join-Path $ReleaseDir 'server\dist') -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
+$clientSize = [math]::Round((Get-ChildItem (Join-Path $ReleaseDir 'client\dist') -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
+
 # Clean up the temp staging dir — the zip is the deliverable.
 Remove-Item $StagingRoot -Recurse -Force -ErrorAction SilentlyContinue
 $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
@@ -111,10 +115,6 @@ $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
 $zipHash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
 $shaPath = Join-Path $ReleasesDir "$zipName.sha256"
 "$zipHash  $zipName" | Set-Content -Path $shaPath -Encoding ascii -NoNewline
-
-# Summary
-$serverSize = [math]::Round((Get-ChildItem (Join-Path $ReleaseDir 'server\dist') -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
-$clientSize = [math]::Round((Get-ChildItem (Join-Path $ReleaseDir 'client\dist') -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
 
 Write-Host ''
 Write-Host '==========================================' -ForegroundColor Green
