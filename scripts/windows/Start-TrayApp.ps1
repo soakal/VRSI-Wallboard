@@ -24,6 +24,18 @@ if (-not $_createdNew) {
     exit 0
 }
 
+# Self-heal: if a past update orphaned the logon task in the Disabled state, the
+# first time the tray actually runs it re-arms its own AtLogon trigger so the
+# machine recovers on its own. Best-effort — a non-elevated kiosk user may lack
+# rights to enable the task, which must never block the tray from starting.
+try {
+    $_tt = Get-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue
+    if ($_tt -and $_tt.State -eq 'Disabled') {
+        Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
+    }
+    Remove-Variable _tt -ErrorAction SilentlyContinue
+} catch { }
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 

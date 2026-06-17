@@ -37,8 +37,13 @@ Start-Transcript -Path (Join-Path $logDir 'update.log') -Append | Out-Null
 # the kiosk down with the tray task disabled.
 function Restart-WallBoardServer {
     param([bool]$TrayWasRunning)
-    if ($TrayWasRunning) {
+    # Always re-enable the logon task if it exists — the task's existence, not a
+    # live mutex, is the right signal that this is a tray install. Enabling does
+    # not launch anything now; it only governs the next logon.
+    if (Get-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue) {
         Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
+    }
+    if ($TrayWasRunning) {
         $trayBat = Join-Path $RepoRoot 'Start-TrayApp.bat'
         if (Test-Path $trayBat) {
             Start-Process 'cmd.exe' -ArgumentList "/c `"$trayBat`"" -WindowStyle Hidden
@@ -66,6 +71,7 @@ function Assert-NodeCompatible {
 $serverStopped = $false
 $restarted = $false
 $trayWasRunning = $false
+$taskDisabled = $false
 
 try {
 
@@ -88,7 +94,12 @@ if ($trayWasRunning) {
     Write-Host '  Tray app detected  - disabling task + stopping tray before rebuild' -ForegroundColor DarkGray
     # Disable the scheduled task FIRST so Task Scheduler does not relaunch the
     # tray mid-update (RestartCount=3 would otherwise fire within 60 seconds).
-    Disable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
+    # Only disable if not already Disabled, so $taskDisabled records that THIS run
+    # owns re-enabling it.
+    if ((Get-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue).State -ne 'Disabled') {
+        Disable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
+        $taskDisabled = $true
+    }
     Get-CimInstance Win32_Process |
         Where-Object { $_.Name -in @('powershell.exe', 'pwsh.exe') -and $_.CommandLine -like '*Start-TrayApp.ps1*' } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
@@ -197,6 +208,12 @@ if (-not $Unattended) { Start-Sleep -Seconds 3 }
 } catch {
     Write-Warning "Update failed: $($_.Exception.Message)"
     Write-UpdateStatus -Ok $false -Message "Update failed: $($_.Exception.Message)"
+    # The tray task is the sole logon launcher; if THIS run disabled it, re-enable
+    # it even when the failure happened before the server was stopped (e.g. an
+    # early git failure) so the tray still auto-starts at next logon.
+    if ($taskDisabled -and -not $restarted) {
+        Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
+    }
     # If we stopped the server but never reached the restart, bring the existing
     # version back up so the board is not left down with the tray task disabled.
     if ($serverStopped -and -not $restarted) {
@@ -209,5 +226,12 @@ if (-not $Unattended) { Start-Sleep -Seconds 3 }
     }
     throw
 } finally {
+    # Enabled is the correct steady state for the logon task; restore it on EVERY
+    # exit path (success, caught failure, rethrow) so an update can never leave the
+    # tray unable to start at logon. Idempotent; only attempted if the task exists.
+    if (Get-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue) {
+        try { Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction Stop | Out-Null }
+        catch { Write-Warning "Could not re-enable 'VRSI WallBoard Tray' task: $($_.Exception.Message)" }
+    }
     Stop-Transcript | Out-Null
 }
