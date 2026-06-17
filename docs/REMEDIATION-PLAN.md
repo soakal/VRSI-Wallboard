@@ -14,10 +14,13 @@
 
 ---
 
+> **Live-machine finding (2026-06-17, found during verification):** ALL board writes fail with `attempt to write a readonly database` because `C:\ProgramData\VRSIWallBoard\data\wallboard.db` is owned by `BUILTIN\Administrators` and the kiosk user has only *Write* (not *Modify*) on it. The server opens the DB read-only, so block/unblock/notes/status never save. Root cause: the DB was created by an **elevated** process; the installer grants the kiosk user Modify on the *install* dir but **not** on the *data* dir. This is a new Phase 1 critical fix (data-dir ACL + never-run-elevated) plus a one-time recovery command.
+
 ## Phase 0 — Safety net & ground truth
 *Make changes reversible and confirm what is actually running before touching anything destructive.*
 
 - **[verify/S]** Create a working branch off main; back up `C:\ProgramData\VRSIWallBoard\data` (wallboard.db + tokens.json) + run a scripted backup. — *Acceptance:* branch exists; timestamped DB backup + tokens copy stored outside the repo; working tree clean aside from ignored artifacts.
+- **[verify/S] Recover THIS machine's data-dir permissions (one-time, ELEVATED):** `icacls "C:\ProgramData\VRSIWallBoard\data" /grant "<kioskUser>:(OI)(CI)M" /T`, then restart the server. — *Acceptance:* the server can open the DB read-write; a live block→note→unblock round-trip persists.
 - **[verify/S]** Confirm running build vs committed source (the destructive-update saga corrupted the dev install): rebuild from source and confirm `server/dist` matches `server/src` and the v0.15.x features are present. — *Acceptance:* fresh `npm run build` succeeds; block-reason auto-note present in rebuilt dist; any divergence recorded.
 - **[verify/S]** Confirm the repo-root `VRSI WallBoard/` duplicate tree is a stale staging copy and untracked, so removal is safe. — *Acceptance:* `git ls-files` shows nothing under it; removal recorded as safe.
 
@@ -27,6 +30,7 @@
 - **[fix/S]** Guard `Update-FromRelease.ps1`: abort (before any Copy-Item) if `.git` or `server\src` exists, telling the user to run `Update-WallBoard.ps1`. No `-Force`. — *Acceptance:* release path aborts on a git checkout before any file op; proceeds on a clean release extract.
 - **[fix/M]** Harden git-vs-release detection in `update.ts` from `fs.existsSync('.git')` to `git -C repoRoot rev-parse --is-inside-work-tree`; validate repoRoot marker; keep `{data}/{error}`. — *Acceptance:* correct on clone/extract/worktree; invalid repoRoot returns descriptive `{error}`.
 - **[fix/S]** Add a WARNING block to `Update-FromRelease.bat` naming the git-clone path. 
+- **[fix/M] Data-dir is writable by the kiosk user (the read-only-DB bug):** `Install-DataDirs.ps1` must `icacls`-grant the kiosk user **Modify on the data dir** (default `C:\ProgramData\VRSIWallBoard\data`), and the server/tray must **never run elevated** so it stops creating Administrator-owned DB files. Add a startup self-check that logs a clear warning if the DB is not writable. — *Acceptance:* a fresh install leaves the data dir Modify-able by the kiosk user; the server opens the DB read-write; block/unblock/notes/status all persist; a non-writable DB logs an actionable warning instead of a bare 500.
 - **[fix/M]** Fix token path divergence: `tokenStore.ts` resolves `tokens.json` via `resolveDataDir()` (honor `DATA_DIR`), migrating an existing `server/data/tokens.json` on first load. — *Acceptance:* tokens live under `DATA_DIR`; a release update no longer wipes encrypted tokens.
 - **[fix/L]** Make backup/restore complete: include app config (+ tokens, or document/enforce re-auth). Through the StorageProvider boundary, merge-never-overwrite. **Owner approval required** if the interface/data model must change.
 - **[fix/M]** Remove committed PII: externalize real aliases in `personIdentity.ts` and email defaults in `DEFAULT_BOARD_CONFIG` to config/env. Flag git-history scrub for owner decision (separate).
