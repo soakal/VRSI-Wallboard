@@ -172,7 +172,14 @@ updateRouter.post('/run', requireAdminToken, (_req: Request, res: Response) => {
     // dist/routes/update.js → repo root is three levels up from this file's dir
     const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
     const scriptsDir = path.join(repoRoot, 'scripts', 'windows');
-    const isGit = fs.existsSync(path.join(repoRoot, '.git'));
+    // Treat ANY source/dev tree as a git install: a .git dir/file OR a server\src
+    // folder. The release path overwrites server\src and runs npm --omit=dev, which
+    // would clobber a developer's working tree — so a source tree must always take
+    // the git-pull path (Update-WallBoard.ps1). Only a pure release install (dist
+    // only, no .git, no src) gets Update-FromRelease.ps1.
+    const isGit =
+      fs.existsSync(path.join(repoRoot, '.git')) ||
+      fs.existsSync(path.join(repoRoot, 'server', 'src'));
     const script = path.join(scriptsDir, isGit ? 'Update-WallBoard.ps1' : 'Update-FromRelease.ps1');
     if (!fs.existsSync(script)) {
       return res.status(500).json({
