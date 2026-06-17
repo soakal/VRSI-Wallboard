@@ -29,22 +29,20 @@ function New-Dir([string]$Path) {
     New-Item -ItemType Directory -Path $Path -Force | Out-Null
 }
 
-# 1. shared/ -- dist + src + package.json (no node_modules; no runtime deps)
+# 1. shared/ -- dist + package.json only (no src, no node_modules; no runtime deps)
 Write-Host '  Copying shared...' -ForegroundColor DarkGray
 New-Dir (Join-Path $ReleaseDir 'shared')
 Copy-Item (Join-Path $SharedDir 'dist')         (Join-Path $ReleaseDir 'shared') -Recurse
 Copy-Item (Join-Path $SharedDir 'package.json') (Join-Path $ReleaseDir 'shared')
-if (Test-Path (Join-Path $SharedDir 'src')) {
-    Copy-Item (Join-Path $SharedDir 'src') (Join-Path $ReleaseDir 'shared') -Recurse
-}
 
-# 2. server/ -- dist + src + config files (no node_modules, no .env secrets)
+# 2. server/ -- dist only + config files (no src, no node_modules, no .env secrets)
+#    Excluding src is CRITICAL: update.ts uses the presence of server\src to decide
+#    whether to use the git-pull updater vs the release-zip updater. A release install
+#    must NOT have server\src or the kiosk will try (and fail) to git pull.
 Write-Host '  Copying server...' -ForegroundColor DarkGray
 New-Dir (Join-Path $ReleaseDir 'server')
-foreach ($item in @('dist', 'src')) {
-    $p = Join-Path $ServerDir $item
-    if (Test-Path $p) { Copy-Item $p (Join-Path $ReleaseDir 'server') -Recurse }
-}
+$p = Join-Path $ServerDir 'dist'
+if (Test-Path $p) { Copy-Item $p (Join-Path $ReleaseDir 'server') -Recurse }
 foreach ($file in @('package.json', 'package-lock.json', 'tsconfig.json', '.env.production.example')) {
     $p = Join-Path $ServerDir $file
     if (Test-Path $p) { Copy-Item $p (Join-Path $ReleaseDir 'server') }

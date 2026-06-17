@@ -121,13 +121,12 @@ try {
     Write-Host '  ===========================================' -ForegroundColor Cyan
     Write-Host ''
 
-    # GUARD: never run the release path on a git/source checkout. This path
-    # overwrites server\src with the zip's source and runs npm install --omit=dev,
-    # which would clobber a developer's working tree and strip dev deps. A dev
-    # install must update via Update-WallBoard.ps1 (git pull). Fail BEFORE touching
-    # anything (no -Force override; there is no legitimate dev use case).
-    if ((Test-Path (Join-Path $RepoRoot '.git')) -or (Test-Path (Join-Path $RepoRoot 'server\src'))) {
-        throw "Refusing to run the release updater on a source/git checkout ($RepoRoot). This would overwrite your working tree and strip dev dependencies. Use Update-WallBoard.ps1 (git pull) instead."
+    # GUARD: never run the release path on a git/dev checkout. A dev install must
+    # update via Update-WallBoard.ps1 (git pull). Key on .git only — do NOT also
+    # check server\src because older release zips (≤ v1.1.0) shipped src by mistake,
+    # and blocking on it would prevent those kiosks from ever self-healing.
+    if (Test-Path (Join-Path $RepoRoot '.git')) {
+        throw "Refusing to run the release updater on a git checkout ($RepoRoot). Use Update-WallBoard.ps1 (git pull) instead."
     }
 
     # 0. Refresh PATH from the registry (this can run from a context without it),
@@ -221,6 +220,17 @@ try {
     #    server\.env is not part of the release zip, so both are untouched)
     Write-Step "Copying new files over $RepoRoot"
     Copy-Item -Path (Join-Path $newRoot '*') -Destination $RepoRoot -Recurse -Force
+
+    # 4b. Remove stale server\src and shared\src left behind by older release zips
+    #     (≤ v1.1.0 incorrectly included src). Copy-Item above is additive and won't
+    #     delete them. Their presence would route future updates to the git-pull path.
+    foreach ($stale in @('server\src', 'shared\src')) {
+        $stalePath = Join-Path $RepoRoot $stale
+        if (Test-Path $stalePath) {
+            Remove-Item $stalePath -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "  Removed stale $stale" -ForegroundColor DarkGray
+        }
+    }
 
     # 5. Update server dependencies (the release ships package.json +
     #    package-lock.json but no node_modules). PATH was refreshed in step 0.
