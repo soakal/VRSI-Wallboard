@@ -85,10 +85,10 @@ export const DEFAULT_BOARD_CONFIG: BoardConfig = {
   spareCarrier: 'matto@vrs-inc.com',
   superUsers: [],
   statusColors: {
-    none: '#475569',
+    none: '#64748b',
     parts_on_order: '#f97316',
     design: '#a855f7',
-    build: '#14b8a6',
+    build: '#ec4899',
     in_progress: '#facc15',
     ready_to_ship: '#3b82f6',
     shipped: '#22c55e',
