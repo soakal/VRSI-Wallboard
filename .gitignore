@@ -27,3 +27,4 @@ VRSI-WallBoard-v*.zip
 *.zip.sha256
 *.sha256
 *.lnk
+.claude/
