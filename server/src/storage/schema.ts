@@ -1,6 +1,7 @@
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS jobs (
   job_number TEXT PRIMARY KEY,
+  description TEXT NOT NULL DEFAULT '',
   pm TEXT NOT NULL DEFAULT '',
   customer TEXT NOT NULL DEFAULT '',
   materials_manager TEXT NOT NULL DEFAULT '',

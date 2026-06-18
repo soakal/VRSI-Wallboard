@@ -144,6 +144,10 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       this.db.exec(`ALTER TABLE board_state ADD COLUMN blocked_reason TEXT`);
     }
 
+    if (!columnNames('jobs').has('description')) {
+      this.db.exec(`ALTER TABLE jobs ADD COLUMN description TEXT NOT NULL DEFAULT ''`);
+    }
+
     if (!columnNames('jobs_import_meta').has('changed_note_job_numbers')) {
       this.db.exec(
         `ALTER TABLE jobs_import_meta ADD COLUMN changed_note_job_numbers TEXT NOT NULL DEFAULT '[]'`
@@ -170,7 +174,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
   loadJobsFile(): JobsFile | null {
     const rows = this.db
       .prepare(
-        `SELECT job_number, pm, customer, materials_manager, pabs_complete,
+        `SELECT job_number, description, pm, customer, materials_manager, pabs_complete,
                 ship_to_pm, ship_to_customer
          FROM jobs ORDER BY job_number`
       )
@@ -192,6 +196,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     return {
       jobs: rows.map((r) => ({
         jobNumber: r.job_number as string,
+        description: (r.description as string) ?? '',
         pm: (r.pm as string) ?? '',
         customer: (r.customer as string) ?? '',
         materialsManager: (r.materials_manager as string) ?? '',
@@ -216,13 +221,14 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     const tx = this.db.transaction(() => {
       this.db.prepare('DELETE FROM jobs').run();
       const ins = this.db.prepare(
-        `INSERT INTO jobs (job_number, pm, customer, materials_manager, pabs_complete,
+        `INSERT INTO jobs (job_number, description, pm, customer, materials_manager, pabs_complete,
           ship_to_pm, ship_to_customer, imported_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const j of uniqueJobs) {
         ins.run(
           j.jobNumber,
+          j.description ?? '',
           j.pm,
           j.customer,
           j.materialsManager,
@@ -708,13 +714,14 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
 
       const insJob = this.db.prepare(
         `INSERT OR IGNORE INTO jobs
-           (job_number, pm, customer, materials_manager, pabs_complete,
+           (job_number, description, pm, customer, materials_manager, pabs_complete,
             ship_to_pm, ship_to_customer, imported_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const j of srcJobs) {
+        // Backups predating the description column omit it under SELECT * — default to ''.
         insJob.run(
-          j.job_number, j.pm, j.customer, j.materials_manager,
+          j.job_number, j.description ?? '', j.pm, j.customer, j.materials_manager,
           j.pabs_complete, j.ship_to_pm, j.ship_to_customer, j.imported_at
         );
       }
