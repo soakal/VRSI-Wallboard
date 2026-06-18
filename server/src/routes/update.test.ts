@@ -1,6 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isNewer } from './update.js'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { hasValidGitCheckout, isNewer } from './update.js'
 
 // ── isNewer ────────────────────────────────────────────────────────────────
 test('isNewer: newer patch', () => {
@@ -42,4 +46,19 @@ test('isNewer: double-digit version components', () => {
 
 test('isNewer: invalid latest returns false', () => {
   assert.equal(isNewer('not-a-version', '0.15.0'), false)
+})
+
+// ── hasValidGitCheckout ─────────────────────────────────────────────────────
+test('hasValidGitCheckout: true for this repository root', () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
+  assert.equal(hasValidGitCheckout(repoRoot), true)
+})
+
+test('hasValidGitCheckout: false for non-git temp directory', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vrsi-git-check-'))
+  try {
+    assert.equal(hasValidGitCheckout(tmp), false)
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
 })

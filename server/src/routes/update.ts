@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { createRequire } from 'module';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs';
@@ -166,6 +166,35 @@ updateRouter.get('/status', (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 let updateStartedAt = 0;
 
+export function hasValidGitCheckout(repoRoot: string): boolean {
+  const gitMarker = path.join(repoRoot, '.git');
+  if (!fs.existsSync(gitMarker)) return false;
+
+  try {
+    const probe = spawnSync('git', ['-C', repoRoot, 'rev-parse', '--is-inside-work-tree'], {
+      windowsHide: true,
+      timeout: 3000,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (probe.error) {
+      logger.warn('Git probe failed while choosing update path', { err: probe.error });
+      return false;
+    }
+    if (probe.status !== 0) {
+      logger.warn('Git probe returned non-zero while choosing update path', {
+        status: probe.status,
+        stderr: probe.stderr.trim().slice(0, 300),
+      });
+      return false;
+    }
+    return probe.stdout.trim() === 'true';
+  } catch (err) {
+    logger.warn('Unexpected git probe error while choosing update path', { err });
+    return false;
+  }
+}
+
 updateRouter.post('/run', requireAdminToken, (_req: Request, res: Response) => {
   try {
     // Debounce: ignore re-clicks while an update launched in the last 5 minutes
@@ -176,10 +205,10 @@ updateRouter.post('/run', requireAdminToken, (_req: Request, res: Response) => {
     // dist/routes/update.js → repo root is three levels up from this file's dir
     const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
     const scriptsDir = path.join(repoRoot, 'scripts', 'windows');
-    // A real dev/git checkout always has .git. Do NOT also key on server\src —
-    // older release zips (≤ v1.1.0) shipped src by mistake, so that signal is
-    // unreliable and would strand release kiosks on the failing git-pull path.
-    const isGit = fs.existsSync(path.join(repoRoot, '.git'));
+    // Prefer the git updater only when this is a VALID git working tree.
+    // Stale/partial .git markers can exist on release installs and would route
+    // them to the wrong updater path that then fails with "not a git repository".
+    const isGit = hasValidGitCheckout(repoRoot);
     const script = path.join(scriptsDir, isGit ? 'Update-WallBoard.ps1' : 'Update-FromRelease.ps1');
     if (!fs.existsSync(script)) {
       return res.status(500).json({

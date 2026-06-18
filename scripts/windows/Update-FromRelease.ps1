@@ -121,11 +121,17 @@ try {
     Write-Host '  ===========================================' -ForegroundColor Cyan
     Write-Host ''
 
-    # GUARD: never run the release path on a git/dev checkout. A dev install must
-    # update via Update-WallBoard.ps1 (git pull). Key on .git only — do NOT also
-    # check server\src because older release zips (≤ v1.1.0) shipped src by mistake,
-    # and blocking on it would prevent those kiosks from ever self-healing.
-    if (Test-Path (Join-Path $RepoRoot '.git')) {
+    # GUARD: never run the release path on a real git/dev checkout. Validate with
+    # git itself (not just ".git" existence) so stale/partial git markers on old
+    # release installs do not block this updater forever.
+    $isGitCheckout = $false
+    try {
+        & git -C $RepoRoot rev-parse --is-inside-work-tree *> $null
+        $isGitCheckout = ($LASTEXITCODE -eq 0)
+    } catch {
+        $isGitCheckout = $false
+    }
+    if ($isGitCheckout) {
         throw "Refusing to run the release updater on a git checkout ($RepoRoot). Use Update-WallBoard.ps1 (git pull) instead."
     }
 

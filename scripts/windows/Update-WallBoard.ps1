@@ -82,6 +82,21 @@ Write-Host '  VRSI WallBoard - Update' -ForegroundColor Cyan
 Write-Host '  =======================' -ForegroundColor Cyan
 Write-Host ''
 
+# Guard: this updater is only for valid git checkouts. If a stale/partial .git
+# marker exists on a release install, fail early before touching tray/server and
+# direct the caller to the release updater.
+Write-Step 'Validating git checkout'
+$isGitCheckout = $false
+try {
+    & git -C $RepoRoot rev-parse --is-inside-work-tree *> $null
+    $isGitCheckout = ($LASTEXITCODE -eq 0)
+} catch {
+    $isGitCheckout = $false
+}
+if (-not $isGitCheckout) {
+    throw "This install is not a valid git checkout ($RepoRoot). Use Update-FromRelease.ps1 instead."
+}
+
 # 0. Detect whether the tray app is running (mutex 'VRSIWallBoardTray').
 #    If it is, stop it now  - it will otherwise restart the old server within
 #    seconds of Stop-WallBoardServer, causing a port-conflict and a false
