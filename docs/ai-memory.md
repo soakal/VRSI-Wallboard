@@ -119,6 +119,8 @@ After that, the in-app Update button works normally forever.
    - Ships `server/dist` only — NO `server/src` (critical — its presence routes updates to git-pull)
 3. `gh release create vX.Y.Z "releases\VRSI-WallBoard-vX.Y.Z.zip" "releases\VRSI-WallBoard-vX.Y.Z.sha256"`
 4. Both assets MUST be uploaded (updater verifies SHA256 before extracting)
+5. Prune `releases/` to the **2 most recent versions** (delete older `.zip` + `.zip.sha256`).
+   Gitignored + all versions live on GitHub, so old local zips are safe to remove.
 
 ### Update paths
 - **Kiosk** (no `.git`): `Update-FromRelease.ps1` — downloads latest GitHub release zip, verifies SHA256, snapshots current dist, copies over, npm install --omit=dev, restarts, rolls back if health check fails

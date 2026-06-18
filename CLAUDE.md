@@ -56,6 +56,14 @@
 - Never commit secrets, `.env` files, or PII
 - Never commit directly to `main` unless the project has no branch protection
 
+## Release Rules
+- After packaging a release (`scripts/windows/Package-Release.ps1`) and publishing it, prune the
+  local `releases/` folder so it keeps **only the 2 most recent versions** — delete the older
+  `VRSI-WallBoard-vX.Y.Z.zip` AND its matching `.zip.sha256`. The folder is gitignored and every
+  version stays available on GitHub Releases, so older local zips are safe to remove.
+- Publish with `gh` (installed at `C:\Program Files\GitHub CLI\gh.exe`); upload BOTH the `.zip` and
+  the `.sha256` — the in-app updater verifies the checksum before extracting.
+
 ## Exchange Counter & Session Commands
 - Reset exchange counter to 0 on session start
 - Every 10 exchanges: output re-anchor line: `[Exchange N | Working on: ___ | Storage: ___]`
