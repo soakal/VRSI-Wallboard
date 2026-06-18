@@ -1,6 +1,6 @@
 # VRSI WallBoard — AI Memory
 
-**Last saved:** 2026-06-17
+**Last saved:** 2026-06-18
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\` (dev: `server/data`)
 **Vault record (v0.9.3→v0.14.1 session log):** Obsidian vault → `10-Projects/VRSI-Wallboard-Session-2026-06-16-v0.9.3-to-v0.14.1.md`
@@ -9,9 +9,9 @@
 
 ## Current State
 
-**Version:** v1.1.2 (root + server + client + shared all in sync). Pushed and released on GitHub.
+**Version:** v1.1.3 (root + server + client + shared all in sync). Pushed and released on GitHub.
 
-**Last completed task:** Out-of-box defaults — 2-week calendar, weather on (Plymouth MI 48170), files off, spare carrier matto@vrs-inc.com (v1.1.2).
+**Last completed task:** v1.1.3 — persist job `description` (was never saved to DB) + more distinct default status colors. Released to GitHub.
 
 **Next task:** None assigned. Kiosk recovery still needed (see below).
 
@@ -20,6 +20,41 @@ To recover an existing kiosk stuck on v1.1.0:
 1. As Administrator, delete `C:\Program Files\VRSI WallBoard\server\src`
 2. Run `Update-FromRelease.bat` — will download and apply v1.1.1
 After that, the in-app Update button works normally forever.
+
+---
+
+## This Session Work (2026-06-18) → v1.1.3
+
+### Fix: job description never persisted (`fix(storage)`)
+- The card render for `job.description` was added in `2ca4f4d` (commit before this session) but
+  descriptions never appeared. Root cause: the `jobs` table had **no `description` column**, and
+  `loadJobsFile`/`saveJobsFile` never carried it — the parser read it (`boardService.ts:478`) but it
+  was dropped on save, so every `BoardJob.description` was `undefined`.
+- Fix (4 spots, all in storage layer): added column to `schema.ts`; `ALTER TABLE` migration in
+  `localProvider.ts ensureColumns()`; carry `description` through `loadJobsFile`, `saveJobsFile`, and
+  the `_mergeFromBackup` job insert (default `''` for pre-v1.1.3 backups).
+- **Existing jobs stay blank until the schedule is re-imported** (column added empty by migration).
+  Source spreadsheet needs a header containing `description`, or `Job Name` / `Project Name`.
+
+### Change: more distinct default status colors (`feat(board)`)
+- `build` teal `#14b8a6` → pink `#ec4899` (teal sat between ready_to_ship blue and shipped green —
+  hard to tell apart). `none` `#475569` → brighter `#64748b`.
+- `DEFAULT_BOARD_CONFIG.statusColors` in `shared/src/types/board.ts` is the single source of truth.
+- **Fresh installs only.** Existing installs keep their saved `board_config`. (This install had NO
+  `board_config` row, so it reads the defaults directly → the change applies here after rebuild.)
+
+### Update button — verified, no code change
+- Button = `POST /api/update/run` → `powershell.exe -ExecutionPolicy Bypass -File <script>` via WMI.
+  Routing is correct: git checkout → `Update-WallBoard.ps1`; release install → `Update-FromRelease.ps1`.
+- The recurring "PowerShell/.ps1 won't run" theory is **wrong** — the admin `.bat` runs the SAME `.ps1`
+  with the SAME `-ExecutionPolicy Bypass`. The only difference is **elevation / write-permission to the
+  install folder**. `Update-FromRelease.ps1` `Assert-Writable` fails fast if the kiosk user lacks
+  Modify. Installer's `Grant-UpdatePermissions` (icacls `(OI)(CI)M`) is the intended fix so the button
+  works without admin. Diagnose real failures via `logs\update.log` + `update-status.json`.
+
+### Tooling
+- Installed **GitHub CLI** (`gh` 2.94.0) at `C:\Program Files\GitHub CLI\gh.exe` (via winget) to
+  publish releases. Authenticated as `soakal` (token in keyring, scopes incl. `repo`).
 
 ---
 
@@ -55,6 +90,7 @@ After that, the in-app Update button works normally forever.
 
 | Version | What |
 |---------|------|
+| v1.1.3 | Persist job `description` (was never saved to DB); distinct default status colors (build teal→pink, brighter none) |
 | v1.1.2 | Out-of-box defaults: 2-week view, weather on (48170), files off, spare carrier set |
 | v1.1.1 | Fix kiosk self-update (update routing, guard, package script) |
 | v1.1.0 | New job statuses (parts_on_order, design, build); status colors in Settings |
@@ -72,6 +108,10 @@ After that, the in-app Update button works normally forever.
 `none` → `parts_on_order` → `design` → `build` → `in_progress` → `ready_to_ship` → `shipped`
 - `in_progress` is a catch-all (e.g. "Labor Only" from spreadsheet)
 - Each status has a color in `DEFAULT_BOARD_CONFIG.statusColors`; user can override in Settings
+- Default colors (v1.1.3): none `#64748b`, parts_on_order `#f97316`, design `#a855f7`, build `#ec4899`
+  (was teal `#14b8a6` ≤v1.1.2), in_progress `#facc15`, ready_to_ship `#3b82f6`, shipped `#22c55e`
+- `BoardJob.description` (v1.1.3): parsed from ops-schedule Description/Job Name/Project Name column,
+  persisted in `jobs` table, shown on card between job number and Materials Manager
 
 ### Release flow
 1. `npm run build` at root
@@ -151,8 +191,10 @@ Key test files:
 
 1. Start server: `npm start` at repo root → `http://localhost:3001`
 2. Current test suite: `npm test --prefix server` → 47/47 pass
-3. Latest release: v1.1.1 on GitHub
-4. **Kiosk recovery still needed** (if kiosk is on v1.1.0):
+3. Latest release: **v1.1.3** on GitHub (`gh` installed + authed as soakal — see Tooling above)
+4. After a kiosk updates to v1.1.3: **re-import the schedule once** so existing jobs get descriptions
+   (the `description` column is added empty by migration)
+5. **Kiosk recovery still needed** (if kiosk is on v1.1.0):
    ```powershell
    # As Administrator on the kiosk:
    Remove-Item "C:\Program Files\VRSI WallBoard\server\src" -Recurse -Force

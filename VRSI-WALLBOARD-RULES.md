@@ -118,6 +118,7 @@ Break this rule = you've created a future rewrite. At every session start, verif
 ```json
 {
   "jobNumber": "424-9612A",
+  "description": "Conveyor cell retrofit",
   "pm": "quinteng@vrs-inc.com",
   "customer": "Rivian",
   "materialsManager": "matm@vrs-inc.com",
@@ -157,6 +158,10 @@ Break this rule = you've created a future rewrite. At every session start, verif
 ```
 
 **Rules:**
+- `description` (optional, since v1.1.3): human-readable job title parsed from the ops-schedule
+  "Description" / "Job Name" / "Project Name" column. Persisted in the `jobs` table (column added by
+  `ensureColumns` migration); shown on the card between the job number and the Materials Manager line.
+  Blank for jobs imported before v1.1.3 until the schedule is re-imported.
 - All IDs are UUIDs (strings) — never integers
 - All timestamps ISO 8601 UTC: `2026-06-04T10:30:00Z`
 - `version` increments on every write — conflict detection for SharePoint sync

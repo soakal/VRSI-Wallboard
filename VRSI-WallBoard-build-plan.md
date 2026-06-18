@@ -174,6 +174,7 @@ On first run, if existing JSON files are detected in the configured data directo
 ```sql
 CREATE TABLE jobs (
   job_number TEXT PRIMARY KEY,
+  description TEXT NOT NULL DEFAULT '',  -- since v1.1.3 (ops-schedule job title)
   pm TEXT,
   customer TEXT,
   materials_manager TEXT,
