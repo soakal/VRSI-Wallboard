@@ -104,3 +104,19 @@ test('detectColumns: a PURCH/review "ship to PM" column never steals the real on
   const { colMap } = detectColumns(['Job', 'PURCH Review ship to PM', 'Ship to PM'])
   assert.equal(colMap.shipToPm, 2)
 })
+
+test('detectColumns: maps job description column when present', () => {
+  const { colMap } = detectColumns(['Job #', 'Job Description', 'PM'])
+  assert.equal(colMap.description, 1)
+})
+
+test('detectColumns: maps common description aliases', () => {
+  assert.equal(detectColumns(['Job #', 'Project Name', 'PM']).colMap.description, 1)
+  assert.equal(detectColumns(['Job #', 'Job Name', 'PM']).colMap.description, 1)
+})
+
+test('detectColumns: does not steal the Status column for a "Project Status" header', () => {
+  const { colMap } = detectColumns(['Job #', 'Project Status', 'PM'])
+  assert.equal(colMap.description, null)
+  assert.equal(colMap.status, 1)
+})

@@ -236,6 +236,13 @@ export function JobCard({
         </div>
       </div>
 
+      {/* Job description under the number for quick card scanning. */}
+      {job.description?.trim() && (
+        <div className="mt-1 text-sm text-slate-300 break-words">
+          {job.description}
+        </div>
+      )}
+
       {/* Line 2: Materials Manager + Project Manager (compact, side by side) */}
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         {job.materialsManager.trim() && (

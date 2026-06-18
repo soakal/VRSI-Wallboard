@@ -3,6 +3,8 @@ export const STATUS_ORDER: JobStatus[] = ['none', 'parts_on_order', 'design', 'b
 
 export interface Job {
   jobNumber: string;
+  /** Human-readable job description/title from the ops schedule. */
+  description?: string;
   pm: string;
   customer: string;
   materialsManager: string;

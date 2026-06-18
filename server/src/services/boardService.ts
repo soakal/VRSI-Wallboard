@@ -161,6 +161,7 @@ export function parseDateValue(value: unknown): string | null {
 // ---------------------------------------------------------------------------
 interface ColumnMap {
   jobNumber: number | null
+  description: number | null
   pm: number | null
   customer: number | null
   materialsManager: number | null
@@ -188,6 +189,7 @@ export function parseSpreadsheetCompleteFlag(value: unknown): boolean {
 export function detectColumns(headers: unknown[]): { colMap: ColumnMap; warnings: string[] } {
   const colMap: ColumnMap = {
     jobNumber: null,
+    description: null,
     pm: null,
     customer: null,
     materialsManager: null,
@@ -208,6 +210,12 @@ export function detectColumns(headers: unknown[]): { colMap: ColumnMap; warnings
       (raw.includes('job') && (raw.includes('#') || raw.includes('num') || raw.includes('no')))
     ) {
       if (colMap.jobNumber === null) colMap.jobNumber = i
+    } else if (
+      raw.includes('description') ||
+      raw === 'job name' ||
+      raw === 'project name'
+    ) {
+      if (colMap.description === null) colMap.description = i
     } else if (
       (raw === 'pm' || raw.includes('project manager')) &&
       !raw.includes('ship')
@@ -432,6 +440,12 @@ export function parseXlsm(
       return val != null ? String(val).trim().toLowerCase() : ''
     }
 
+    const getText = (col: number | null): string => {
+      if (col === null) return ''
+      const val = row[col]
+      return val != null ? String(val).trim() : ''
+    }
+
     const getDate = (col: number | null): string | null => {
       if (col === null) return null
       return parseDateValue(row[col])
@@ -461,6 +475,7 @@ export function parseXlsm(
 
     const job: Job = {
       jobNumber,
+      description: getText(colMap.description),
       pm: canonicalPersonName(getString(colMap.pm)),
       customer: colMap.customer !== null
         ? (row[colMap.customer] != null ? String(row[colMap.customer]).trim() : '')
