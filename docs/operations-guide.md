@@ -156,6 +156,24 @@ The Update button needs the logged-in user to have permission to write to the in
 > ```
 > This grants the permission, restarts the board, and the Update button works from then on. (Or just re-run `INSTALL.bat` as Administrator — v0.9.1+ grants the permission for you.)
 
+### 1.5.1 Upgrading an existing v1.1.x kiosk to v1.2.0
+
+A kiosk already running v1.1.x updates to **v1.2.0 in place** — no reinstall. Use the in-app **Update** button (or `Update-FromRelease.bat` as Administrator) exactly as above. Your job data, notes, board config, and `server\.env` are preserved; the update swaps the application code, not the data.
+
+Almost every v1.2.0 change is application code (import safety guard, sign-in/auth-flow fixes, the API response-envelope change, the `multer` upgrade, the new restore conflict-resolution option, updater rollback logic, and the client fixes). All of those take effect the moment the update copies the new files and restarts the server — the Update button is enough for them.
+
+> **One manual step is required to fully secure the kiosk.** v1.2.0 changes the scheduled **backup** task so it runs as the limited kiosk user instead of elevated (an important hardening fix). **The Update button does not re-register scheduled tasks** — it only replaces the script files on disk. So on an existing kiosk the old, elevated backup task keeps running until you re-register it once. In an **Administrator** PowerShell (or right-click → Run as administrator):
+> ```powershell
+> # From the install folder, e.g. C:\Program Files\VRSI WallBoard
+> .\scripts\windows\Register-BackupTask.bat
+> ```
+> This removes the old `VRSI WallBoard Backup` task and re-creates it de-elevated. Re-running `INSTALL.bat` (and choosing to enable backups) does the same thing. Until you do this the kiosk is no worse off than before — it simply hasn't gained the fix yet.
+
+Two smaller things to know:
+
+- **The new updater safeguards apply to the *next* update, not this one.** The v1.1.x→v1.2.0 update is performed by the updater already on disk (the old one). The v1.2.0 changes — a now-mandatory release checksum and the git-path rollback — protect the update *after* v1.2.0. This is normal and harmless: the v1.2.0 release ships its `.sha256` checksum, so nothing to do.
+- **After updating, the server may briefly refuse to start only if it was mis-configured for LAN exposure.** v1.2.0 refuses to boot if `BIND_HOST` is set to a non-loopback address (e.g. `0.0.0.0`) while `TRUST_LOCALHOST` is still on and no `ADMIN_TOKEN` is set — that combination would have exposed admin routes with no authentication. Standard localhost kiosks (the default) are unaffected. If you *do* serve the board over the LAN, set `ADMIN_TOKEN` (or `TRUST_LOCALHOST=false`) in `server\.env` before updating.
+
 ---
 
 ## 2. Uninstall
