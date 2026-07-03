@@ -7,7 +7,7 @@ import { logger } from '../utils/logger.js';
 import { ok, err, type Result } from '../lib/result.js';
 import type { BoardConfig, ImportResult, Job, JobNote, JobStatus } from '@vrsi/wallboard-shared';
 import { DEFAULT_BOARD_CONFIG as DEFAULT_BC } from '@vrsi/wallboard-shared';
-import type { RestoreConflict, RestoreResult, StorageMode, StorageProvider } from './storageTypes.js';
+import type { RestoreConflict, RestoreConflictStrategy, RestoreResult, StorageMode, StorageProvider } from './storageTypes.js';
 import { SCHEMA_SQL } from './schema.js';
 import type { BoardPersistence, JobStateEntry, JobsFile } from './boardPersistence.js';
 import { migrateJsonToSqliteIfNeeded } from './migrate.js';
@@ -209,6 +209,10 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
       newJobNumbers: JSON.parse(meta.new_job_numbers || '[]') as string[],
       changedNoteJobNumbers: JSON.parse(meta.changed_note_job_numbers || '[]') as string[],
     };
+  }
+
+  runInTransaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
   }
 
   saveJobsFile(data: JobsFile): void {
@@ -631,7 +635,10 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     return listBackupFilesOnDisk();
   }
 
-  async restore(source: string): Promise<Result<RestoreResult>> {
+  async restore(
+    source: string,
+    conflictStrategy: RestoreConflictStrategy = 'block'
+  ): Promise<Result<RestoreResult>> {
     if (!fs.existsSync(source)) return err('not_found', `Backup not found: ${source}`);
     const dest = dbPath(this.dataDir);
 
@@ -648,9 +655,13 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
     }
 
     try {
-      // Check for conflicts BEFORE creating the pre-restore snapshot.
+      // Check for conflicts BEFORE creating the pre-restore snapshot. When the
+      // caller hasn't chosen a resolution strategy, block and report them so the
+      // user can decide (rules §7.5). With an explicit 'backup'/'live' strategy,
+      // proceed and resolve conflicted records that way — so a conflicted backup
+      // is never permanently unrestorable.
       const conflicts = this._findRestoreConflicts(srcDb);
-      if (conflicts.length > 0) {
+      if (conflicts.length > 0 && conflictStrategy === 'block') {
         this._logConflicts(conflicts, source);
         this.logAudit(
           'restore',
@@ -661,7 +672,7 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
         return ok({ conflicts });
       }
 
-      // No conflicts — create the pre-restore snapshot, then merge.
+      // No blocking conflicts — create the pre-restore snapshot, then merge.
       const backupDir = resolveBackupDir();
       fs.mkdirSync(backupDir, { recursive: true });
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -669,8 +680,17 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
 
       await this.db.backup(preRestoreFile);
 
-      this._mergeFromBackup(srcDb, source);
+      const conflictJobs = new Set(conflicts.map((c) => c.jobNumber));
+      this._mergeFromBackup(srcDb, source, { strategy: conflictStrategy, conflictJobs });
 
+      if (conflicts.length > 0) {
+        this.logAudit(
+          'conflict',
+          `Restore resolved ${conflicts.length} conflict(s) using strategy='${conflictStrategy}'`,
+          source,
+          true
+        );
+      }
       this.logAudit('restore', `Merged from backup ${source}`, source, true);
       return ok({ preRestoreFile, conflicts: [] });
     } catch (e) {
@@ -703,9 +723,19 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
    *   jobs        — backup job not in live → insert; exists in both → skip (jobs come from XLSM).
    *   jobs_import_meta — take the row with newer imported_at.
    *   config      — skip (preserve current user settings).
-   * Caller must run _findRestoreConflicts before calling this; conflicts must be empty.
+   * Caller runs _findRestoreConflicts first. When conflicts exist, the caller may
+   * pass a resolution strategy: 'backup' forces the backup version for conflicted
+   * jobs, 'live' keeps the live version; non-conflicted records always follow the
+   * normal newest-wins rules above.
    */
-  private _mergeFromBackup(srcDb: Database.Database, _sourcePath: string): void {
+  private _mergeFromBackup(
+    srcDb: Database.Database,
+    _sourcePath: string,
+    resolution: { strategy: RestoreConflictStrategy; conflictJobs: Set<string> } = {
+      strategy: 'block',
+      conflictJobs: new Set(),
+    }
+  ): void {
     const tx = this.db.transaction(() => {
       // ── Jobs ────────────────────────────────────────────────────────────────
       const srcJobs = srcDb
@@ -809,6 +839,22 @@ export class LocalStorageProvider implements StorageProvider, BoardPersistence {
           );
           continue;
         }
+        // Conflicted job (both sides modified within the window): apply the
+        // caller's explicit resolution instead of the newest-wins heuristic.
+        if (resolution.conflictJobs.has(src.job_number)) {
+          if (resolution.strategy === 'live') continue; // keep live
+          if (resolution.strategy === 'backup') {
+            upsertState.run(
+              src.job_number, src.status, src.ship_date_override,
+              src.ship_date_override_note, src.binder_printed,
+              src.status_manual ?? 0, src.binder_manual ?? 0,
+              src.blocked ?? 0, src.blocked_at ?? null, src.blocked_reason ?? null,
+              src.version, src.updated_at, src.updated_by
+            );
+            continue;
+          }
+        }
+
         if (src.version === live.version) continue; // identical — skip
 
         const srcEpoch = isoToEpoch(src.updated_at);

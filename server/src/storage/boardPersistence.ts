@@ -30,6 +30,12 @@ export interface JobStateEntry {
 }
 
 export interface BoardPersistence {
+  /**
+   * Run fn inside a single database transaction. Nested calls use savepoints,
+   * so a multi-step write (e.g. an import that writes board state, replaces the
+   * jobs table, and prunes orphans) commits atomically or not at all.
+   */
+  runInTransaction<T>(fn: () => T): T;
   loadJobsFile(): JobsFile | null;
   saveJobsFile(data: JobsFile): void;
   getBoardStateFile(): Record<string, JobStateEntry>;

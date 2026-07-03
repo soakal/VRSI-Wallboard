@@ -40,7 +40,10 @@ export async function startDeviceCodeFlow(): Promise<{
     const request: DeviceCodeRequest = {
       scopes: SCOPES,
       deviceCodeCallback: (response) => {
-        logger.info('Device code received', { userCode: response.userCode });
+        // Debug level: the user code ends up in combined.log, which is
+        // exportable via /api/storage/logs-export. It's short-lived and not a
+        // secret, but keep it out of the default info-level log.
+        logger.debug('Device code received', { userCode: response.userCode });
         _codeInfo = {
           userCode: response.userCode,
           deviceCode: response.deviceCode,

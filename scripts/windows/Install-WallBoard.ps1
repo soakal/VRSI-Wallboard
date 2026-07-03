@@ -223,6 +223,13 @@ function Grant-UpdatePermissions {
     # after stopping the server. Grant the console user Modify on the install tree
     # so the updater can replace files in place without elevation. (OI)(CI) makes
     # the grant inherit to files written by future updates. Requires admin.
+    #
+    # SECURITY: because this makes the ENTIRE install tree (including scripts\ and
+    # the root .bat files) writable by the non-admin kiosk user, no scheduled task
+    # or service may execute anything from this tree with elevated/other-user
+    # rights — that would be a local privilege escalation. The backup task is
+    # therefore registered to run as the same limited kiosk user (see
+    # Register-BackupTask.ps1), not with -RunLevel Highest.
     $consoleUser = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).UserName
     if (-not $consoleUser) {
         Write-Warning '  Could not determine the logged-in user - skipping update-permission grant. The in-app Update button may require Administrator until this is granted.'

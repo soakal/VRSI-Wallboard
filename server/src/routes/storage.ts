@@ -87,9 +87,19 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
     return;
   }
 
+  // Optional conflict resolution. Omitted → 'block' (report conflicts, change
+  // nothing). 'backup'/'live' explicitly resolve a previously-blocked restore so
+  // a conflicted backup isn't permanently unrestorable (rules §7.5).
+  const rawStrategy = typeof req.body?.conflictStrategy === 'string' ? req.body.conflictStrategy : 'block';
+  if (rawStrategy !== 'block' && rawStrategy !== 'backup' && rawStrategy !== 'live') {
+    res.status(400).json({ error: { code: 'invalid', message: "conflictStrategy must be 'backup' or 'live'" } });
+    return;
+  }
+  const conflictStrategy = rawStrategy as 'block' | 'backup' | 'live';
+
   let result;
   try {
-    result = await withBoardWriteLock(() => getPersistence().restore(source));
+    result = await withBoardWriteLock(() => getPersistence().restore(source, conflictStrategy));
   } catch (e) {
     logger.error('Restore route error', { error: e });
     reloadPersistence();
@@ -106,7 +116,7 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
     res.status(409).json({
       error: {
         code: 'restore_conflict',
-        message: `${result.data.conflicts.length} restore conflict(s) require user resolution. Live data was not changed.`,
+        message: `${result.data.conflicts.length} restore conflict(s) require user resolution. Live data was not changed. Retry with conflictStrategy 'backup' or 'live' to resolve.`,
         details: { conflicts: result.data.conflicts },
       },
     });

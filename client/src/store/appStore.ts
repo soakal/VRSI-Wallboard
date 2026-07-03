@@ -36,12 +36,16 @@ const getInitialActiveUser = (): BoardUser | null => {
   const savedName = localStorage.getItem('nexus.activeUserName');
   const savedRole = localStorage.getItem('nexus.activeUserRole');
 
+  // Validate the persisted role against the known union instead of trusting it
+  // blindly — a stale/corrupt value (e.g. a legacy 'super') would otherwise be
+  // honored until the live users list loads and re-syncs, briefly leaking an
+  // all-jobs view. Fall back to the safest role ('manual' sees only its own).
+  const validRoles: ReadonlyArray<BoardUser['role']> = ['pm', 'materials', 'super', 'manual'];
   if (savedId && savedName && savedRole) {
-    return {
-      id: savedId,
-      name: savedName,
-      role: savedRole as BoardUser['role']
-    };
+    const role = (validRoles as readonly string[]).includes(savedRole)
+      ? (savedRole as BoardUser['role'])
+      : 'manual';
+    return { id: savedId, name: savedName, role };
   }
   return null;
 };

@@ -9,11 +9,38 @@
 
 ## Current State
 
-**Version:** v1.1.3 (root + server + client + shared all in sync). Pushed and released on GitHub.
+**Version:** **v1.2.0** (root + server + client + shared + lockfiles + rules §1 all in sync) on branch
+`claude/app-audit-1sga65`. **NOT yet packaged/published** — needs `Package-Release.ps1` + `gh release
+create v1.2.0` on Windows (upload BOTH .zip and .sha256; the updater now requires the sidecar).
 
-**Last completed task:** v1.1.3 — persist job `description` (was never saved to DB) + more distinct default status colors. Released to GitHub.
+**Last completed task (2026-07-03):** Full four-track application audit + remediation, then bumped
+v1.1.3→v1.2.0. Report: `docs/audit-2026-07-03.md`. Fixed all 4 HIGH and most MEDIUM/LOW findings;
+verified with build + 55/55 tests + mock-mode smoke test + headless client boot. v1.2.0 is a MINOR
+(new restore conflictStrategy API, non-loopback startup guard, multer major bump, updater/backup-task
+behavior changes), not a patch.
 
-**Next task:** None assigned. Kiosk recovery still needed (see below).
+**Release still TODO (on Windows):**
+1. `npm run build` at root
+2. `scripts/windows/Package-Release.ps1`
+3. `gh release create v1.2.0 "releases\VRSI-WallBoard-v1.2.0.zip" "releases\VRSI-WallBoard-v1.2.0.zip.sha256"`
+4. Existing kiosks: re-run `Register-BackupTask.ps1` (or the installer) once so the backup task is
+   re-registered as the LIMITED kiosk user (the H2 EoP fix only lands on re-registration).
+
+**Deferred (need human sign-off before implementing):**
+- Replace/sandbox `xlsx` (§10 #2, network-readiness project)
+- `deleted: true` soft-delete flag + note deletion tombstones — §3 data-model changes (§18 requires approval)
+
+**Audit fixes landed this session (see §19 changelog + audit doc for detail):**
+- HIGH: empty-import board-wipe guard; backup task de-elevated (EoP); auth-flow start-once + debounced routing
+- MEDIUM: Graph ID validation; admin gate on Graph read routes; non-loopback bind guard; multer 2.x;
+  restore conflictStrategy; single-transaction import; ops-note removal on clear; Apply-error surfacing;
+  discard-guard on search/filter; 3 AM health-probe + rolling event window; API envelope + unwrap;
+  uninstall honors dir overrides; git-updater rollback; duplicate Ctrl+S handler removed
+- LOW: pin react-big-calendar 1.13.1 (had drifted to 1.20.0); role validation; shortcut guard;
+  poll floor; presence .catch; mandatory release SHA256; device code → debug
+
+**Next task:** None assigned. Kiosk recovery still needed (see below). If the audit branch is approved,
+bump version + release per the release flow.
 
 **Blockers / Pending kiosk action:**
 To recover an existing kiosk stuck on v1.1.0:

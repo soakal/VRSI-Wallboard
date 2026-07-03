@@ -37,6 +37,15 @@ export interface RestoreResult {
   conflicts: RestoreConflict[];
 }
 
+/**
+ * How restore resolves records modified on BOTH sides (backup and live):
+ *   'block'  — default; abort and report conflicts for the user to resolve.
+ *   'backup' — take the backup's version for conflicted jobs.
+ *   'live'   — keep the live version for conflicted jobs.
+ * Non-conflicted records always follow the normal newest-wins merge.
+ */
+export type RestoreConflictStrategy = 'block' | 'backup' | 'live';
+
 export interface StorageProvider {
   getJob(jobNumber: string): Promise<Result<BoardJob>>;
   listJobs(filter?: JobFilter): Promise<Result<BoardJob[]>>;
@@ -53,6 +62,6 @@ export interface StorageProvider {
     options?: { trigger?: 'manual' | 'scheduled' | 'browser_close' | 'server_shutdown' }
   ): Promise<Result<BackupFileInfo>>;
   listBackups(): BackupFileInfo[];
-  restore(source: string): Promise<Result<RestoreResult>>;
+  restore(source: string, conflictStrategy?: RestoreConflictStrategy): Promise<Result<RestoreResult>>;
   getStatus(): Promise<Result<{ mode: StorageMode; healthy: boolean; dbPath: string }>>;
 }

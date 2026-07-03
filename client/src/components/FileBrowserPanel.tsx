@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SharePointSite, SharePointDrive, SharePointFile } from '../types/index';
+import { unwrap } from '../api/http';
 import FileIcon from './FileIcon';
 
 interface FileBrowserPanelProps {
@@ -55,8 +56,7 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({ isOpen, onClose, fi
     setError(null);
     try {
       const res = await fetch('/api/sharepoint/sites');
-      if (!res.ok) throw new Error(`Failed to load sites (${res.status})`);
-      const data: SharePointSite[] = await res.json();
+      const data = await unwrap<SharePointSite[]>(res);
       setSites(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load sites');
@@ -71,8 +71,7 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({ isOpen, onClose, fi
     setSelectedSite(site);
     try {
       const res = await fetch(`/api/sharepoint/sites/${encodeURIComponent(site.id)}/drives`);
-      if (!res.ok) throw new Error(`Failed to load drives (${res.status})`);
-      const data: SharePointDrive[] = await res.json();
+      const data = await unwrap<SharePointDrive[]>(res);
       setDrives(data);
       setView('drives');
     } catch (err) {
@@ -91,8 +90,7 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({ isOpen, onClose, fi
       const res = await fetch(
         `/api/sharepoint/sites/${encodeURIComponent(selectedSite.id)}/drives/${encodeURIComponent(drive.id)}/files`
       );
-      if (!res.ok) throw new Error(`Failed to load files (${res.status})`);
-      const data: SharePointFile[] = await res.json();
+      const data = await unwrap<SharePointFile[]>(res);
       setFiles(data);
       setView('files');
     } catch (err) {

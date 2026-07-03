@@ -6,18 +6,32 @@ import {
   listFiles,
 } from '../graph/sharepoint.js';
 import { isAuthenticated } from '../auth/tokenRefresher.js';
+import { requireAdminToken } from '../middleware/adminAuth.js';
 import { logger } from '../utils/logger.js';
 
 export const sharepointRouter = Router();
 
+// Graph IDs are opaque tokens (site/drive/item ids). Reject anything with path
+// separators or traversal so a crafted siteId/driveId can't redirect the kiosk's
+// delegated token to a different Graph path (e.g. siteId=x/../../me/messages).
+const GRAPH_ID_RE = /^[A-Za-z0-9!$'()*+,.:;=@_~%-]+$/;
+function isValidGraphId(id: string): boolean {
+  return id.length > 0 && id.length <= 512 && GRAPH_ID_RE.test(id);
+}
+
 function authGuard(req: Request, res: Response, next: NextFunction): void {
   if (!isAuthenticated()) {
-    res.status(401).json({ error: 'Not authenticated' });
+    res.status(401).json({ error: { code: 'not_authenticated', message: 'Not authenticated' } });
     return;
   }
   next();
 }
 
+// requireAdminToken first: when TRUST_LOCALHOST is off (LAN exposure), these
+// Graph-backed reads demand the admin token like the board/storage routes do,
+// instead of leaking live M365 calendar/file data to any client that can reach
+// the port. On the default localhost-trusted kiosk this is a no-op.
+sharepointRouter.use(requireAdminToken);
 sharepointRouter.use(authGuard);
 
 sharepointRouter.get(
@@ -40,7 +54,7 @@ sharepointRouter.get(
         siteName: 'OneDrive',
         driveId: '',
       }));
-      res.json(normalized);
+      res.json({ data: normalized });
     } catch (err) {
       next(err);
     }
@@ -53,7 +67,7 @@ sharepointRouter.get(
     try {
       logger.debug('GET /api/sharepoint/sites');
       const sites = await listSites();
-      res.json(sites);
+      res.json({ data: sites });
     } catch (err) {
       next(err);
     }
@@ -65,13 +79,13 @@ sharepointRouter.get(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const siteId = req.query.siteId as string | undefined;
-      if (!siteId) {
-        res.status(400).json({ error: 'siteId query parameter is required' });
+      if (!siteId || !isValidGraphId(siteId)) {
+        res.status(400).json({ error: { code: 'invalid_site_id', message: 'A valid siteId query parameter is required' } });
         return;
       }
       logger.debug('GET /api/sharepoint/drives', { siteId });
       const drives = await listDrives(siteId);
-      res.json(drives);
+      res.json({ data: drives });
     } catch (err) {
       next(err);
     }
@@ -85,9 +99,13 @@ sharepointRouter.get(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { siteId } = req.params;
+      if (!isValidGraphId(siteId)) {
+        res.status(400).json({ error: { code: 'invalid_site_id', message: 'Invalid siteId' } });
+        return;
+      }
       logger.debug('GET /api/sharepoint/sites/:siteId/drives', { siteId });
       const drives = await listDrives(siteId);
-      res.json(drives);
+      res.json({ data: drives });
     } catch (err) {
       next(err);
     }
@@ -99,13 +117,13 @@ sharepointRouter.get(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const driveId = req.query.driveId as string | undefined;
-      if (!driveId) {
-        res.status(400).json({ error: 'driveId query parameter is required' });
+      if (!driveId || !isValidGraphId(driveId)) {
+        res.status(400).json({ error: { code: 'invalid_drive_id', message: 'A valid driveId query parameter is required' } });
         return;
       }
       logger.debug('GET /api/sharepoint/files', { driveId });
       const files = await listFiles(driveId);
-      res.json(files);
+      res.json({ data: files });
     } catch (err) {
       next(err);
     }
@@ -118,7 +136,11 @@ sharepointRouter.get(
   '/sites/:siteId/drives/:driveId/files',
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { driveId } = req.params;
+      const { siteId, driveId } = req.params;
+      if (!isValidGraphId(siteId) || !isValidGraphId(driveId)) {
+        res.status(400).json({ error: { code: 'invalid_id', message: 'Invalid siteId or driveId' } });
+        return;
+      }
       logger.debug('GET /api/sharepoint/sites/:siteId/drives/:driveId/files', { driveId });
       const files = await listFiles(driveId);
       // Normalize to the flat SharePointFile shape the client expects
@@ -132,7 +154,7 @@ sharepointRouter.get(
         siteName: '',
         driveId,
       }));
-      res.json(normalized);
+      res.json({ data: normalized });
     } catch (err) {
       next(err);
     }

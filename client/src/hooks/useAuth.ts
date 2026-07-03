@@ -14,9 +14,12 @@ export function useAuthStatus(poll = true) {
     staleTime: 0,
   });
 
+  // Return only the fields callers use. Spreading `...q` accessed every tracked
+  // field (isFetching, dataUpdatedAt, …), so the consumer re-rendered on every
+  // 3s poll — which re-created inline callbacks and restarted the auth flow.
   return {
-    ...q,
     isAuthenticated: q.data?.authenticated ?? false,
     needsReauth: q.data?.needsReauth ?? false,
+    isLoading: q.isLoading,
   };
 }

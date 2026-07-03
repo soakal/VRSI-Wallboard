@@ -76,10 +76,22 @@ Write-Step 'Removing shortcuts'
 Remove-WallBoardShortcuts
 
 if ($Choice -eq '2') {
-    $progData = 'C:\ProgramData\VRSIWallBoard'
-    if (Test-Path $progData) {
-        Remove-Item -Path $progData -Recurse -Force
-        Write-Host "  Deleted: $progData" -ForegroundColor Yellow
+    # Resolve the ACTUAL data/backup/log locations from .env — an install that
+    # overrode DATA_DIR/BACKUP_DIR/LOGS_DIR (e.g. to another drive) would
+    # otherwise leave the real database and backups on disk while deleting an
+    # unrelated ProgramData path the user believes held their data.
+    $targets = @()
+    try { $targets += (Get-DataDir) }   catch {}
+    try { $targets += (Get-BackupDir) } catch {}
+    try { $targets += (Get-EnvValue 'LOGS_DIR' 'C:\ProgramData\VRSIWallBoard\logs') } catch {}
+    # Also remove the default ProgramData root to catch non-overridden installs
+    # and any leftover sibling subdirectories.
+    $targets += 'C:\ProgramData\VRSIWallBoard'
+    foreach ($t in ($targets | Where-Object { $_ } | Select-Object -Unique)) {
+        if (Test-Path $t) {
+            Remove-Item -Path $t -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "  Deleted: $t" -ForegroundColor Yellow
+        }
     }
     $devDb = Join-Path $ServerDir 'data'
     if (Test-Path (Join-Path $devDb 'wallboard.db')) {

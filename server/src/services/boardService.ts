@@ -592,7 +592,10 @@ export async function applyBoardImport(
   // "new note" flag. Populated inside the lock below, read after it resolves.
   const changedNoteJobs: string[] = []
 
-  const applyResult = await runExclusive(() => {
+  const applyResult = await runExclusive(() =>
+    // M7: board-state write + jobs-table replace + orphan prune all commit in
+    // one transaction, so a crash mid-import can't leave state and jobs diverged.
+    getPersistence().runInTransaction(() => {
     const state = getBoardStateFile()
     let shippedApplied = 0
     let readyToShipApplied = 0
@@ -622,6 +625,13 @@ export async function applyBoardImport(
     }
 
     let notesImported = 0
+    // Jobs whose spreadsheet note cell is non-empty this import. Used below to
+    // strip a stale Ops Schedule note when the cell has since been cleared.
+    const jobsWithOpsNote = new Set(
+      Object.entries(importedNotes)
+        .filter(([, t]) => t.trim() !== '')
+        .map(([jobNumber]) => jobNumber),
+    )
     for (const [jobNumber, rawText] of Object.entries(importedNotes)) {
       const text = rawText.trim()
       if (!text) continue
@@ -649,7 +659,40 @@ export async function applyBoardImport(
       changedNoteJobs.push(jobNumber)
     }
 
+    // §7.4: an Ops Schedule note is "replaced by the latest import". A job still
+    // in the schedule but whose note cell was cleared must lose its stale ops
+    // note (importedNotes only carries non-empty cells, so the loop above never
+    // sees the clear). Only touch imported jobs; absent jobs are handled by prune.
+    for (const job of jobs) {
+      if (jobsWithOpsNote.has(job.jobNumber)) continue
+      const existing = state[job.jobNumber]
+      if (!existing) continue
+      if (!existing.notes.some((n) => n.authorId === OPS_SCHEDULE_NOTE_AUTHOR_ID)) continue
+      state[job.jobNumber] = {
+        ...existing,
+        notes: existing.notes.filter((n) => n.authorId !== OPS_SCHEDULE_NOTE_AUTHOR_ID),
+        version: (existing.version ?? 0) + 1,
+        updatedAt: now,
+      }
+    }
+
     writeBoardState(state)
+
+    // Replace the jobs table and prune orphans inside this same transaction.
+    // (Inlined from saveJobsFile so the lock/transaction is held exactly once —
+    // calling the exported saveJobsFile here would re-enter runExclusive.)
+    const existingJobs = loadJobsFile()
+    const existingNumbers = new Set(existingJobs?.jobs.map((j) => j.jobNumber) ?? [])
+    const newJobNumbers = jobs.map((j) => j.jobNumber).filter((n) => !existingNumbers.has(n))
+    getPersistence().saveJobsFile({
+      jobs,
+      importedAt: now,
+      sourceFile,
+      newJobNumbers,
+      changedNoteJobNumbers: changedNoteJobs,
+    })
+    pruneOrphanedBoardState(new Set(jobs.map((j) => j.jobNumber)))
+
     return {
       shippedApplied,
       readyToShipApplied,
@@ -657,9 +700,9 @@ export async function applyBoardImport(
       notesImported,
       binderPrintedApplied,
     }
-  })
+    }),
+  )
 
-  await saveJobsFile(jobs, sourceFile, changedNoteJobs)
   return applyResult
 }
 

@@ -21,9 +21,34 @@ const AuthSetup: React.FC<AuthSetupProps> = ({ onAuthenticated }) => {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Hold the callback in a ref so startAuth's identity never changes with it.
+  // Passing an inline arrow from the parent used to re-create startAuth on every
+  // parent render, re-firing the start effect and 409-storming /api/auth/start.
+  const onAuthenticatedRef = useRef(onAuthenticated);
+  useEffect(() => { onAuthenticatedRef.current = onAuthenticated; });
+
   const stopPolling = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+  };
+
+  // Poll auth status until the device-code flow completes, then hand off.
+  const startStatusPoll = () => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const statusRes = await fetch('/api/auth/status');
+        if (!statusRes.ok) return;
+        const body = await statusRes.json();
+        const authed = body?.data?.authenticated ?? body?.authenticated;
+        if (authed) {
+          stopPolling();
+          onAuthenticatedRef.current();
+        }
+      } catch {
+        // ignore transient errors
+      }
+    }, 3000);
   };
 
   const startAuth = useCallback(async () => {
@@ -39,8 +64,25 @@ const AuthSetup: React.FC<AuthSetupProps> = ({ onAuthenticated }) => {
 
     try {
       const res = await fetch('/api/auth/start', { method: 'POST' });
+      if (res.status === 409) {
+        // A device-code flow is already live server-side (e.g. this component
+        // remounted). Not an error — keep any code we're already showing and
+        // just poll status so we advance when the existing flow completes.
+        setAuth(prev => prev ?? {
+          userCode: '',
+          verificationUri: 'https://microsoft.com/devicelogin',
+          expiresIn: 0,
+          loading: false,
+          error: null,
+          startedAt: Date.now(),
+        });
+        setAuth(prev => prev ? { ...prev, loading: false, error: null } : prev);
+        startStatusPoll();
+        return;
+      }
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const data: AuthStartResponse = await res.json();
+      const body = await res.json();
+      const data: AuthStartResponse = body?.data ?? body;
 
       const startedAt = Date.now();
       setAuth({
@@ -64,26 +106,15 @@ const AuthSetup: React.FC<AuthSetupProps> = ({ onAuthenticated }) => {
         });
       }, 1000);
 
-      // Poll status
-      pollRef.current = setInterval(async () => {
-        try {
-          const statusRes = await fetch('/api/auth/status');
-          if (!statusRes.ok) return;
-          const statusData = await statusRes.json();
-          if (statusData.authenticated) {
-            stopPolling();
-            onAuthenticated();
-          }
-        } catch {
-          // ignore transient errors
-        }
-      }, 3000);
+      startStatusPoll();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start authentication';
       setAuth(prev => prev ? { ...prev, loading: false, error: message } : null);
     }
-  }, [onAuthenticated]);
+  }, []);
 
+  // Start the device-code flow once, on mount. startAuth has stable identity
+  // (no changing deps), so this never restarts the flow on a parent re-render.
   useEffect(() => {
     startAuth();
     return () => stopPolling();

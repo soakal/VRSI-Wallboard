@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStatus } from './hooks/useAuth';
 import { useHealth } from './hooks/useHealth';
@@ -79,6 +79,11 @@ function AppInner() {
   // Tracks consecutive unauthenticated polls so a brief server restart (which
   // returns 401/unauthenticated for a few seconds) does not bounce us to /setup.
   const unauthCountRef = React.useRef(0);
+  // Debounced auth value the ROUTER switches on. The raw poll value can flip
+  // false for a single tick during a server blip; routing on that would mount
+  // AuthSetup and start a real device-code flow. This only flips false after the
+  // same debounce the /setup redirect uses.
+  const [stableAuthed, setStableAuthed] = useState(false);
 
   // Server config
   const { config } = useConfig();
@@ -146,22 +151,32 @@ function AppInner() {
   // after 4+ consecutive unauthenticated polls (~12s at the 3s poll interval).
   useEffect(() => {
     if (authLoading) return;
-    setIsAuthenticated(isAuthenticated);
 
     if (isAuthenticated) {
       unauthCountRef.current = 0;
-      if (!location.pathname.startsWith('/board')) navigate('/');
+      setIsAuthenticated(true);
+      setStableAuthed(true);
+      if (!location.pathname.startsWith('/board')) navigate('/', { replace: true });
       return;
     }
 
     unauthCountRef.current += 1;
-    if (
-      (needsReauth || unauthCountRef.current >= 4) &&
-      !location.pathname.startsWith('/board')
-    ) {
-      navigate('/setup');
+    // Only treat the kiosk as signed-out after several consecutive failed polls
+    // (or an explicit re-auth signal). A single transient 'unauthenticated' from
+    // a server blip must not flip the route to /setup and start a new flow.
+    if (needsReauth || unauthCountRef.current >= 4) {
+      setIsAuthenticated(false);
+      setStableAuthed(false);
+      if (!location.pathname.startsWith('/board')) navigate('/setup', { replace: true });
     }
   }, [isAuthenticated, needsReauth, authLoading, navigate, setIsAuthenticated, location.pathname]);
+
+  // Stable callback for AuthSetup — an inline arrow here would change identity
+  // every render and restart the device-code flow (see AuthSetup).
+  const handleAuthenticated = useCallback(() => {
+    setIsAuthenticated(true);
+    setStableAuthed(true);
+  }, [setIsAuthenticated]);
 
   // Sync config to store whenever it changes
   useEffect(() => {
@@ -187,7 +202,12 @@ function AppInner() {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) return;
 
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
@@ -237,7 +257,10 @@ function AppInner() {
     if (!config.showFiles) setIsFilesOpen(false);
   }, [config.showFiles, setIsFilesOpen]);
 
-  // Nightly watchdog — reload at 3am
+  // Nightly watchdog — reload at 3am, but only once the server answers /health.
+  // A blind reload during a backup/update/reboot window lands the kiosk on the
+  // browser's connection-error page with no retry; probe first and keep retrying
+  // until the server is back, then reload into a fresh, healthy page.
   useEffect(() => {
     const now = new Date();
     const next3am = new Date(now);
@@ -246,10 +269,25 @@ function AppInner() {
       next3am.setDate(next3am.getDate() + 1);
     }
     const msUntil3am = next3am.getTime() - now.getTime();
-    const timer = setTimeout(() => {
-      window.location.reload();
-    }, msUntil3am);
-    return () => clearTimeout(timer);
+    let retryTimer: number | undefined;
+    const attemptReload = async () => {
+      try {
+        const r = await fetch('/health', { cache: 'no-store' });
+        if (r.ok) {
+          window.location.reload();
+          return;
+        }
+      } catch {
+        // Server briefly down — fall through and retry rather than reloading
+        // into a dead page.
+      }
+      retryTimer = window.setTimeout(() => { void attemptReload(); }, 30_000);
+    };
+    const timer = window.setTimeout(() => { void attemptReload(); }, msUntil3am);
+    return () => {
+      clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, []);
 
   const showUpdateBanner = updateInfo.updateAvailable && !updateDismissed;
@@ -309,7 +347,7 @@ function AppInner() {
         <Route
           path="/"
           element={
-            isAuthenticated ? (
+            stableAuthed ? (
               <Dashboard
                 events={events}
                 recentFiles={recentFiles ?? []}
@@ -332,10 +370,10 @@ function AppInner() {
         <Route
           path="/setup"
           element={
-            isAuthenticated ? (
+            stableAuthed ? (
               <Navigate to="/" replace />
             ) : (
-              <AuthSetup onAuthenticated={() => setIsAuthenticated(true)} />
+              <AuthSetup onAuthenticated={handleAuthenticated} />
             )
           }
         />
