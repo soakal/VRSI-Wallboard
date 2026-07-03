@@ -13,24 +13,28 @@ authRouter.post(
       if (process.env.DISABLE_AZURE === 'true') {
         logger.warn('Test mode: skipping device code flow');
         res.json({
-          deviceCode: 'test-device-code',
-          userCode: 'TEST-1234',
-          verificationUri: 'https://microsoft.com/devicelogin',
-          expiresIn: 900,
-          interval: 5,
-          message: 'Test mode: no real authentication required',
+          data: {
+            deviceCode: 'test-device-code',
+            userCode: 'TEST-1234',
+            verificationUri: 'https://microsoft.com/devicelogin',
+            expiresIn: 900,
+            interval: 5,
+            message: 'Test mode: no real authentication required',
+          },
         });
         return;
       }
 
       if (isPolling()) {
-        res.status(409).json({ error: 'Device code flow already in progress' });
+        // A device-code flow is already live. This is not an error condition for
+        // the client — it should keep showing the current code, not surface a 409.
+        res.status(409).json({ error: { code: 'flow_in_progress', message: 'Device code flow already in progress' } });
         return;
       }
 
       logger.info('Starting device code flow');
       const { codeInfo } = await startDeviceCodeFlow();
-      res.json(codeInfo);
+      res.json({ data: codeInfo });
     } catch (err) {
       next(err);
     }
@@ -48,10 +52,12 @@ authRouter.get(
       if (process.env.DISABLE_AZURE === 'true') {
         logger.debug('Test mode: returning mock auth status');
         res.json({
-          authenticated: true,
-          polling: false,
-          userEmail: 'test@example.com',
-          needsReauth: false,
+          data: {
+            authenticated: true,
+            polling: false,
+            userEmail: 'test@example.com',
+            needsReauth: false,
+          },
         });
         return;
       }
@@ -70,10 +76,12 @@ authRouter.get(
       }
 
       res.json({
-        authenticated,
-        polling,
-        userEmail,
-        needsReauth: needsReauthentication(),
+        data: {
+          authenticated,
+          polling,
+          userEmail,
+          needsReauth: needsReauthentication(),
+        },
       });
     } catch (err) {
       next(err);

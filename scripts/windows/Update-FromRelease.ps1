@@ -161,23 +161,24 @@ try {
     Write-Step 'Downloading release zip'
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing -TimeoutSec 300
 
-    # 2b. Verify the download against the published checksum if the release has one
-    #     (guards a corrupt/truncated download or a swapped asset). Fail BEFORE
-    #     touching the install. Older releases with no .sha256 asset are skipped.
+    # 2b. Verify the download against the published checksum (guards a corrupt/
+    #     truncated download or a swapped asset). Fail BEFORE touching the install.
+    #     Every release since v0.14.1 ships a .sha256 sidecar (Package-Release.ps1
+    #     always emits one), so a MISSING sidecar is treated as an error rather
+    #     than silently skipped — a release without one shouldn't be auto-applied.
     $shaAsset = $rel.assets | Where-Object { $_.name -like '*.sha256' } | Select-Object -First 1
-    if ($shaAsset) {
-        Write-Step 'Verifying download checksum'
-        $shaPath = Join-Path $tmpRoot $shaAsset.name
-        Invoke-WebRequest -Uri $shaAsset.browser_download_url -OutFile $shaPath -UseBasicParsing -TimeoutSec 60
-        $expected = (((Get-Content $shaPath -Raw) -split '\s+') | Where-Object { $_ })[0].Trim().ToLower()
-        $actual = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
-        if ($expected -ne $actual) {
-            throw "Checksum mismatch (expected $expected, got $actual) - download corrupt or tampered. Aborting before touching the install."
-        }
-        Write-Host '  Checksum verified.'
-    } else {
-        Write-Host '  No .sha256 asset on this release - skipping checksum.'
+    if (-not $shaAsset) {
+        throw 'Release has no .sha256 checksum asset - refusing to auto-update without integrity verification. Publish the .sha256 sidecar (see Package-Release.ps1) or update manually.'
     }
+    Write-Step 'Verifying download checksum'
+    $shaPath = Join-Path $tmpRoot $shaAsset.name
+    Invoke-WebRequest -Uri $shaAsset.browser_download_url -OutFile $shaPath -UseBasicParsing -TimeoutSec 60
+    $expected = (((Get-Content $shaPath -Raw) -split '\s+') | Where-Object { $_ })[0].Trim().ToLower()
+    $actual = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
+    if ($expected -ne $actual) {
+        throw "Checksum mismatch (expected $expected, got $actual) - download corrupt or tampered. Aborting before touching the install."
+    }
+    Write-Host '  Checksum verified.'
 
     Write-Step 'Extracting'
     Expand-Archive -Path $zipPath -DestinationPath $tmpRoot -Force

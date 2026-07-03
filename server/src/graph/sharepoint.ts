@@ -106,7 +106,7 @@ export async function listDrives(siteId: string): Promise<GraphDrive[]> {
   const client = getGraphClient();
 
   const response = await client
-    .api(`/sites/${siteId}/drives`)
+    .api(`/sites/${encodeURIComponent(siteId)}/drives`)
     .select('id,name,driveType,webUrl')
     .get() as { value: GraphDrive[] };
 
@@ -130,7 +130,7 @@ export async function listFiles(driveId: string): Promise<GraphDriveItem[]> {
   const client = getGraphClient();
 
   const response = await client
-    .api(`/drives/${driveId}/root/children`)
+    .api(`/drives/${encodeURIComponent(driveId)}/root/children`)
     .select('id,name,webUrl,lastModifiedDateTime,size,file,folder,createdBy,lastModifiedBy')
     .get() as { value: GraphDriveItem[] };
 

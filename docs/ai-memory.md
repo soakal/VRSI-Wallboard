@@ -11,9 +11,26 @@
 
 **Version:** v1.1.3 (root + server + client + shared all in sync). Pushed and released on GitHub.
 
-**Last completed task:** v1.1.3 — persist job `description` (was never saved to DB) + more distinct default status colors. Released to GitHub.
+**Last completed task (2026-07-03):** Full four-track application audit + remediation on branch
+`claude/app-audit-1sga65`. Report: `docs/audit-2026-07-03.md`. Fixed all 4 HIGH and most
+MEDIUM/LOW findings; verified with build + 55/55 tests + mock-mode smoke test + headless client boot.
+Not yet released/version-bumped — these are fixes on the audit branch awaiting review/merge.
 
-**Next task:** None assigned. Kiosk recovery still needed (see below).
+**Deferred (need human sign-off before implementing):**
+- Replace/sandbox `xlsx` (§10 #2, network-readiness project)
+- `deleted: true` soft-delete flag + note deletion tombstones — §3 data-model changes (§18 requires approval)
+
+**Audit fixes landed this session (see §19 changelog + audit doc for detail):**
+- HIGH: empty-import board-wipe guard; backup task de-elevated (EoP); auth-flow start-once + debounced routing
+- MEDIUM: Graph ID validation; admin gate on Graph read routes; non-loopback bind guard; multer 2.x;
+  restore conflictStrategy; single-transaction import; ops-note removal on clear; Apply-error surfacing;
+  discard-guard on search/filter; 3 AM health-probe + rolling event window; API envelope + unwrap;
+  uninstall honors dir overrides; git-updater rollback; duplicate Ctrl+S handler removed
+- LOW: pin react-big-calendar 1.13.1 (had drifted to 1.20.0); role validation; shortcut guard;
+  poll floor; presence .catch; mandatory release SHA256; device code → debug
+
+**Next task:** None assigned. Kiosk recovery still needed (see below). If the audit branch is approved,
+bump version + release per the release flow.
 
 **Blockers / Pending kiosk action:**
 To recover an existing kiosk stuck on v1.1.0:

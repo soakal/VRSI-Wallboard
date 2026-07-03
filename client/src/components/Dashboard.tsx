@@ -127,15 +127,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     setIsDimmed(Date.now() > sunsetMs);
   }, [nowMs, sunsetIso]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "s") { e.preventDefault(); onOpenSettings(); }
-      if (e.ctrlKey && e.key === "f" && config.showFiles) { e.preventDefault(); onOpenFiles(); }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onOpenSettings, onOpenFiles, config.showFiles]);
+  // Ctrl+S / Ctrl+F are handled once, globally, in App.tsx. A second handler
+  // here re-opened Settings in the same keystroke App used to close it (and had
+  // no input guard), so it was removed.
 
   const handleSunsetIso = useCallback((iso: string) => setSunsetIso(iso), []);
 

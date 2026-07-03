@@ -126,6 +126,10 @@ if ($trayWasRunning) {
 # 1. Check for local modifications that would block git pull
 Write-Step 'Checking for local changes'
 Push-Location $RepoRoot
+# Remember the current commit so a failed build/restart can roll the working tree
+# back to a known-good state (the release updater snapshots dist; the git updater
+# rolls back via the commit instead).
+$preUpdateCommit = (& git rev-parse HEAD 2>$null)
 $dirty = git status --porcelain 2>$null
 $autoStashed = $false
 if ($dirty) {
@@ -223,6 +227,20 @@ if (-not $Unattended) { Start-Sleep -Seconds 3 }
 } catch {
     Write-Warning "Update failed: $($_.Exception.Message)"
     Write-UpdateStatus -Ok $false -Message "Update failed: $($_.Exception.Message)"
+    # If we already pulled new code but the build/restart failed, roll the working
+    # tree back to the pre-update commit and rebuild BEFORE the recovery restart —
+    # otherwise we'd restart a half-built new version instead of the last good one.
+    # (In unattended mode this discards any auto-stashed local changes; recovering
+    # the kiosk to a working build takes priority on the dev/git update path.)
+    if ($preUpdateCommit) {
+        $nowCommit = (& git -C $RepoRoot rev-parse HEAD 2>$null)
+        if ($nowCommit -and ($nowCommit -ne $preUpdateCommit)) {
+            Write-Warning "Rolling back to pre-update commit $preUpdateCommit"
+            & git -C $RepoRoot reset --hard $preUpdateCommit *> $null
+            try { & (Join-Path $PSScriptRoot 'Build-Production.ps1') }
+            catch { Write-Warning "Rollback rebuild failed: $($_.Exception.Message)" }
+        }
+    }
     # The tray task is the sole logon launcher; if THIS run disabled it, re-enable
     # it even when the failure happened before the server was stopped (e.g. an
     # early git failure) so the tray still auto-starts at next logon.

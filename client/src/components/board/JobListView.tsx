@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, type MouseEvent as ReactM
 import { Link, useSearchParams, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useBoardJobs, useBoardConfig, useBoardUsers, useUpdateBoardConfig } from '../../hooks/useBoard'
-import { useAppStore } from '../../store/appStore'
+import { useAppStore, confirmDiscardUnsaved } from '../../store/appStore'
 import { JobCard } from './JobCard'
 import { BoardShipAgenda } from './BoardShipAgenda'
 import { filterJobsForTab, sortBoardJobsByShipDate } from './boardColors'
@@ -303,9 +303,16 @@ export function JobListView({ tab }: Props) {
     return () => document.removeEventListener('mousedown', handler)
   }, [spareGearOpen])
 
-  const commitSearch = () => setSearch(inputValue)
+  // Committing a search or clearing it remounts the card list (key={search}),
+  // which unmounts any dirty card and silently drops its un-applied draft.
+  // Confirm first, same as tab/user navigation does.
+  const commitSearch = () => {
+    if (inputValue !== search && !confirmDiscardUnsaved()) return
+    setSearch(inputValue)
+  }
 
   const clearSearch = () => {
+    if (search !== '' && !confirmDiscardUnsaved()) return
     setInputValue('')
     setSearch('')
     inputRef.current?.focus()
@@ -608,7 +615,7 @@ export function JobListView({ tab }: Props) {
             {tab !== 'archive' && (newCount > 0 || newOnly) && (
               <button
                 type="button"
-                onClick={() => setNewOnly((o) => !o)}
+                onClick={() => { if (confirmDiscardUnsaved()) setNewOnly((o) => !o) }}
                 className={`px-3 py-1 rounded-lg border text-xs font-medium transition-colors ${
                   newOnly
                     ? 'bg-red-600/80 border-red-500 text-white'
@@ -623,7 +630,7 @@ export function JobListView({ tab }: Props) {
               <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-0.5">
                 <button
                   type="button"
-                  onClick={() => setShowAll(false)}
+                  onClick={() => { if (confirmDiscardUnsaved()) setShowAll(false) }}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
                     !showAll ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
                   }`}
@@ -632,7 +639,7 @@ export function JobListView({ tab }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowAll(true)}
+                  onClick={() => { if (confirmDiscardUnsaved()) setShowAll(true) }}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
                     showAll ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
                   }`}

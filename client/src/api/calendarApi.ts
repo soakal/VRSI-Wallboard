@@ -1,11 +1,9 @@
 import type { CalendarItem, CalendarEvent } from '../types/index';
+import { unwrap } from './http';
 
 export async function getCalendars(): Promise<CalendarItem[]> {
   const response = await fetch('/api/calendars');
-  if (!response.ok) {
-    throw new Error('Failed to get calendars');
-  }
-  return response.json();
+  return unwrap<CalendarItem[]>(response);
 }
 
 export async function getEvents(
@@ -19,8 +17,5 @@ export async function getEvents(
     end: end.toISOString()
   });
   const response = await fetch(`/api/events?${params}`);
-  if (!response.ok) {
-    throw new Error('Failed to get events');
-  }
-  return response.json();
+  return unwrap<CalendarEvent[]>(response);
 }

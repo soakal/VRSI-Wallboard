@@ -93,6 +93,7 @@ export function JobCard({
   const updateJobNote = useUpdateJobNote()
   const deleteJobNote = useDeleteJobNote()
   const [noteActionError, setNoteActionError] = useState<string | null>(null)
+  const [applyError, setApplyError] = useState<string | null>(null)
 
   const spareJob = isSpareJob(job, config)
   const pendingOverride = overrideFromPending(pendingShipDate, job.originalShipDate)
@@ -122,11 +123,12 @@ export function JobCard({
   const userName = activeUser?.name
   useEffect(() => {
     if (!isDirty || !userId || !userName) return
-    claimPresence(job.jobNumber, userId, userName)
-    const interval = setInterval(() => claimPresence(job.jobNumber, userId, userName), 15000)
+    const claim = () => void claimPresence(job.jobNumber, userId, userName).catch(() => {})
+    claim()
+    const interval = setInterval(claim, 15000)
     return () => {
       clearInterval(interval)
-      releasePresence(job.jobNumber, userId)
+      void releasePresence(job.jobNumber, userId).catch(() => {})
     }
   }, [isDirty, userId, userName, job.jobNumber])
 
@@ -134,23 +136,37 @@ export function JobCard({
 
   const handleApply = () => {
     if (!activeUser) return
+    setApplyError(null)
+    // Surface any failed field write instead of leaving the card silently dirty
+    // — on a shared wall board a swallowed error means the display keeps showing
+    // the old status/ship date with no indication the save didn't land.
+    const onError = (e: Error) => setApplyError(e.message)
     if (statusDirty) {
-      setJobStatus.mutate({ jobNumber: job.jobNumber, status: pendingStatus, actor: activeUser })
+      setJobStatus.mutate(
+        { jobNumber: job.jobNumber, status: pendingStatus, actor: activeUser },
+        { onError },
+      )
     }
     if (binderDirty) {
-      setJobBinderPrinted.mutate({
-        jobNumber: job.jobNumber,
-        binderPrinted: pendingBinderPrinted,
-        actor: activeUser,
-      })
+      setJobBinderPrinted.mutate(
+        {
+          jobNumber: job.jobNumber,
+          binderPrinted: pendingBinderPrinted,
+          actor: activeUser,
+        },
+        { onError },
+      )
     }
     if (dateDirty || noteDirty) {
-      setJobShipDate.mutate({
-        jobNumber: job.jobNumber,
-        shipDateOverride: pendingOverride,
-        shipDateOverrideNote: pendingOverride ? (pendingOverrideNote.trim() || null) : null,
-        actor: activeUser,
-      })
+      setJobShipDate.mutate(
+        {
+          jobNumber: job.jobNumber,
+          shipDateOverride: pendingOverride,
+          shipDateOverrideNote: pendingOverride ? (pendingOverrideNote.trim() || null) : null,
+          actor: activeUser,
+        },
+        { onError },
+      )
     }
     // A typed-but-unsent note counts as a pending change: Apply saves it too,
     // so one click commits everything on the card at once.
@@ -158,7 +174,7 @@ export function JobCard({
       handleAddNote(noteDraft.trim())
       setNoteDraft('')
     }
-    if (userId) releasePresence(job.jobNumber, userId)
+    if (userId) void releasePresence(job.jobNumber, userId).catch(() => {})
   }
 
   const handleCancel = () => {
@@ -167,7 +183,7 @@ export function JobCard({
     setPendingShipDate(job.effectiveShipDate)
     setPendingOverrideNote(job.shipDateOverrideNote ?? '')
     setNoteDraft('')
-    if (userId) releasePresence(job.jobNumber, userId)
+    if (userId) void releasePresence(job.jobNumber, userId).catch(() => {})
   }
 
   const handleAddNote = (text: string) => {
@@ -420,6 +436,12 @@ export function JobCard({
       {otherEditors.length > 0 && (
         <div className="mt-2 px-2 py-1.5 bg-amber-900/30 border border-amber-700/40 rounded-lg text-amber-400 text-xs">
           {otherEditors.map(e => e.userName).join(' & ')} {otherEditors.length === 1 ? 'is' : 'are'} editing this job
+        </div>
+      )}
+
+      {applyError && (
+        <div className="mt-3 rounded-md bg-red-950/60 border border-red-800 px-3 py-2 text-xs text-red-300">
+          Could not save changes: {applyError}
         </div>
       )}
 

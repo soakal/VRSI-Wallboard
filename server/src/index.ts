@@ -61,6 +61,25 @@ function validateEnv(): void {
         `for AES-256 token encryption. Rotate it in .env when convenient.`
     );
   }
+
+  // Bind-host / trust-model consistency. requireAdminToken lets any loopback
+  // request through when TRUST_LOCALHOST is on (the default). If the server is
+  // bound to a non-loopback address (LAN exposure, or a reverse proxy that
+  // forwards its own loopback address), that bypass would leave every admin
+  // route — including POST /api/update/run — open with no token. Refuse to start
+  // unless the operator has either disabled localhost trust or set an ADMIN_TOKEN.
+  const bindHost = process.env.BIND_HOST ?? '127.0.0.1';
+  const isLoopbackBind =
+    bindHost === '127.0.0.1' || bindHost === '::1' || bindHost === 'localhost';
+  const trustsLocalhost = process.env.TRUST_LOCALHOST !== 'false';
+  if (!isLoopbackBind && trustsLocalhost && !process.env.ADMIN_TOKEN?.trim()) {
+    logger.error(
+      `BIND_HOST is '${bindHost}' (non-loopback) while TRUST_LOCALHOST is on and no ADMIN_TOKEN ` +
+        `is set — this would expose every admin route without authentication. Refusing to start. ` +
+        `Set ADMIN_TOKEN, or set TRUST_LOCALHOST=false, or bind to 127.0.0.1.`
+    );
+    process.exit(1);
+  }
 }
 
 validateEnv();

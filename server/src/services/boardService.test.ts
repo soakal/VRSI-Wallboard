@@ -14,6 +14,7 @@ import {
   setJobStatus,
   setJobBinderPrinted,
   setJobBlocked,
+  addNote,
   getMergedJobs,
   getJobBoardTab,
   getBoardConfig,
@@ -80,6 +81,36 @@ test('import with a note flags hasNewNote; unchanged re-import clears it; change
   await applyBoardImport([job('100')], 'ops.xlsm', { '100': 'in_progress' }, { '100': 'changed note' })
   assert.equal(find('100')!.hasNewNote, true)
   assert.equal(find('100')!.notes.filter((n) => n.authorName === 'Ops Schedule').length, 1)
+})
+
+// ── Ops note removal when the spreadsheet cell is cleared (§7.4) ─────────
+test('re-import with the ops note cleared removes the stale ops note', async () => {
+  await applyBoardImport([job('100')], 'ops.xlsm', { '100': 'in_progress' }, { '100': 'from schedule' })
+  assert.equal(find('100')!.notes.filter((n) => n.authorName === 'Ops Schedule').length, 1)
+  // Re-import: job still present, but its note cell is now empty (absent from importedNotes).
+  await applyBoardImport([job('100')], 'ops.xlsm', { '100': 'in_progress' }, {})
+  assert.equal(
+    find('100')!.notes.filter((n) => n.authorName === 'Ops Schedule').length,
+    0,
+    'stale ops note removed when the schedule cell is cleared',
+  )
+})
+
+test('clearing the ops note leaves user-authored notes untouched', async () => {
+  await applyBoardImport([job('100')], 'ops.xlsm', { '100': 'in_progress' }, { '100': 'from schedule' })
+  await addNote('100', 'user note', actor)
+  await applyBoardImport([job('100')], 'ops.xlsm', { '100': 'in_progress' }, {})
+  const notes = find('100')!.notes
+  assert.equal(notes.filter((n) => n.authorName === 'Ops Schedule').length, 0, 'ops note gone')
+  assert.equal(notes.filter((n) => n.text === 'user note').length, 1, 'user note preserved')
+})
+
+test('re-import with an unchanged ops note keeps it (not stripped)', async () => {
+  await applyBoardImport([job('100')], 'ops.xlsm', { '100': 'in_progress' }, { '100': 'stable note' })
+  await applyBoardImport([job('100')], 'ops.xlsm', { '100': 'in_progress' }, { '100': 'stable note' })
+  const ops = find('100')!.notes.filter((n) => n.authorName === 'Ops Schedule')
+  assert.equal(ops.length, 1, 'unchanged ops note retained')
+  assert.equal(ops[0].text, 'stable note')
 })
 
 // ── Blocked tab (v0.10.0 Phase 3) ───────────────────────────────────────

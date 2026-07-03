@@ -14,14 +14,14 @@
   },
   "dependencies": {
     "@azure/msal-node": "^2.16.2",
-    "@vrsi/wallboard-shared": "file:../shared",
     "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@vrsi/wallboard-shared": "file:../shared",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "helmet": "^7.1.0",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.2.0",
     "node-cron": "^3.0.3",
     "winston": "^3.13.0",
     "xlsx": "^0.18.5"

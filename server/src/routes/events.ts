@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { listEvents } from '../graph/events.js';
 import { listCalendars, GraphCalendar } from '../graph/calendars.js';
 import { isAuthenticated } from '../auth/tokenRefresher.js';
+import { requireAdminToken } from '../middleware/adminAuth.js';
 import { getConfig } from '../services/configService.js';
 import { logger } from '../utils/logger.js';
 import {
@@ -12,6 +13,11 @@ import {
 } from '../services/boardService.js';
 
 export const eventsRouter = Router();
+
+// When TRUST_LOCALHOST is off, require the admin token so this live-calendar
+// feed isn't readable by any unauthenticated LAN client. No-op on the default
+// localhost-trusted kiosk.
+eventsRouter.use(requireAdminToken);
 
 /**
  * Shape returned to the client — must match client/src/types/index.ts CalendarEvent.
@@ -43,7 +49,7 @@ eventsRouter.get(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!isAuthenticated()) {
-        res.status(401).json({ error: 'Not authenticated' });
+        res.status(401).json({ error: { code: 'not_authenticated', message: 'Not authenticated' } });
         return;
       }
 
@@ -146,7 +152,7 @@ eventsRouter.get(
         // Board data may not exist yet — skip silently
       }
 
-      res.json(normalized);
+      res.json({ data: normalized });
     } catch (err) {
       next(err);
     }

@@ -141,9 +141,10 @@ const upload = multer({
 })
 
 // ---------------------------------------------------------------------------
-// Validate a client-supplied jobs array (the no-file /import path has no auth,
-// so any LAN client can POST arbitrary objects). Coerce known fields to safe
-// shapes and reject rows missing a usable jobNumber.
+// Validate a client-supplied jobs array. Note: this route (like all of
+// boardRouter) is behind requireAdminToken — the earlier "no auth" comment was
+// stale. Coerce known fields to safe shapes and reject rows missing a usable
+// jobNumber regardless, since imported data is otherwise trusted downstream.
 // ---------------------------------------------------------------------------
 const MAX_IMPORT_ROWS = 10_000
 
@@ -221,6 +222,23 @@ boardRouter.post('/import', upload.single('file'), async (req: Request, res: Res
       rowErrors = result.rowErrors
       skipped = result.skipped
       sourceFile = req.file.originalname
+      // Data-safety guard: an empty/wrong file, or a schedule whose header row
+      // changed so the job-number column isn't detected, parses to zero jobs.
+      // Applying that would DELETE FROM jobs and prune every note-less board-state
+      // row (statuses, binder checkmarks, ship-date overrides). Refuse instead —
+      // the JSON path already guards this; the file path must too.
+      if (jobs.length === 0) {
+        res.status(400).json({
+          error: {
+            code: 'no_valid_jobs',
+            message:
+              'No jobs found in the uploaded file — nothing was imported. Check that the sheet has a job-number column and the expected header row.',
+          },
+          rowErrors,
+          warnings,
+        })
+        return
+      }
       applyResult = await applyBoardImport(
         jobs,
         sourceFile,
