@@ -147,5 +147,5 @@ if ($restartTray) {
     }
     Write-Host 'The tray monitor has been restarted and will launch the server automatically.' -ForegroundColor Cyan
 } else {
-    Write-Host 'Start the server again with Start-WallBoard.bat' -ForegroundColor Cyan
+    Write-Host 'Start the server again with Start-TrayApp.bat (recommended — crash/hang auto-restart) or Start-WallBoard.bat (debug only, no auto-restart).' -ForegroundColor Cyan
 }

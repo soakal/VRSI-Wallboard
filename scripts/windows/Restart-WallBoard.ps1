@@ -1,7 +1,9 @@
 # Restart the VRSI WallBoard server.
 # If the tray app is running, the tray monitor auto-restarts the server; this script
-# just stops it and waits.  If no tray is running, this script relaunches the
-# headless service script directly.
+# just stops it and waits. If no tray is running, this script relaunches via the
+# tray app (the only supported production path — crash + hang auto-restart), not
+# the headless service — a "fix" via this script should never silently downgrade
+# a kiosk to unsupervised.
 . "$PSScriptRoot\_common.ps1"
 
 $ErrorActionPreference = 'Stop'
@@ -26,14 +28,20 @@ if ($trayRunning) {
     # the mutex probe had a timing gap), skip the fallback to avoid a port conflict.
     $alreadyUp = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($alreadyUp) {
-        Write-Host '  Port 3001 is already in use - skipping headless fallback launch.' -ForegroundColor DarkGray
+        Write-Host '  Port 3001 is already in use - skipping fallback launch.' -ForegroundColor DarkGray
     } else {
-        Write-Step 'No tray app detected - relaunching headless service'
-        $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
-        # conhost --headless: no console window in the taskbar even when Windows
-        # Terminal is the default host.
-        Start-Process "$env:SystemRoot\System32\conhost.exe" `
-            -ArgumentList "--headless $env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`""
+        Write-Step 'No tray app detected - starting the tray app (server + watchdog)'
+        $trayBat = Join-Path $RepoRoot 'Start-TrayApp.bat'
+        if (Test-Path $trayBat) {
+            Start-Process 'cmd.exe' -ArgumentList "/c `"$trayBat`"" -WindowStyle Hidden
+        } else {
+            Write-Warning "Start-TrayApp.bat not found at $trayBat - falling back to the headless service (no crash/hang auto-restart)."
+            $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
+            # conhost --headless: no console window in the taskbar even when Windows
+            # Terminal is the default host.
+            Start-Process "$env:SystemRoot\System32\conhost.exe" `
+                -ArgumentList "--headless $env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`""
+        }
     }
 }
 

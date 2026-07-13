@@ -1,4 +1,7 @@
-﻿# Production server  -  no pause (for Task Scheduler / startup).
+﻿# Headless server, no pause (for Task Scheduler / startup).
+# Internal fallback only - no crash-restart or hang watchdog. Production launches
+# must use Start-TrayApp.ps1; this script is invoked automatically by the
+# updater/restart scripts ONLY when Start-TrayApp.bat cannot be found.
 . "$PSScriptRoot\_common.ps1"
 
 $ErrorActionPreference = 'Stop'

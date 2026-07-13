@@ -27,5 +27,5 @@ if ($isAdmin) {
 
 Write-Host ''
 Write-Host 'Done. Sign out and back in (or reboot) to test auto-start.' -ForegroundColor Green
-Write-Host 'Start manually now: Start-WallBoard-Service.bat then Start-Kiosk.bat' -ForegroundColor Cyan
+Write-Host 'Start manually now: Start-TrayApp.bat (or the "Start WallBoard.lnk" shortcut)' -ForegroundColor Cyan
 Write-Host ''

@@ -32,25 +32,29 @@ $logDir = Get-EnvValue 'LOGS_DIR' 'C:\ProgramData\VRSIWallBoard\logs'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
 Start-Transcript -Path (Join-Path $logDir 'update.log') -Append | Out-Null
 
-# Re-enable the tray task (if it was running) and start the server again. Used on
-# the success path AND on failure recovery, so a half-failed update never leaves
-# the kiosk down with the tray task disabled.
+# Re-enable the tray task (if it exists) and start the server again. Used on the
+# success path AND on failure recovery, so a half-failed update never leaves the
+# kiosk down with the tray task disabled.
+#
+# Always launches via the tray (crash + hang auto-restart), regardless of whether
+# the tray was running before the update — the tray is the only supported
+# production path, so an update should land the kiosk there even if it was
+# previously running unsupervised (e.g. someone "fixed" it via the console
+# script, or an earlier update-recovery fallback left it headless). The headless
+# service is a last resort, only used if Start-TrayApp.bat itself is missing.
 function Restart-WallBoardServer {
-    param([bool]$TrayWasRunning)
     # Always re-enable the logon task if it exists — the task's existence, not a
     # live mutex, is the right signal that this is a tray install. Enabling does
     # not launch anything now; it only governs the next logon.
     if (Get-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue) {
         Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
     }
-    if ($TrayWasRunning) {
-        $trayBat = Join-Path $RepoRoot 'Start-TrayApp.bat'
-        if (Test-Path $trayBat) {
-            Start-Process 'cmd.exe' -ArgumentList "/c `"$trayBat`"" -WindowStyle Hidden
-            return
-        }
-        Write-Warning "Start-TrayApp.bat not found at $trayBat  - falling back to headless service."
+    $trayBat = Join-Path $RepoRoot 'Start-TrayApp.bat'
+    if (Test-Path $trayBat) {
+        Start-Process 'cmd.exe' -ArgumentList "/c `"$trayBat`"" -WindowStyle Hidden
+        return
     }
+    Write-Warning "Start-TrayApp.bat not found at $trayBat  - falling back to the headless service (no crash/hang auto-restart)."
     $serviceScript = Join-Path $PSScriptRoot 'Start-WallBoard-Service.ps1'
     Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$serviceScript`""
 }
@@ -181,7 +185,7 @@ Write-Step 'Rebuilding (shared -> server -> client)'
 # 5. Restart: prefer tray (which owns server lifecycle) when it was present;
 #    fall back to headless service only when no tray was running.
 Write-Step 'Restarting server'
-Restart-WallBoardServer -TrayWasRunning $trayWasRunning
+Restart-WallBoardServer
 $restarted = $true
 
 # 6. Wait for server to be healthy
@@ -234,7 +238,7 @@ if (-not $Unattended) { Start-Sleep -Seconds 3 }
     if ($serverStopped -and -not $restarted) {
         Write-Warning 'Restarting the existing version so the board is not left down...'
         try {
-            Restart-WallBoardServer -TrayWasRunning $trayWasRunning
+            Restart-WallBoardServer
         } catch {
             Write-Warning "Recovery restart also failed: $($_.Exception.Message)."
         }

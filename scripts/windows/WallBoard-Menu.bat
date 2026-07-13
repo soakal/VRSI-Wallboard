@@ -13,8 +13,8 @@ echo   2  Install data folders only
 echo   3  Build production
 echo.
 echo  RUN
-echo   4  Start server (keep window open)
-echo   T  Start tray app (server + icon near clock)
+echo   T  Start tray app (production - server + auto-restart, icon near clock)
+echo   4  Start server (console - debug only, no auto-restart)
 echo   5  Start kiosk browser
 echo   S  Stop server
 echo   P  Update to latest version (auto-detects git vs release install)
