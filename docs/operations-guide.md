@@ -101,11 +101,11 @@ Double-click **`Start-TrayApp.bat`**. A blue **W** icon appears in the taskbar n
 
 Double-clicking the tray icon also opens the browser.
 
-The tray app auto-restarts the server if it crashes (up to 3 times per 60 seconds), and shows balloon notifications on start, restart, and crash.
+The tray app auto-restarts the server if it crashes (up to 3 times per 60 seconds), and also probes `/health` every ~30 seconds — if the server is alive but unresponsive for about 2 minutes (a hang, not a crash), it force-restarts it too. This is the **only supported production launch path** — the update and restart scripts always land the kiosk back on the tray, even if it was previously running some other way.
 
-**Alternative — console window:**
+**Debug only — console window:**
 
-Double-click **`Start-WallBoard.bat`**. The terminal window stays open — close it or press `Ctrl+C` to stop. No tray icon; useful for debugging.
+Double-click **`Start-WallBoard.bat`**. The terminal window stays open — close it or press `Ctrl+C` to stop. No tray icon, and **no auto-restart watchdog of any kind** (crash or hang) — useful for debugging with a human watching the window, but not for unattended production use.
 
 ### 1.6 Set up kiosk display (optional)
 
@@ -334,8 +334,8 @@ When reporting a problem, include:
 | Install | Double-click `INSTALL.bat` (see `START-HERE.txt` for the 3-step walkthrough) |
 | Update to latest version | Settings → About & Updates → **Update** (or `scripts\windows\Update-FromRelease.bat` as Administrator) |
 | Check current version | Settings → About & Updates |
-| Start server (tray) | Double-click `Start-TrayApp.bat` — blue W icon near the clock |
-| Start server (console) | Double-click `Start-WallBoard.bat` |
+| Start server (tray, production) | Double-click `Start-TrayApp.bat` — blue W icon near the clock, crash + hang auto-restart |
+| Start server (console, debug only — no auto-restart) | Double-click `Start-WallBoard.bat` |
 | Enable auto-start on login | Double-click `ENABLE-STARTUP.bat` |
 | Uninstall | Double-click `UNINSTALL.bat` |
 | Stop server | Right-click tray icon → Stop & Exit (or `Ctrl+C` in the console window) |

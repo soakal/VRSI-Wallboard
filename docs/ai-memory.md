@@ -64,8 +64,21 @@ nothing saves, and a SERVER restart (WallBoard-Menu stop/start) is needed; typed
 - The exact on-site trigger for the server becoming unresponsive is not 100% pinned (top
   candidates: hung locked op, external DB lock, console QuickEdit freeze if run in a console
   window). All three are now either fixed or auto-recovered by the tray hang-watchdog.
-- If the kiosk runs via `Start-WallBoard.bat` (bare console, no tray), there is still no
-  auto-restart — recommend running via the tray (`Start-TrayApp.bat`).
+
+### RESOLVED (v1.1.5) — tray-vs-console launch gap
+Investigated whether a real kiosk could end up running `Start-WallBoard.bat` (bare console, no
+watchdog) instead of the tray. Confirmed the installer's default autostart already registers only
+the tray (`_Register-Startup.ps1` → `VRSI WallBoard Tray` scheduled task; legacy headless/kiosk
+tasks are actively deleted). The real gap was four FALLBACK paths that could silently regress an
+already-installed kiosk onto the unsupervised console/headless script: `Restart-WallBoard.ps1`'s
+no-tray-detected branch, both updaters' post-update restart (previously gated on whether the tray
+was running *before* the update), `Enable-Startup.ps1`'s manual-start hint, and
+`Restore-Backup.ps1`'s post-restore hint. All four now launch `Start-TrayApp.bat` unconditionally,
+falling back to the headless service only if the tray launcher file itself is missing.
+`Start-WallBoard.ps1`/`Start-WallBoard-Service.ps1` are kept (legitimate debug/internal-fallback
+purposes) but now carry explicit "no auto-restart watchdog" warnings everywhere they're
+referenced (own script output, `WallBoard-Menu.bat`, `operations-guide.md`, `README.md`,
+`scripts/windows/README.md`). Standing rule added to `VRSI-WALLBOARD-RULES.md` §6.
 
 ---
 

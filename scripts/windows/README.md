@@ -19,9 +19,9 @@ Open `WallBoard-Menu.bat` for an interactive menu, or run individual scripts:
 | **`Build-Production.bat`** | npm install + build client, server, shared |
 | **`Update-WallBoard.bat`** | Dev/git installs: pull latest code, rebuild, restart server + browser |
 | **`Update-FromRelease.bat`** | Kiosk installs: download latest GitHub release zip, install, restart |
-| **`Start-WallBoard.bat`** | Run server on port 3001 (foreground window) |
-| **`Start-WallBoard-Service.bat`** | Run server silently (Task Scheduler mode) |
-| **`Start-TrayApp.bat`** | Launch tray app (server + system-tray icon) |
+| **`Start-WallBoard.bat`** | Run server on port 3001 (foreground window) — debug only, no auto-restart |
+| **`Start-WallBoard-Service.bat`** | Run server silently (internal updater/restart fallback only, unsupervised) |
+| **`Start-TrayApp.bat`** | Launch tray app (server + system-tray icon) — production: crash + hang auto-restart |
 | **`Start-Kiosk.bat`** | Fullscreen Edge/Chrome browser |
 | **`Restart-WallBoard.bat`** | Restart server (tray-aware) |
 | **`Stop-WallBoard.bat`** | Stop server on port 3001 |
@@ -97,7 +97,7 @@ Backups go to `C:\ProgramData\VRSIWallBoard\backups\` (or `BACKUP_DIR` in `.env`
 .\scripts\windows\Register-StartupTasks.ps1
 ```
 
-This registers the **VRSI WallBoard Tray** scheduled task, which launches `Start-TrayApp.ps1` at logon. The tray app starts the Node server, shows a `W` icon near the system clock, and auto-restarts the server if it crashes. Any legacy `VRSI WallBoard Server` and `VRSI WallBoard Kiosk` tasks from older installs are removed automatically.
+This registers the **VRSI WallBoard Tray** scheduled task, which launches `Start-TrayApp.ps1` at logon. The tray app starts the Node server, shows a `W` icon near the system clock, and auto-restarts the server if it crashes — it also probes `/health` every ~30s and force-restarts if the server is alive but unresponsive for ~2 minutes (a hang, not a crash). Any legacy `VRSI WallBoard Server` and `VRSI WallBoard Kiosk` tasks from older installs are removed automatically.
 
 ## PowerShell scripts reference
 
@@ -110,10 +110,10 @@ This registers the **VRSI WallBoard Tray** scheduled task, which launches `Start
 | `Update-WallBoard.ps1` | Dev/git: pull + rebuild + restart server + reload browser (`-Unattended` skips prompts) |
 | `Update-FromRelease.ps1` | Kiosk: download latest GitHub release zip + install + restart (`-Unattended` for the Settings Update button) |
 | `Package-Release.ps1` | Build and bundle `VRSI WallBoard\` folder for deployment (dev-only, not shipped) |
-| `Start-WallBoard.ps1` | Run production server (foreground) |
-| `Start-WallBoard-Service.ps1` | Run server silently (Task Scheduler / startup, no tray) |
-| `Start-TrayApp.ps1` | Launch tray app: starts server + shows system-tray icon with crash-restart |
-| `Restart-WallBoard.ps1` | Restart server; if tray is running lets it auto-restart, otherwise relaunches headless service |
+| `Start-WallBoard.ps1` | Run production server (foreground) — debug only, no auto-restart watchdog |
+| `Start-WallBoard-Service.ps1` | Run server silently — internal fallback only (updater/restart), unsupervised, not a production launch path |
+| `Start-TrayApp.ps1` | Launch tray app: starts server + shows system-tray icon with crash + hang auto-restart — the only supported production launch |
+| `Restart-WallBoard.ps1` | Restart server; if tray is running lets it auto-restart, otherwise relaunches via the tray app (falls back to the headless service only if the tray app is missing) |
 | `Start-Kiosk.ps1` | Launch Edge/Chrome in kiosk mode |
 | `Stop-WallBoard.ps1` | Stop server on port 3001 |
 | `Invoke-WallBoardBackup.ps1` | Trigger backup via API |

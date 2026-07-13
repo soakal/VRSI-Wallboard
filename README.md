@@ -67,7 +67,7 @@ Deployments use the packaged **`VRSI WallBoard\`** release folder (built by `scr
 
 After install, the app runs at **http://localhost:3001** (reboot or log off/on if you enabled startup). The startup task launches the tray app invisibly — look for the blue **W** icon near the clock.
 
-Manual start (no auto-start): `scripts\windows\Start-TrayApp.bat` (tray) or `Start-WallBoard-Service.bat` + `Start-Kiosk.bat` (headless).
+Manual start (no auto-start): `scripts\windows\Start-TrayApp.bat` — the only supported production launch (crash + hang auto-restart). `Start-WallBoard.bat` runs a foreground console for debugging only, with no auto-restart of any kind.
 
 ### Updating an installed kiosk
 
