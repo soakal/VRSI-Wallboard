@@ -74,7 +74,7 @@ function AppInner() {
 
   // Auth — always polling
   const { isAuthenticated, needsReauth, isLoading: authLoading } = useAuthStatus(true);
-  const { backupStale } = useHealth();
+  const { backupStale, backupInProgress } = useHealth();
 
   // Tracks consecutive unauthenticated polls so a brief server restart (which
   // returns 401/unauthenticated for a few seconds) does not bounce us to /setup.
@@ -320,6 +320,7 @@ function AppInner() {
                 calendarError={calendarError}
                 needsReauth={needsReauth}
                 backupStale={backupStale}
+                backupInProgress={backupInProgress}
                 displayMode={displayMode}
                 onOpenSettings={() => setIsSettingsOpen(true)}
                 onOpenFiles={() => setIsFilesOpen(true)}

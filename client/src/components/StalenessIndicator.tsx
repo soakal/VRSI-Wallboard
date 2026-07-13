@@ -6,6 +6,7 @@ interface StalenessIndicatorProps {
   calendarError?: boolean;
   needsReauth?: boolean;
   backupStale?: boolean;
+  backupInProgress?: boolean;
 }
 
 const StalenessIndicator: React.FC<StalenessIndicatorProps> = ({
@@ -14,6 +15,7 @@ const StalenessIndicator: React.FC<StalenessIndicatorProps> = ({
   calendarError = false,
   needsReauth = false,
   backupStale = false,
+  backupInProgress = false,
 }) => {
   if (needsReauth) {
     return (
@@ -38,6 +40,15 @@ const StalenessIndicator: React.FC<StalenessIndicatorProps> = ({
       <div className="flex items-center justify-center gap-2 bg-red-900/60 px-4 py-1.5 text-sm text-red-200">
         <span className="h-2 w-2 rounded-full bg-red-400" />
         <span>Offline — displaying cached data</span>
+      </div>
+    );
+  }
+
+  if (backupInProgress) {
+    return (
+      <div className="flex items-center justify-center gap-2 bg-sky-900/50 px-4 py-1.5 text-sm text-sky-200">
+        <span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse" />
+        <span>Backing up data… the board stays usable.</span>
       </div>
     );
   }

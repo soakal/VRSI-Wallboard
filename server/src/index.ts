@@ -20,7 +20,7 @@ import { getDbIntegrityStatus } from './storage/localProvider.js';
 import { resolveDataDir, resolveLogsDir, resolveBackupDir } from './lib/paths.js';
 import { auditApiMiddleware } from './middleware/auditMiddleware.js';
 import { logAudit, startAuditPruneCron } from './services/auditService.js';
-import { runBackup } from './services/backupService.js';
+import { runBackup, isBackupInProgress } from './services/backupService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -152,6 +152,7 @@ app.get('/health', (_req: Request, res: Response) => {
     needsReauth: needsReauthentication(),
     lastBackupAt,
     backupStale,
+    backupInProgress: isBackupInProgress(),
     testMode: process.env.DISABLE_AZURE === 'true',
     dbIntegrity: getDbIntegrityStatus(),
     // Initialization is "done" once the token is resolved one way or another:

@@ -3,12 +3,14 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { BoardHeader } from './BoardHeader'
 import { useAppStore, confirmDiscardUnsaved } from '../../store/appStore'
+import { useHealth } from '../../hooks/useHealth'
 
 export function BoardLayout() {
   const location = useLocation()
   const queryClient = useQueryClient()
   const { setIsSettingsOpen, setIsFilesOpen, setIsMonitoringOpen } = useAppStore()
   const dirtyCount = useAppStore((s) => Object.keys(s.dirtyJobs).length)
+  const { backupInProgress } = useHealth()
   // Same rule as the calendar page: Files button hidden when disabled in Settings
   const showFiles = useAppStore((s) => s.config?.showFiles ?? true)
 
@@ -31,6 +33,13 @@ export function BoardLayout() {
   return (
     <div className="h-screen flex flex-col bg-[#0f1117] text-slate-200">
       <BoardHeader />
+      {/* Backup activity — informational only; the board stays fully usable */}
+      {backupInProgress && (
+        <div className="flex flex-shrink-0 items-center justify-center gap-2 bg-sky-900/50 px-4 py-1 text-xs text-sky-200">
+          <span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse" />
+          <span>Backing up data… the board stays usable.</span>
+        </div>
+      )}
       <main
         id="board-scroll"
         className="flex-1 min-h-0 overflow-y-auto max-w-7xl w-full mx-auto px-4 pb-24 md:pb-6 scroll-smooth"

@@ -23,6 +23,7 @@ interface DashboardProps {
   calendarError?: boolean;
   needsReauth?: boolean;
   backupStale?: boolean;
+  backupInProgress?: boolean;
   displayMode: 'day' | 'week' | 'month' | 'twoWeek';
   onOpenSettings: () => void;
   onOpenFiles: () => void;
@@ -40,6 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   calendarError = false,
   needsReauth = false,
   backupStale = false,
+  backupInProgress = false,
   displayMode,
   onOpenSettings,
   onOpenFiles,
@@ -158,6 +160,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     calendarError ||
     !isOnline ||
     backupStale ||
+    backupInProgress ||
     (dataUpdatedAt > 0 && nowMs - dataUpdatedAt > STALE_THRESHOLD_MS);
 
   return (
@@ -172,6 +175,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           calendarError={calendarError}
           needsReauth={needsReauth}
           backupStale={backupStale}
+          backupInProgress={backupInProgress}
         />
       )}
 

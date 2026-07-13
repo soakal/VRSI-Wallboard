@@ -20,6 +20,14 @@ function recentBackupWithin(ms: number): boolean {
   return age < ms;
 }
 
+// True while a backup is running — surfaced via /health so the kiosk UI can
+// show a "Backing up…" indicator. Visibility only; never used for locking.
+let backupInProgress = false;
+
+export function isBackupInProgress(): boolean {
+  return backupInProgress;
+}
+
 export async function runBackup(trigger: BackupTrigger): Promise<BackupRunResult> {
   if (trigger === 'browser_close' && recentBackupWithin(BROWSER_CLOSE_MIN_INTERVAL_MS)) {
     logger.info('Browser-close backup skipped (backup created within last 10 minutes)');
@@ -27,7 +35,13 @@ export async function runBackup(trigger: BackupTrigger): Promise<BackupRunResult
   }
 
   const dest = resolveBackupDir();
-  const result = await getPersistence().backup(dest, { trigger });
+  backupInProgress = true;
+  let result;
+  try {
+    result = await getPersistence().backup(dest, { trigger });
+  } finally {
+    backupInProgress = false;
+  }
   if (result.ok) {
     logger.info('Backup completed', { trigger, file: result.data.file });
   } else {
