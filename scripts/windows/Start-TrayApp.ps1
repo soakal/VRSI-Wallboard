@@ -100,6 +100,8 @@ $script:ServerProcess    = $null
 $script:Stopping         = $false
 $script:RestartTimes     = New-Object System.Collections.Generic.List[datetime]
 $script:CrashLoopNotified = $false
+$script:MonitorTickCount  = 0
+$script:HealthFailCount   = 0
 
 # ---- Helper: show balloon notification ----
 function Show-Balloon {
@@ -302,6 +304,31 @@ $script:MonitorTimer.add_Tick({
             $script:RestartTimes.Add($now) | Out-Null
             Start-Server
             Show-Balloon 'WallBoard server stopped unexpectedly - restarted.' ([System.Windows.Forms.ToolTipIcon]::Warning)
+        } else {
+            # Hang detection: a process can be ALIVE but unresponsive (blocked
+            # event loop, wedged console output, stuck I/O). HasExited never
+            # catches that state - the board then shows stale data and every
+            # save fails until someone restarts the server by hand. Probe
+            # /health every 6th tick (~30s); after 4 consecutive failures
+            # (~2 minutes unresponsive) force a restart.
+            $script:MonitorTickCount++
+            if (($script:MonitorTickCount % 6) -eq 0) {
+                if (Test-WallBoardHealthy) {
+                    $script:HealthFailCount = 0
+                } else {
+                    $script:HealthFailCount++
+                    Write-TrayLog 'WARN' "Health probe failed ($($script:HealthFailCount)/4)"
+                    if ($script:HealthFailCount -ge 4) {
+                        $script:HealthFailCount = 0
+                        Write-TrayLog 'WARN' 'Server alive but /health unresponsive for ~2 minutes - force restarting.'
+                        Stop-Server
+                        Start-Sleep -Seconds 2
+                        Start-Server
+                        $script:Stopping = $false  # Stop-Server sets it; re-arm the watchdog
+                        Show-Balloon 'WallBoard server was unresponsive - restarted.' ([System.Windows.Forms.ToolTipIcon]::Warning)
+                    }
+                }
+            }
         }
     } catch {
         Show-Balloon "Failed to restart server: $($_.Exception.Message)" ([System.Windows.Forms.ToolTipIcon]::Error)
