@@ -19,6 +19,7 @@ import type {
   Actor,
 } from '@vrsi/wallboard-shared'
 import { canonicalPersonName, samePerson } from '../lib/personIdentity.js'
+import { logger } from '../utils/logger.js'
 
 // ---------------------------------------------------------------------------
 // Note ID generation
@@ -37,13 +38,40 @@ function generateNoteId(): string {
 // ---------------------------------------------------------------------------
 let boardStateMutationQueue: Promise<unknown> = Promise.resolve()
 
+// If an operation holds the write lock longer than this, the queue moves on
+// without it. The .then() recovery below only helps when fn SETTLES (resolves
+// or rejects) — an async fn that never settles (e.g. a restore whose internal
+// db.backup() hangs on a dead drive) would otherwise wedge the queue forever:
+// every later status/note/ship-date save hangs until the server is restarted,
+// while reads keep working, so the board looks alive but nothing can be saved.
+const LOCK_WATCHDOG_MS = (() => {
+  const v = parseInt(process.env.BOARD_LOCK_WATCHDOG_MS ?? '', 10)
+  return Number.isFinite(v) && v > 0 ? v : 60_000
+})()
+
 function runExclusive<T>(fn: () => T): Promise<T> {
   const run = boardStateMutationQueue.then(() => fn())
   // Keep the chain alive even if fn throws, so one failure doesn't wedge it.
-  boardStateMutationQueue = run.then(
+  const settled = run.then(
     () => undefined,
     () => undefined
   )
+  // Watchdog: release the queue even if fn never settles (see comment above).
+  // The hung operation keeps running in the background; risking one rare
+  // interleaved write beats permanently blocking every board save.
+  boardStateMutationQueue = Promise.race([
+    settled,
+    new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        logger.error(
+          `Board write lock held for over ${LOCK_WATCHDOG_MS}ms — releasing the mutation queue so saves are not blocked. A hung operation may still be running.`
+        )
+        resolve()
+      }, LOCK_WATCHDOG_MS)
+      timer.unref?.()
+      void settled.then(() => clearTimeout(timer))
+    }),
+  ])
   return run
 }
 
