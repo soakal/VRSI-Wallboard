@@ -8,20 +8,20 @@ import type {
   Actor
 } from '@vrsi/wallboard-shared';
 import { boardHeaders } from './boardHeaders';
-import { unwrap } from './http';
+import { unwrap, boardFetch } from './http';
 
 export async function getBoardJobs(): Promise<BoardJob[]> {
-  const response = await fetch('/api/board/jobs', { headers: boardHeaders() });
+  const response = await boardFetch('/api/board/jobs', { headers: boardHeaders() });
   return unwrap<BoardJob[]>(response);
 }
 
 export async function getBoardConfig(): Promise<BoardConfig> {
-  const response = await fetch('/api/board/config', { headers: boardHeaders() });
+  const response = await boardFetch('/api/board/config', { headers: boardHeaders() });
   return unwrap<BoardConfig>(response);
 }
 
 export async function updateBoardConfig(partial: Partial<BoardConfig>): Promise<BoardConfig> {
-  const response = await fetch('/api/board/config', {
+  const response = await boardFetch('/api/board/config', {
     method: 'POST',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(partial)
@@ -30,7 +30,7 @@ export async function updateBoardConfig(partial: Partial<BoardConfig>): Promise<
 }
 
 export async function getBoardUsers(): Promise<BoardUser[]> {
-  const response = await fetch('/api/board/users', { headers: boardHeaders() });
+  const response = await boardFetch('/api/board/users', { headers: boardHeaders() });
   return unwrap<BoardUser[]>(response);
 }
 
@@ -48,7 +48,7 @@ export interface ImportResult {
 }
 
 export async function importJobsJson(jobs: Job[]): Promise<ImportResult> {
-  const response = await fetch('/api/board/import', {
+  const response = await boardFetch('/api/board/import', {
     method: 'POST',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ jobs })
@@ -59,7 +59,7 @@ export async function importJobsJson(jobs: Job[]): Promise<ImportResult> {
 export async function importJobsFile(file: File): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await fetch('/api/board/import', {
+  const response = await boardFetch('/api/board/import', {
     method: 'POST',
     headers: boardHeaders(),
     body: formData
@@ -72,7 +72,7 @@ export async function setJobStatus(
   status: JobStatus,
   actor: Actor
 ): Promise<BoardJob> {
-  const response = await fetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/status`, {
+  const response = await boardFetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/status`, {
     method: 'PATCH',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ status, actor })
@@ -86,7 +86,7 @@ export async function setJobShipDate(
   actor: Actor,
   shipDateOverrideNote?: string | null,
 ): Promise<BoardJob> {
-  const response = await fetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/ship-date`, {
+  const response = await boardFetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/ship-date`, {
     method: 'PATCH',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ shipDateOverride, shipDateOverrideNote, actor })
@@ -99,7 +99,7 @@ export async function setJobBinderPrinted(
   binderPrinted: boolean,
   actor: Actor
 ): Promise<BoardJob> {
-  const response = await fetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/binder-printed`, {
+  const response = await boardFetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/binder-printed`, {
     method: 'PATCH',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ binderPrinted, actor })
@@ -113,7 +113,7 @@ export async function setJobBlocked(
   reason: string | null,
   actor: Actor
 ): Promise<BoardJob> {
-  const response = await fetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/blocked`, {
+  const response = await boardFetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/blocked`, {
     method: 'PATCH',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ blocked, reason, actor })
@@ -126,7 +126,7 @@ export async function addJobNote(
   text: string,
   actor: Actor
 ): Promise<JobNote> {
-  const response = await fetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/notes`, {
+  const response = await boardFetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/notes`, {
     method: 'POST',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ text, actor })
@@ -137,12 +137,12 @@ export async function addJobNote(
 export type PresenceMap = Record<string, { userId: string; userName: string }[]>
 
 export async function getPresence(): Promise<PresenceMap> {
-  const response = await fetch('/api/board/presence', { headers: boardHeaders() });
+  const response = await boardFetch('/api/board/presence', { headers: boardHeaders() });
   return unwrap<PresenceMap>(response);
 }
 
 export async function claimPresence(jobNumber: string, userId: string, userName: string): Promise<void> {
-  await fetch(`/api/board/presence/${encodeURIComponent(jobNumber)}`, {
+  await boardFetch(`/api/board/presence/${encodeURIComponent(jobNumber)}`, {
     method: 'POST',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ userId, userName }),
@@ -150,7 +150,7 @@ export async function claimPresence(jobNumber: string, userId: string, userName:
 }
 
 export async function releasePresence(jobNumber: string, userId: string): Promise<void> {
-  await fetch(`/api/board/presence/${encodeURIComponent(jobNumber)}`, {
+  await boardFetch(`/api/board/presence/${encodeURIComponent(jobNumber)}`, {
     method: 'DELETE',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ userId }),
@@ -163,7 +163,7 @@ export async function updateJobNote(
   text: string,
   actor: Actor
 ): Promise<JobNote> {
-  const response = await fetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/notes/${encodeURIComponent(noteId)}`, {
+  const response = await boardFetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/notes/${encodeURIComponent(noteId)}`, {
     method: 'PATCH',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ text, actor }),
@@ -176,7 +176,7 @@ export async function deleteJobNote(
   noteId: string,
   actor: Actor
 ): Promise<void> {
-  const response = await fetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/notes/${encodeURIComponent(noteId)}`, {
+  const response = await boardFetch(`/api/board/jobs/${encodeURIComponent(jobNumber)}/notes/${encodeURIComponent(noteId)}`, {
     method: 'DELETE',
     headers: boardHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ actor })

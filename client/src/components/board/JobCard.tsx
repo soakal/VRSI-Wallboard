@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { BoardJob, BoardUser, BoardConfig, JobStatus } from '@vrsi/wallboard-shared'
 import StatusCheckboxes from './StatusCheckboxes'
 import BinderPrintedCheckbox from './BinderPrintedCheckbox'
@@ -41,6 +41,39 @@ function savedOverride(job: BoardJob): string | null {
   return job.shipDateOverridden ? job.effectiveShipDate : null
 }
 
+// ---------------------------------------------------------------------------
+// Per-job draft persistence. Pending edits used to live ONLY in React state,
+// so a failed save followed by any reload (nightly 3 AM reload, error-boundary
+// reload, kiosk/server restart) silently destroyed what the user typed. Drafts
+// are written to localStorage while a card is dirty and restored on mount.
+// ---------------------------------------------------------------------------
+interface JobDraft {
+  status: JobStatus
+  binderPrinted: boolean
+  shipDate: string | null
+  overrideNote: string
+  noteDraft: string
+  savedAt: number
+}
+
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
+const draftKey = (jobNumber: string) => `vrsi.jobDraft.${jobNumber}`
+
+function loadDraft(jobNumber: string): JobDraft | null {
+  try {
+    const raw = localStorage.getItem(draftKey(jobNumber))
+    if (!raw) return null
+    const draft = JSON.parse(raw) as JobDraft
+    if (typeof draft.savedAt !== 'number' || Date.now() - draft.savedAt > DRAFT_TTL_MS) {
+      localStorage.removeItem(draftKey(jobNumber))
+      return null
+    }
+    return draft
+  } catch {
+    return null
+  }
+}
+
 export function JobCard({
   job,
   activeUser,
@@ -50,18 +83,33 @@ export function JobCard({
 }: Props) {
   const [notesOpen, setNotesOpen] = useState(job.notes.length > 0)
 
-  const [pendingStatus, setPendingStatus] = useState<JobStatus>(job.status)
-  const [pendingBinderPrinted, setPendingBinderPrinted] = useState<boolean>(job.binderPrinted)
-  const [pendingShipDate, setPendingShipDate] = useState<string | null>(job.effectiveShipDate)
-  const [pendingOverrideNote, setPendingOverrideNote] = useState<string>(job.shipDateOverrideNote ?? '')
-  const [noteDraft, setNoteDraft] = useState('')
+  // Restore any surviving draft (failed save / reload / restart) on mount.
+  const [initialDraft] = useState(() => loadDraft(job.jobNumber))
+  const [pendingStatus, setPendingStatus] = useState<JobStatus>(initialDraft?.status ?? job.status)
+  const [pendingBinderPrinted, setPendingBinderPrinted] = useState<boolean>(
+    initialDraft?.binderPrinted ?? job.binderPrinted,
+  )
+  const [pendingShipDate, setPendingShipDate] = useState<string | null>(
+    initialDraft !== null ? initialDraft.shipDate : job.effectiveShipDate,
+  )
+  const [pendingOverrideNote, setPendingOverrideNote] = useState<string>(
+    initialDraft?.overrideNote ?? job.shipDateOverrideNote ?? '',
+  )
+  const [noteDraft, setNoteDraft] = useState(initialDraft?.noteDraft ?? '')
+  // Visible save failure — a failed Apply must never be silent.
+  const [saveError, setSaveError] = useState<string | null>(null)
   const setJobDirty = useAppStore((s) => s.setJobDirty)
 
+  // Sync pending state when the SERVER value changes (another user's edit, a
+  // fresh import). Skipped on mount so a restored draft is not clobbered by
+  // the first render's values.
+  const isFirstRender = useRef(true)
   useEffect(() => { setNotesOpen(job.notes.length > 0) }, [job.notes.length])
-  useEffect(() => { setPendingStatus(job.status) }, [job.status])
-  useEffect(() => { setPendingBinderPrinted(job.binderPrinted) }, [job.binderPrinted])
-  useEffect(() => { setPendingShipDate(job.effectiveShipDate) }, [job.effectiveShipDate])
-  useEffect(() => { setPendingOverrideNote(job.shipDateOverrideNote ?? '') }, [job.shipDateOverrideNote])
+  useEffect(() => { if (!isFirstRender.current) setPendingStatus(job.status) }, [job.status])
+  useEffect(() => { if (!isFirstRender.current) setPendingBinderPrinted(job.binderPrinted) }, [job.binderPrinted])
+  useEffect(() => { if (!isFirstRender.current) setPendingShipDate(job.effectiveShipDate) }, [job.effectiveShipDate])
+  useEffect(() => { if (!isFirstRender.current) setPendingOverrideNote(job.shipDateOverrideNote ?? '') }, [job.shipDateOverrideNote])
+  useEffect(() => { isFirstRender.current = false }, [])
 
   const setJobStatus = useSetJobStatus()
   const setJobShipDate = useSetJobShipDate()
@@ -78,17 +126,29 @@ export function JobCard({
 
   const handleBlock = () => {
     if (!activeUser) return
-    setJobBlocked.mutate({
-      jobNumber: job.jobNumber,
-      blocked: true,
-      reason: blockReasonInput.trim() || null,
-      actor: activeUser,
-    })
-    setShowBlockInput(false)
+    setSaveError(null)
+    setJobBlocked.mutate(
+      {
+        jobNumber: job.jobNumber,
+        blocked: true,
+        reason: blockReasonInput.trim() || null,
+        actor: activeUser,
+      },
+      {
+        // Close the input only when the block actually saved — on failure the
+        // typed reason stays in the box and the error is shown.
+        onSuccess: () => setShowBlockInput(false),
+        onError: (e) => setSaveError(e.message),
+      },
+    )
   }
   const handleUnblock = () => {
     if (!activeUser) return
-    setJobBlocked.mutate({ jobNumber: job.jobNumber, blocked: false, reason: null, actor: activeUser })
+    setSaveError(null)
+    setJobBlocked.mutate(
+      { jobNumber: job.jobNumber, blocked: false, reason: null, actor: activeUser },
+      { onError: (e) => setSaveError(e.message) },
+    )
   }
   const updateJobNote = useUpdateJobNote()
   const deleteJobNote = useDeleteJobNote()
@@ -114,6 +174,26 @@ export function JobCard({
     return () => setJobDirty(job.jobNumber, false)
   }, [isDirty, job.jobNumber, setJobDirty])
 
+  // Persist the draft while dirty; clear it once the card matches the server
+  // again (successful Apply or Cancel). Survives reloads and restarts.
+  useEffect(() => {
+    try {
+      if (!isDirty) {
+        localStorage.removeItem(draftKey(job.jobNumber))
+        return
+      }
+      const draft: JobDraft = {
+        status: pendingStatus,
+        binderPrinted: pendingBinderPrinted,
+        shipDate: pendingShipDate,
+        overrideNote: pendingOverrideNote,
+        noteDraft,
+        savedAt: Date.now(),
+      }
+      localStorage.setItem(draftKey(job.jobNumber), JSON.stringify(draft))
+    } catch { /* localStorage full/unavailable — drafts are best-effort */ }
+  }, [isDirty, pendingStatus, pendingBinderPrinted, pendingShipDate, pendingOverrideNote, noteDraft, job.jobNumber])
+
   const pendingDateOverridden =
     pendingOverride !== null || (dateDirty && pendingShipDate !== job.originalShipDate)
 
@@ -134,29 +214,45 @@ export function JobCard({
 
   const handleApply = () => {
     if (!activeUser) return
+    // A failed save must be VISIBLE and must not discard the pending edits —
+    // they stay on the card (and in the localStorage draft) for a retry.
+    setSaveError(null)
+    const onError = (e: Error) => setSaveError(e.message)
     if (statusDirty) {
-      setJobStatus.mutate({ jobNumber: job.jobNumber, status: pendingStatus, actor: activeUser })
+      setJobStatus.mutate(
+        { jobNumber: job.jobNumber, status: pendingStatus, actor: activeUser },
+        { onError },
+      )
     }
     if (binderDirty) {
-      setJobBinderPrinted.mutate({
-        jobNumber: job.jobNumber,
-        binderPrinted: pendingBinderPrinted,
-        actor: activeUser,
-      })
+      setJobBinderPrinted.mutate(
+        {
+          jobNumber: job.jobNumber,
+          binderPrinted: pendingBinderPrinted,
+          actor: activeUser,
+        },
+        { onError },
+      )
     }
     if (dateDirty || noteDirty) {
-      setJobShipDate.mutate({
-        jobNumber: job.jobNumber,
-        shipDateOverride: pendingOverride,
-        shipDateOverrideNote: pendingOverride ? (pendingOverrideNote.trim() || null) : null,
-        actor: activeUser,
-      })
+      setJobShipDate.mutate(
+        {
+          jobNumber: job.jobNumber,
+          shipDateOverride: pendingOverride,
+          shipDateOverrideNote: pendingOverride ? (pendingOverrideNote.trim() || null) : null,
+          actor: activeUser,
+        },
+        { onError },
+      )
     }
     // A typed-but-unsent note counts as a pending change: Apply saves it too,
-    // so one click commits everything on the card at once.
+    // so one click commits everything on the card at once. The draft text is
+    // cleared only AFTER the server confirms the note was stored.
     if (noteDraftDirty) {
-      handleAddNote(noteDraft.trim())
-      setNoteDraft('')
+      addJobNote.mutate(
+        { jobNumber: job.jobNumber, text: noteDraft.trim(), actor: activeUser },
+        { onSuccess: () => setNoteDraft(''), onError },
+      )
     }
     if (userId) releasePresence(job.jobNumber, userId)
   }
@@ -175,7 +271,11 @@ export function JobCard({
     setNoteActionError(null)
     addJobNote.mutate(
       { jobNumber: job.jobNumber, text, actor: activeUser },
-      { onError: (e) => setNoteActionError(e.message) },
+      {
+        // Clear the typed draft only once the note is confirmed stored.
+        onSuccess: () => setNoteDraft(''),
+        onError: (e) => setNoteActionError(e.message),
+      },
     )
   }
 
@@ -420,6 +520,23 @@ export function JobCard({
       {otherEditors.length > 0 && (
         <div className="mt-2 px-2 py-1.5 bg-amber-900/30 border border-amber-700/40 rounded-lg text-amber-400 text-xs">
           {otherEditors.map(e => e.userName).join(' & ')} {otherEditors.length === 1 ? 'is' : 'are'} editing this job
+        </div>
+      )}
+
+      {saveError && (
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2">
+          <span className="text-red-400 text-xs font-semibold uppercase tracking-wide shrink-0">Save failed</span>
+          <span className="text-red-200/90 text-xs min-w-0 break-words">
+            {saveError} Your edits are still on this card — press Apply to retry.
+          </span>
+          <button
+            type="button"
+            onClick={() => setSaveError(null)}
+            className="ml-auto text-red-300 hover:text-red-100 text-xs shrink-0"
+            aria-label="Dismiss save error"
+          >
+            ✕
+          </button>
         </div>
       )}
 

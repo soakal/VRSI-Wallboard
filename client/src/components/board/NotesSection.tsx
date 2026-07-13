@@ -40,8 +40,9 @@ export default function NotesSection({
   const handleSend = () => {
     const text = draft.trim()
     if (!text || isSubmitting) return
+    // The draft is cleared by JobCard only after the server confirms the note
+    // was stored — clearing it here would destroy the text on a failed save.
     onAddNote(text)
-    onDraftChange('')
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
