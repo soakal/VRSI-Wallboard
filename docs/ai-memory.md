@@ -1,6 +1,6 @@
 # VRSI WallBoard — AI Memory
 
-**Last saved:** 2026-06-18
+**Last saved:** 2026-07-13
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\` (dev: `server/data`)
 **Vault record (v0.9.3→v0.14.1 session log):** Obsidian vault → `10-Projects/VRSI-Wallboard-Session-2026-06-16-v0.9.3-to-v0.14.1.md`
@@ -20,6 +20,52 @@ To recover an existing kiosk stuck on v1.1.0:
 1. As Administrator, delete `C:\Program Files\VRSI WallBoard\server\src`
 2. Run `Update-FromRelease.bat` — will download and apply v1.1.1
 After that, the in-app Update button works normally forever.
+
+---
+
+## This Session Work (2026-07-13) — save-reliability + data-loss fixes (uncommitted to a release yet)
+
+**Field report:** kiosk "blocks editing after a period of time" — users type data, click Apply,
+nothing saves, and a SERVER restart (WallBoard-Menu stop/start) is needed; typed edits are lost.
+
+### Root-cause findings (all reproduced locally against v1.1.3)
+1. **Silent client failure (this is why data was LOST).** No board mutation had an `onError`
+   handler and no fetch had a timeout: a failed/hung save showed NOTHING; the note draft was
+   cleared BEFORE the server confirmed (`handleApply`/`NotesSection.handleSend`); pending edits
+   lived only in React state, so the nightly 3 AM reload / error-boundary reload / restart wiped
+   them. Reproduced end-to-end with Playwright (kill server mid-edit → Apply → no error, text gone).
+2. **Write-lock wedge (permanent "can't save until restart").** `runExclusive`'s
+   `.then(()=>undefined, ()=>undefined)` recovery only helps when fn SETTLES. A never-settling
+   async fn under `withBoardWriteLock` (restore path awaits `db.backup()`) wedges the queue
+   FOREVER: every later save hangs, reads still work, only a restart recovers. Reproduced.
+3. **SQLITE_BUSY = silent 500 + 5s event-loop freeze.** An external process holding a write lock
+   on `wallboard.db` (backup/AV/sync tool, DB viewer) makes every save block ~5s (better-sqlite3
+   busy-wait blocks the WHOLE event loop) then fail with a generic 500 the client never showed.
+   Reproduced with a second better-sqlite3 process holding `BEGIN IMMEDIATE`.
+4. **Watchdog blind spot.** The tray only restarts the server when the PROCESS EXITED
+   (`HasExited`); a hung-but-alive server is never detected.
+
+### Fixes (verified: 60/60 server tests, client build, 6/6 Playwright A/B checks)
+- `boardService.ts` — lock watchdog: queue self-releases after `BOARD_LOCK_WATCHDOG_MS`
+  (default 60s) with a loud log, so a hung locked operation can't block saves forever.
+- `errorHandler.ts` — `SQLITE_BUSY*` now → `503 { code: 'db_busy' }` with an actionable message
+  (surfaced in the UI) instead of a hidden 500.
+- Client — `boardFetch` (15s `AbortSignal.timeout`) on ALL board API calls; every mutation
+  surfaces failure via a red "Save failed" banner on the JobCard; note drafts are cleared only
+  on CONFIRMED save; all pending edits persist to `localStorage` (`vrsi.jobDraft.<jobNumber>`,
+  24h TTL) and are restored after any reload/restart, cleared when the card matches the server.
+- `Start-TrayApp.ps1` — hang detection: `/health` probed every ~30s; 4 consecutive failures
+  (~2 min) while the process is alive → force restart.
+- **Feature:** "Backing up data…" indicator — `runBackup` sets an in-memory flag, `/health`
+  exposes `backupInProgress`, client polls (30s) and shows a sky-blue banner on both the board
+  (BoardLayout) and calendar (StalenessIndicator). Visibility only, no locking.
+
+### Still open / judgment calls
+- The exact on-site trigger for the server becoming unresponsive is not 100% pinned (top
+  candidates: hung locked op, external DB lock, console QuickEdit freeze if run in a console
+  window). All three are now either fixed or auto-recovered by the tray hang-watchdog.
+- If the kiosk runs via `Start-WallBoard.bat` (bare console, no tray), there is still no
+  auto-restart — recommend running via the tray (`Start-TrayApp.bat`).
 
 ---
 
