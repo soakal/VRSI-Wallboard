@@ -109,6 +109,12 @@ app.use(
     origin: corsOrigin,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Token'],
+    exposedHeaders: [
+      'Content-Disposition',
+      'X-VRSI-Support-Email',
+      'X-VRSI-Saved-Path',
+      'X-VRSI-Filename',
+    ],
   })
 );
 

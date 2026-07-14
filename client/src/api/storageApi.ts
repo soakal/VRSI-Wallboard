@@ -102,3 +102,58 @@ export async function restoreBackup(file: string): Promise<{ preRestoreFile: str
   const json = (await res.json()) as { data: { preRestoreFile: string | null; conflicts: RestoreConflict[] } };
   return json.data;
 }
+
+export interface SupportInfo {
+  supportEmail: string;
+  maxMessageLength: number;
+  maxContactLength: number;
+}
+
+export interface SupportSubmitInput {
+  message: string;
+  contactName?: string;
+  replyTo?: string;
+  attachLogs?: boolean;
+}
+
+export interface SupportSubmitResult {
+  blob: Blob;
+  filename: string;
+  supportEmail: string;
+  savedPath: string | null;
+}
+
+export async function fetchSupportInfo(): Promise<SupportInfo> {
+  const res = await fetch('/api/storage/support-info');
+  if (!res.ok) throw new Error('Failed to load support info');
+  const json = (await res.json()) as { data: SupportInfo };
+  return json.data;
+}
+
+export async function submitSupportReport(input: SupportSubmitInput): Promise<SupportSubmitResult> {
+  const res = await fetch('/api/storage/support', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: { message?: string } | string;
+    };
+    const e = body.error;
+    const msg =
+      typeof e === 'object' && e?.message
+        ? e.message
+        : typeof e === 'string'
+          ? e
+          : 'Could not build the support package';
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const filename =
+    res.headers.get('X-VRSI-Filename') ??
+    `vrsi-wallboard-support-${new Date().toISOString().slice(0, 10)}.zip`;
+  const supportEmail = res.headers.get('X-VRSI-Support-Email') ?? '';
+  const savedPath = res.headers.get('X-VRSI-Saved-Path');
+  return { blob, filename, supportEmail, savedPath };
+}

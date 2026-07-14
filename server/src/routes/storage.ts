@@ -9,6 +9,14 @@ import { getPersistence, reloadPersistence } from '../storage/factory.js';
 import { runBackup, type BackupTrigger } from '../services/backupService.js';
 import { withBoardWriteLock } from '../services/boardService.js';
 import { requireAdminToken } from '../middleware/adminAuth.js';
+import { logAudit } from '../services/auditService.js';
+import {
+  buildSupportBundle,
+  cleanupSupportTemp,
+  resolveSupportEmail,
+  SUPPORT_MESSAGE_MAX,
+  SUPPORT_CONTACT_MAX,
+} from '../services/supportService.js';
 
 export const storageRouter = Router();
 storageRouter.use(requireAdminToken);
@@ -120,6 +128,79 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
       message: 'Database restored. Reload the page to see updated data.',
     },
   });
+});
+
+/** Support contact + limits for the in-app support form. */
+storageRouter.get('/support-info', (_req: Request, res: Response) => {
+  res.json({
+    data: {
+      supportEmail: resolveSupportEmail(),
+      maxMessageLength: SUPPORT_MESSAGE_MAX,
+      maxContactLength: SUPPORT_CONTACT_MAX,
+    },
+  });
+});
+
+/**
+ * Build a support zip (message + system info + optional logs), save a Desktop
+ * copy when possible, and stream the zip for browser download. Client opens
+ * mailto: — no Graph mail.
+ */
+storageRouter.post('/support', (req: Request, res: Response) => {
+  const body = req.body as {
+    message?: unknown;
+    contactName?: unknown;
+    replyTo?: unknown;
+    attachLogs?: unknown;
+  };
+
+  const message = typeof body.message === 'string' ? body.message : '';
+  const contactName = typeof body.contactName === 'string' ? body.contactName : undefined;
+  const replyTo = typeof body.replyTo === 'string' ? body.replyTo : undefined;
+  const attachLogs = body.attachLogs !== false && body.attachLogs !== 'false';
+
+  let bundle: ReturnType<typeof buildSupportBundle>;
+  try {
+    bundle = buildSupportBundle({ message, contactName, replyTo, attachLogs });
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    if (err.code === 'validation_error') {
+      res.status(400).json({
+        error: { code: 'validation_error', message: err.message ?? 'Invalid support request' },
+      });
+      return;
+    }
+    logger.warn('Support bundle failed', { error: e });
+    res.status(500).json({
+      error: { code: 'support_bundle_failed', message: 'Could not build the support package' },
+    });
+    return;
+  }
+
+  logAudit('system', 'Support report packaged', bundle.savedPath ?? bundle.filename, true, bundle.sizeBytes);
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${bundle.filename}"`);
+  res.setHeader('X-VRSI-Support-Email', bundle.supportEmail);
+  res.setHeader('X-VRSI-Filename', bundle.filename);
+  if (bundle.savedPath) {
+    res.setHeader('X-VRSI-Saved-Path', bundle.savedPath);
+  }
+
+  const stream = fs.createReadStream(bundle.zipPath);
+  stream.on('close', () => cleanupSupportTemp(bundle.zipPath));
+  stream.on('error', (e) => {
+    logger.warn('Support zip stream failed', { error: e });
+    cleanupSupportTemp(bundle.zipPath);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: { code: 'support_bundle_failed', message: 'Could not send the support package' },
+      });
+    } else {
+      res.end();
+    }
+  });
+  stream.pipe(res);
 });
 
 /** Download the combined server log (tail-capped) so IT can diagnose remotely. */

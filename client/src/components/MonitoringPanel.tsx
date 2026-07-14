@@ -3,13 +3,16 @@ import {
   fetchAuditLog,
   fetchBackups,
   fetchSecurityReport,
+  fetchSupportInfo,
   restoreBackup,
   RestoreConflictError,
   runBackupNow,
+  submitSupportReport,
   type AuditEntry,
   type BackupFile,
   type BackupsResponse,
   type SecurityReport,
+  type SupportInfo,
 } from '../api/storageApi';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
 
@@ -18,11 +21,39 @@ interface MonitoringPanelProps {
   onClose: () => void;
 }
 
-type Tab = 'it' | 'backup' | 'activity';
+type Tab = 'it' | 'backup' | 'activity' | 'support';
 
 function isFetchFailure(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed');
+}
+
+function openSupportMailto(
+  supportEmail: string,
+  message: string,
+  filename: string,
+  savedPath: string | null,
+  contactName: string,
+  replyTo: string
+): void {
+  const subject = `VRSI WallBoard support — ${new Date().toISOString().slice(0, 10)}`;
+  const attachHint = savedPath
+    ? `Please attach this file from the Desktop (or Downloads):\n${savedPath}`
+    : `Please attach the downloaded zip file:\n${filename}`;
+  const body = [
+    contactName ? `From: ${contactName}` : null,
+    replyTo ? `Reply-to: ${replyTo}` : null,
+    contactName || replyTo ? '' : null,
+    message.trim(),
+    '',
+    '---',
+    attachHint,
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n');
+
+  const mailto = `mailto:${encodeURIComponent(supportEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = mailto;
 }
 
 const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) => {
@@ -38,16 +69,26 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
   const [filter, setFilter] = useState<string>('all');
   const { currentVersion } = useUpdateCheck();
 
+  const [supportInfo, setSupportInfo] = useState<SupportInfo | null>(null);
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportContact, setSupportContact] = useState('');
+  const [supportReplyTo, setSupportReplyTo] = useState('');
+  const [supportAttachLogs, setSupportAttachLogs] = useState(true);
+  const [supportBusy, setSupportBusy] = useState(false);
+  const [supportError, setSupportError] = useState<string | null>(null);
+  const [supportOk, setSupportOk] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setReportError(null);
     setAuditError(null);
     setBackupError(null);
 
-    const [reportRes, auditRes, backupRes] = await Promise.allSettled([
+    const [reportRes, auditRes, backupRes, supportRes] = await Promise.allSettled([
       fetchSecurityReport(),
       fetchAuditLog(300),
       fetchBackups(),
+      fetchSupportInfo(),
     ]);
 
     if (reportRes.status === 'fulfilled') {
@@ -88,6 +129,10 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
       );
     }
 
+    if (supportRes.status === 'fulfilled') {
+      setSupportInfo(supportRes.value);
+    }
+
     setLoading(false);
   }, []);
 
@@ -102,6 +147,53 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
       setBackupError(err instanceof Error ? err.message : 'Backup failed');
     } finally {
       setBackupBusy(false);
+    }
+  };
+
+  const handleSendSupport = async () => {
+    setSupportBusy(true);
+    setSupportError(null);
+    setSupportOk(null);
+    try {
+      const result = await submitSupportReport({
+        message: supportMessage,
+        contactName: supportContact.trim() || undefined,
+        replyTo: supportReplyTo.trim() || undefined,
+        attachLogs: supportAttachLogs,
+      });
+
+      const url = URL.createObjectURL(result.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const email = result.supportEmail || supportInfo?.supportEmail || '';
+      if (email) {
+        openSupportMailto(
+          email,
+          supportMessage,
+          result.filename,
+          result.savedPath,
+          supportContact.trim(),
+          supportReplyTo.trim()
+        );
+      }
+
+      const where = result.savedPath
+        ? `Zip saved to:\n${result.savedPath}`
+        : `Zip downloaded as ${result.filename}`;
+      setSupportOk(
+        email
+          ? `${where}\n\nYour mail app should open — attach the zip and send to ${email}.`
+          : `${where}\n\nAttach the zip and email it to your VRSI support contact.`
+      );
+      setSupportMessage('');
+    } catch (err) {
+      setSupportError(err instanceof Error ? err.message : 'Could not build the support package');
+    } finally {
+      setSupportBusy(false);
     }
   };
 
@@ -202,7 +294,7 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
           <div>
             <h2 className="text-sm font-semibold text-slate-100">System &amp; IT Report</h2>
             <p className="text-[11px] text-slate-500">
-              Backups, audit log, safety summary
+              Backups, audit log, support, safety summary
               {currentVersion ? ` · WallBoard v${currentVersion}` : ''}
             </p>
           </div>
@@ -237,6 +329,13 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
             className={`px-3 py-1.5 text-xs rounded-t font-medium ${tab === 'activity' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}
           >
             Activity log
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('support')}
+            className={`px-3 py-1.5 text-xs rounded-t font-medium ${tab === 'support' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            Support
           </button>
         </div>
 
@@ -429,6 +528,82 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {tab === 'support' && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400">
+                Describe the problem, then send a support package. This downloads a zip (and saves a
+                copy to the Desktop when possible) and opens your mail app
+                {supportInfo?.supportEmail ? (
+                  <>
+                    {' '}
+                    to{' '}
+                    <span className="text-slate-200 font-mono">{supportInfo.supportEmail}</span>
+                  </>
+                ) : null}
+                . Attach the zip before sending.
+              </p>
+              <label className="block space-y-1">
+                <span className="text-xs text-slate-400">What went wrong? (required)</span>
+                <textarea
+                  value={supportMessage}
+                  onChange={(e) => setSupportMessage(e.target.value)}
+                  rows={5}
+                  maxLength={supportInfo?.maxMessageLength ?? 4000}
+                  placeholder="What were you doing, what did you expect, and what happened instead?"
+                  className="w-full text-sm bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-100 placeholder:text-slate-600 resize-y min-h-[100px]"
+                />
+                <span className="text-[10px] text-slate-600">
+                  {supportMessage.length}/{supportInfo?.maxMessageLength ?? 4000}
+                </span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-400">Your name (optional)</span>
+                  <input
+                    type="text"
+                    value={supportContact}
+                    onChange={(e) => setSupportContact(e.target.value)}
+                    maxLength={supportInfo?.maxContactLength ?? 200}
+                    className="w-full text-sm bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-slate-100"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-400">Reply email (optional)</span>
+                  <input
+                    type="email"
+                    value={supportReplyTo}
+                    onChange={(e) => setSupportReplyTo(e.target.value)}
+                    maxLength={supportInfo?.maxContactLength ?? 200}
+                    className="w-full text-sm bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-slate-100"
+                  />
+                </label>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={supportAttachLogs}
+                  onChange={(e) => setSupportAttachLogs(e.target.checked)}
+                  className="rounded border-slate-600"
+                />
+                Attach recent server logs + system info (recommended)
+              </label>
+              {supportError && <p className="text-xs text-red-400 whitespace-pre-wrap">{supportError}</p>}
+              {supportOk && <p className="text-xs text-emerald-400 whitespace-pre-wrap">{supportOk}</p>}
+              <button
+                type="button"
+                onClick={() => void handleSendSupport()}
+                disabled={supportBusy || !supportMessage.trim()}
+                className="w-full text-sm px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {supportBusy ? 'Packaging…' : 'Send support report'}
+              </button>
+              <p className="text-[10px] text-slate-600">
+                Or use <span className="text-slate-500">Download logs</span> below for a plain log
+                file only.
+              </p>
             </div>
           )}
         </div>
