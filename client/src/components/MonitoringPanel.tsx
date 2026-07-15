@@ -135,11 +135,14 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
         attachLogs: supportAttachLogs,
       });
 
-      if (result.method === 'mailto') {
+      // Only fall back to a browser download when there's no Desktop copy to
+      // point at — otherwise this prompts a redundant "Save As" for a file
+      // that's already sitting on the Desktop.
+      if (result.method === 'mailto' && !result.savedPath) {
         try {
           await downloadSupportPackage(result.filename);
         } catch {
-          /* Desktop copy may still exist */
+          /* nothing else we can offer the user at this point */
         }
       }
 
@@ -151,7 +154,7 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
         );
       } else if (result.savedPath) {
         setSupportOk(
-          `Your mail app should open.\n\nAttach the zip from your Desktop:\n${result.savedPath}\n\nA copy was also downloaded to your browser Downloads folder.`
+          `Your mail app should open.\n\nAttach the zip from your Desktop:\n${result.savedPath}`
         );
       } else {
         setSupportOk(

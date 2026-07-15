@@ -8,11 +8,23 @@
 
 ## Current State
 
-**Version:** v1.1.10 (root + server + client + shared — release commit on main).
+**Version:** v1.1.11 (root + server + client + shared — release commit on main).
 
-**Last completed task:** After Brian updated his installed copy to v1.1.9 and tested live, the fallback mail opened correctly but with no Subject (expected — v1.1.8 had stripped it entirely). Live-verified directly on the same hanging-COM machine that a subject-only mailto query string (no body) does NOT reproduce the original garbling bug — restored `?subject=` to the fallback in `Open-SupportMail.ps1`, keeping `&body=` out. Released as v1.1.10.
+**Last completed task:** Brian noted the app was auto-saving the support zip to the Desktop AND separately prompting a browser "Save As" dialog for the same file on the mailto fallback path — redundant. Fixed `MonitoringPanel.tsx` to only trigger the browser download when there's no Desktop copy already saved (`!result.savedPath`). Released as v1.1.11.
 
-**Next task:** Update this machine's installed copy (`C:\Program Files\VRSI WallBoard\`, tray-managed, Scheduled Task "VRSI WallBoard Tray") from v1.1.9 → v1.1.10 via the in-app Update button, then re-test Ctrl+M → Support → Send through the real app UI and confirm both To and Subject look correct.
+**Next task:** Update this machine's installed copy (`C:\Program Files\VRSI WallBoard\`, tray-managed, Scheduled Task "VRSI WallBoard Tray") from v1.1.10 → v1.1.11 via the in-app Update button, then re-test Ctrl+M → Support → Send through the real app UI — confirm To + Subject are correct AND no redundant save-file prompt appears.
+
+---
+
+## Support-mail redundant download prompt, round 4 (shipped in v1.1.11)
+
+**Report:** Brian: "since it is automatically saving to the desktop don't ask me to save somewhere else."
+
+**Cause:** `buildSupportBundle()` (server) had always silently copied the zip to the user's Desktop when possible and returned that path as `savedPath` — this was true since v1.1.6. But `MonitoringPanel.tsx`'s `handleSendSupport` called `downloadSupportPackage(result.filename)` (triggering a browser "Save As" dialog) **unconditionally** whenever `result.method === 'mailto'`, regardless of whether `savedPath` was already set. So on the mailto fallback path the user got the file twice: once silently on the Desktop, once via an unwanted save prompt.
+
+**Fix:** the download now only fires when `!result.savedPath` — i.e. only when the Desktop copy genuinely failed and the browser download is the only way to get the file. The success message no longer claims "a copy was also downloaded to your browser Downloads folder" when a Desktop copy already exists.
+
+**Verified:** `npm run build` clean, `npm test --prefix server` 63/63. This is a client-only UI change — no PowerShell/COM behavior involved, so no live-Outlook verification needed for this one, just confirm no download prompt appears when a Desktop copy exists.
 
 ---
 
@@ -121,19 +133,19 @@ https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.7 (zip + sha256 uploa
 
 ---
 
-## Release flow (v1.1.10)
+## Release flow (v1.1.11)
 
 1. `npm run build` at root
-2. `scripts\windows\Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.10.zip` + `.sha256`
-3. `gh release create v1.1.10 "releases\VRSI-WallBoard-v1.1.10.zip" "releases\VRSI-WallBoard-v1.1.10.zip.sha256"`
-4. Prune local `releases/` to 2 most recent versions (v1.1.9 + v1.1.10 after this release)
+2. `scripts\windows\Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.11.zip` + `.sha256`
+3. `gh release create v1.1.11 "releases\VRSI-WallBoard-v1.1.11.zip" "releases\VRSI-WallBoard-v1.1.11.zip.sha256"`
+4. Prune local `releases/` to 2 most recent versions (v1.1.10 + v1.1.11 after this release)
 
 ---
 
 ## Context for Next Session
 
-1. Latest release: **v1.1.10** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.10
-2. Support-mail fallback (To + Subject, no Body) is live-verified via direct script invocation on the real hanging machine (see above, round 3) — the one remaining step is updating this machine's installed/tray copy to v1.1.10 and re-confirming through the actual app UI.
+1. Latest release: **v1.1.11** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.11
+2. This machine's installed/tray copy still needs updating to v1.1.11 and a final Ctrl+M → Support → Send re-test through the real app UI (To + Subject correct, no redundant save prompt).
 3. Support inbox preconfigured to `briank@vrs-inc.com` (code default + installer `.env`)
 4. Staff: Ctrl+M → Support → describe problem → Send support report
-5. Kiosks still need to update from v1.1.6 through v1.1.9 → v1.1.10 to pick up the Outlook-hang timeout fix, the mailto-garbling fix, the COM-hang-starves-fallback fix, and the restored fallback Subject
+5. Kiosks still need to update from v1.1.6 through v1.1.10 → v1.1.11 to pick up the Outlook-hang timeout fix, the mailto-garbling fix, the COM-hang-starves-fallback fix, the restored fallback Subject, and the redundant-download-prompt fix
