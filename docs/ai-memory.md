@@ -37,6 +37,11 @@ found two real bugs that only showed up on the actual Windows target, not the Li
 Verified: 63/63 server tests genuinely pass on Windows, `npm run build` clean, `tsc --noEmit`
 clean on server + client, no stray files left on disk.
 
+**Shipped:** committed `96dfe73`, pushed to `main`, released as
+https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.7 (zip + sha256 uploaded). Local
+`releases/` folder has only v1.1.7 (nothing to prune yet). Stale branch
+`cursor/support-report-button-51e5` deleted from GitHub (fully merged, redundant ref).
+
 ---
 
 ## v1.1.6 — Support tab (shipped in this release)
@@ -49,17 +54,18 @@ clean on server + client, no stray files left on disk.
 
 ---
 
-## Release flow (v1.1.6)
+## Release flow (v1.1.7)
 
 1. `npm run build` at root
-2. `scripts\windows\Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.6.zip` + `.sha256`
-3. `gh release create v1.1.6 "releases\VRSI-WallBoard-v1.1.6.zip" "releases\VRSI-WallBoard-v1.1.6.zip.sha256"`
-4. Prune local `releases/` to 2 most recent versions
+2. `scripts\windows\Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.7.zip` + `.sha256`
+3. `gh release create v1.1.7 "releases\VRSI-WallBoard-v1.1.7.zip" "releases\VRSI-WallBoard-v1.1.7.zip.sha256"`
+4. Prune local `releases/` to 2 most recent versions (nothing to prune yet — only v1.1.7 present)
 
 ---
 
 ## Context for Next Session
 
-1. Latest release: **v1.1.6** — https://github.com/soakal/VRSI-WallBoard/releases/tag/v1.1.6
+1. Latest release: **v1.1.7** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.7
 2. Support inbox preconfigured to `briank@vrs-inc.com` (code default + installer `.env`)
 3. Staff: Ctrl+M → Support → describe problem → Send support report
+4. Kiosks still need to update from v1.1.6 → v1.1.7 to pick up the Outlook-hang timeout fix
