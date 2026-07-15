@@ -8,11 +8,34 @@
 
 ## Current State
 
-**Version:** v1.1.6 (root + server + client + shared — release commit on main)
+**Version:** v1.1.7 (root + server + client + shared — release commit on main)
 
-**Last completed task:** Docs synced for v1.1.6 Support (code-guide, README, scripts README, ops quick reference).
+**Last completed task:** Fable audit of the v1.1.6 Support feature (see below) — two real fixes shipped, released as v1.1.7.
 
-**Next task:** Kiosks update to v1.1.6.
+**Next task:** Kiosks update to v1.1.7.
+
+---
+
+## v1.1.7 — Fable audit of Support feature, two kiosk-reliability fixes
+
+Brian asked for a Fable pass to confirm the v1.1.6 Support feature was fully merged and working.
+Merge status was already clean (PR #2 squash-merged `cursor/support-report-button-51e5`; that
+branch ref was stale/redundant and has been deleted from GitHub). Fable's code+build+test audit
+found two real bugs that only showed up on the actual Windows target, not the Linux CI runner:
+
+1. **No timeout on `spawnSync` calls in `supportService.ts`.** The Outlook COM script and
+   `Compress-Archive` calls could block the whole Node event loop indefinitely if Outlook hung
+   (first-run wizard, stuck modal) — freezing the entire board for every kiosk user until the
+   tray watchdog force-restarted the server ~2 minutes later. Fixed: shared 30s
+   `SUPPORT_SPAWN_TIMEOUT_MS` on both `spawnSync` calls.
+2. **`supportService.test.ts`'s "builds a zip" test depended on the real Desktop.** It only
+   passed when `resolveDesktopDir()` found no Desktop (true on Linux CI, false on every real
+   Windows box) — so it was silently red on Windows (62/63, not the claimed 63/63) and wrote a
+   real zip to the Desktop on every run. Fixed: the test now points `HOME`/`USERPROFILE` at a
+   Desktop-less temp dir for its duration.
+
+Verified: 63/63 server tests genuinely pass on Windows, `npm run build` clean, `tsc --noEmit`
+clean on server + client, no stray files left on disk.
 
 ---
 

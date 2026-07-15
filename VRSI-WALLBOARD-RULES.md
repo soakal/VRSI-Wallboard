@@ -61,7 +61,7 @@ AI outputs one re-anchor line before responding:
 ```
 PROJECT_NAME    = VRSI WallBoard
 FORMERLY        = Nexus Kiosk (Dakboard Replacement)
-VERSION         = 1.1.6
+VERSION         = 1.1.7
 COPYRIGHT       = Copyright © VRSI. All Rights Reserved.
 NORTH_STAR      = A job board + calendar display that works standalone on
                   Windows today and upgrades to SharePoint collaboration
@@ -73,7 +73,7 @@ STACK           = React 18 + Vite + TypeScript (frontend)
 DEPLOY_TARGET   = Windows-native (Node.js process + browser --app= window)
 STORAGE_MODE    = Local | NetworkShare | SharePoint  ← CONFIRM EACH SESSION
 AUTH            = Azure Device Code Flow (MSAL) + Entra ID
-LAST_UPDATED    = June 17, 2026
+LAST_UPDATED    = July 15, 2026
 ```
 
 ---
@@ -529,4 +529,5 @@ Location: `docs/ai-memory.md`
 | 2026-07-14 | Cursor+BK | In-app Support report (no Graph mail): Monitoring panel gains a **Support** tab next to Activity log / Download logs. User describes the problem → `POST /api/storage/support` builds a zip (message.txt, system-info.txt, optional combined/update log tails + audit snippet), saves a Desktop copy when possible (+ archive under `logs\support-reports\`). Windows: tries Outlook COM with zip attached, falls back to server-launched `mailto:`; `SUPPORT_EMAIL` stays server-side only (not in UI/API). Ops guide §4 updated. | Brian: customers need one-click support message + log attach without Graph |
 | 2026-07-15 | BK+Cursor | v1.1.6: release tag for Support tab (merged PR #2). Version bump across root/server/client/shared. | Ship Support to kiosks via GitHub release |
 | 2026-07-15 | BK+Cursor | Installer/updater: `SUPPORT_EMAIL=briank@vrs-inc.com` written into `server\.env` on install and added on update when missing (`Install-WallBoard.ps1`, `_common.ps1`, `Update-FromRelease.ps1`). Code default already applied when `.env` omits the line. Docs synced (code-guide, README, scripts README, ops quick reference). | Brian: support inbox should be preconfigured, not a manual step |
+| 2026-07-15 | Fable+Claude | v1.1.7: Fable audit of the v1.1.6 Support feature found two real issues on the actual Windows target (not the Linux CI runner): (1) `supportService.ts`'s `spawnSync` calls (Outlook COM script + `Compress-Archive`) had no timeout — a hung Outlook dialog (first-run wizard, stuck modal) would freeze the entire Node event loop, taking the whole board down for every kiosk user until the tray watchdog force-restarted it ~2 min later. Fixed with a shared 30s `SUPPORT_SPAWN_TIMEOUT_MS` on both calls. (2) `supportService.test.ts`'s "builds a zip" test called the real `resolveDesktopDir()` and only passed when no Desktop existed (true on Linux CI, false on every real Windows box) — it was silently red on Windows and wrote real zip files to the Desktop on every test run. Fixed by pointing `HOME`/`USERPROFILE` at a Desktop-less temp dir for the test's duration. Verified: 63/63 tests genuinely pass on Windows now, build clean, no stray files left behind. | Brian: have Fable verify the Support feature works and is fully merged; found + fixed two real kiosk-reliability bugs |
 

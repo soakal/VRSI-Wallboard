@@ -16,6 +16,8 @@ import {
 
 let dataDir: string;
 let logsDir: string;
+let originalUserProfile: string | undefined;
+let originalHome: string | undefined;
 
 beforeEach(() => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vrsi-support-test-'));
@@ -25,11 +27,22 @@ beforeEach(() => {
   process.env.LOGS_DIR = logsDir;
   process.env.DISABLE_AZURE = 'true';
   delete process.env.SUPPORT_EMAIL;
+  // Point HOME/USERPROFILE at a dir with no Desktop subfolder, so
+  // buildSupportBundle's resolveDesktopDir() can't find a real Desktop and
+  // write a real zip onto the machine running the tests.
+  originalUserProfile = process.env.USERPROFILE;
+  originalHome = process.env.HOME;
+  process.env.USERPROFILE = dataDir;
+  process.env.HOME = dataDir;
   resetPersistenceForTests();
 });
 
 afterEach(() => {
   resetPersistenceForTests();
+  if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = originalUserProfile;
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
   try {
     fs.rmSync(dataDir, { recursive: true, force: true });
   } catch {

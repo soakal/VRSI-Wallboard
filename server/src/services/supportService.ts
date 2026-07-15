@@ -25,6 +25,10 @@ export const SUPPORT_MESSAGE_MAX = 4000;
 export const SUPPORT_CONTACT_MAX = 200;
 const LOG_TAIL_MAX_BYTES = 5 * 1024 * 1024;
 const UPDATE_LOG_TAIL_MAX_BYTES = 512 * 1024;
+// Bounds every spawnSync call in this file — without it, a hung Outlook COM
+// dialog (first-run wizard, stuck modal) blocks the whole Node event loop
+// indefinitely, freezing the entire board for every kiosk user.
+const SUPPORT_SPAWN_TIMEOUT_MS = 30_000;
 
 export interface SupportRequestInput {
   message: string;
@@ -158,8 +162,11 @@ function compressDirectory(sourceDir: string, zipPath: string): void {
         '-Command',
         `Compress-Archive -Path (Join-Path -Path '${sourceDir.replace(/'/g, "''")}' -ChildPath '*') -DestinationPath '${zipPath.replace(/'/g, "''")}' -Force`,
       ],
-      { encoding: 'utf8', windowsHide: true }
+      { encoding: 'utf8', windowsHide: true, timeout: SUPPORT_SPAWN_TIMEOUT_MS }
     );
+    if (ps.error) {
+      throw new Error(`Compress-Archive failed to run: ${ps.error.message}`);
+    }
     if (ps.status !== 0 || !fs.existsSync(zipPath)) {
       throw new Error(
         `Compress-Archive failed: ${(ps.stderr || ps.stdout || 'unknown error').trim()}`
@@ -171,7 +178,11 @@ function compressDirectory(sourceDir: string, zipPath: string): void {
   const zip = spawnSync('zip', ['-r', '-q', zipPath, '.'], {
     cwd: sourceDir,
     encoding: 'utf8',
+    timeout: SUPPORT_SPAWN_TIMEOUT_MS,
   });
+  if (zip.error) {
+    throw new Error(`zip failed to run: ${zip.error.message}`);
+  }
   if (zip.status !== 0 || !fs.existsSync(zipPath)) {
     throw new Error(`zip failed: ${(zip.stderr || zip.stdout || 'unknown error').trim()}`);
   }
@@ -364,8 +375,15 @@ function runSupportMailScript(
         '-Mode',
         mode,
       ],
-      { encoding: 'utf8', windowsHide: true }
+      { encoding: 'utf8', windowsHide: true, timeout: SUPPORT_SPAWN_TIMEOUT_MS }
     );
+    if (ps.error) {
+      logger.warn('Support mail script failed to run or timed out', {
+        mode,
+        error: ps.error.message,
+      });
+      return false;
+    }
     return ps.status === 0;
   } catch (e) {
     logger.warn('Support mail script failed', {
