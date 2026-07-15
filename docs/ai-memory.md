@@ -12,7 +12,7 @@
 
 **Last completed task:** v1.1.6 version bump + release prep for Support tab (PR #2 merged).
 
-**Next task:** Publish GitHub release `v1.1.6` zip + sha256 from Windows (`Package-Release.ps1`); kiosks update; set `SUPPORT_EMAIL` in `.env` on each kiosk.
+**Next task:** Kiosks update to v1.1.6; Support inbox is preconfigured (`briank@vrs-inc.com`).
 
 ---
 
@@ -20,7 +20,8 @@
 
 - Monitoring (Ctrl+M) → **Support** tab
 - Outlook auto-attach when available; mailto fallback
-- `SUPPORT_EMAIL` server-side only (not shown in UI)
+- Support inbox **preconfigured**: `DEFAULT_SUPPORT_EMAIL` in server code + `SUPPORT_EMAIL=briank@vrs-inc.com` in `.env.production.example` / installer — no manual setup required
+- Inbox not shown in UI (server-side only)
 - `npm test --prefix server` → 63/63 pass
 
 ---
@@ -36,6 +37,6 @@
 
 ## Context for Next Session
 
-1. Latest tag after publish: **v1.1.6**
-2. Kiosk `.env`: `SUPPORT_EMAIL=briank@vrs-inc.com`
+1. Latest release: **v1.1.6** — https://github.com/soakal/VRSI-WallBoard/releases/tag/v1.1.6
+2. Support inbox preconfigured to `briank@vrs-inc.com` (code default + installer `.env`)
 3. Staff: Ctrl+M → Support → describe problem → Send support report

@@ -188,6 +188,7 @@ function Set-ServerEnvProduction {
         'DISABLE_AZURE' = 'true'
         'CORS_ORIGIN' = 'http://localhost:3001'
         'LOG_LEVEL' = 'info'
+        'SUPPORT_EMAIL' = 'briank@vrs-inc.com'
     }
 
     foreach ($line in $lines) {

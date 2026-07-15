@@ -19,7 +19,20 @@ function Ensure-ServerEnv {
             throw "Missing server\.env. Copy server\.env.production.example to server\.env first."
         }
     }
+    Ensure-SupportEmailInEnv -EnvFile $envFile
     return $envFile
+}
+
+# Product support inbox — baked into every install/upgrade if missing from .env.
+function Ensure-SupportEmailInEnv {
+    param([string]$EnvFile = (Join-Path $ServerDir '.env'))
+    if (-not (Test-Path $EnvFile)) { return }
+    $lines = @(Get-Content $EnvFile)
+    foreach ($line in $lines) {
+        if ($line -match '^\s*SUPPORT_EMAIL\s*=') { return }
+    }
+    Add-Content -Path $EnvFile -Value 'SUPPORT_EMAIL=briank@vrs-inc.com' -Encoding utf8
+    Write-Host '  Added SUPPORT_EMAIL=briank@vrs-inc.com to server\.env' -ForegroundColor DarkGray
 }
 
 function Test-WallBoardHealthy {

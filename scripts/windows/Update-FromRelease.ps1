@@ -246,6 +246,9 @@ try {
     Push-Location $ServerDir
     try { Invoke-NpmInstall } finally { Pop-Location }
 
+    # Ensure product support inbox is in server\.env (safe to add if missing).
+    Ensure-SupportEmailInEnv
+
     # 6. Restart: prefer the tray when it was running; otherwise headless
     Write-Step 'Restarting server'
     Restart-WallBoardServer
