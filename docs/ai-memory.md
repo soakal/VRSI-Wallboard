@@ -8,11 +8,39 @@
 
 ## Current State
 
-**Version:** v1.1.8 (root + server + client + shared — release commit on main)
+**Version:** v1.1.9 (root + server + client + shared — release commit on main).
 
-**Last completed task:** Fixed the live Support-button garbling bug (below) and shipped it as v1.1.8. **Live verification on real Outlook is still outstanding** — see the checklist at the end of the section below.
+**Last completed task:** Fixed the v1.1.8 regression where a HUNG Outlook COM activation ate the whole 30s spawn budget so the script's internal mailto fallback never ran (nothing opened at all). Fixed, verified live on the actual affected machine (real hang reproduced, real 13.3s run, real clean mailto window — screenshot-confirmed), and released as v1.1.9.
 
-**Next task:** Update this machine's installed copy (`C:\Program Files\VRSI WallBoard\`, tray-managed, Scheduled Task "VRSI WallBoard Tray") from v1.1.7 → v1.1.8 via the in-app Update button, then run the real-Outlook verification checklist against it. (Local dev-server testing on :3001 doesn't work for this — the Tray scheduled task auto-restarts the installed copy the moment the port frees up, so a plain `node dist/index.js` from the repo keeps losing the port back to the old installed build.)
+**Next task:** Update this machine's installed copy (`C:\Program Files\VRSI WallBoard\`, tray-managed, Scheduled Task "VRSI WallBoard Tray") from v1.1.8 → v1.1.9 via the in-app Update button so the tray-managed instance itself runs the fix (the direct smoke test that verified this ran the repo's build standalone, not through the installed/tray copy).
+
+---
+
+## Support-mail COM-hang fix, round 2 (shipped in v1.1.9)
+
+**Bug (confirmed via `C:\ProgramData\VRSIWallBoard\logs\combined.log` on the same new-Outlook-only kiosk, after updating it to v1.1.8):** Send Support opened NOTHING — no Outlook window, no mailto window — and the log showed `{"error":"spawnSync powershell.exe ETIMEDOUT","message":"Support mail script failed to run or timed out"}`. The client fell back to the zip-download message because `composeSupportMail()` got `null` and defaulted its return label to `'mailto'` without anything having launched.
+
+**Root cause:** on this machine `New-Object -ComObject Outlook.Application` does not fail fast — it **hangs** (new Outlook / olk.exe doesn't support classic COM automation, and the activation call blocks instead of throwing). Under the old two-spawn design that hang only killed the FIRST spawn; the second, independent mailto spawn still opened a (garbled) window. The v1.1.8 single-invocation design (correct, and kept) put the mailto fallback sequentially AFTER the COM attempt in the SAME process — so when Node's outer 30s `SUPPORT_SPAWN_TIMEOUT_MS` killed the hung powershell.exe, it killed the fallback with it. The fallback code was unreachable on any machine where COM hangs rather than throws.
+
+**Fix (all inside `scripts/windows/Open-SupportMail.ps1` — single-invocation design and `$displayAttempted` guard unchanged):**
+- The COM attempt (create → populate → attach → `Display()`) now runs in an **in-process STA runspace** (`[powershell]::Create()` + `BeginInvoke()` + `AsyncWaitHandle.WaitOne(10s)`), giving it its own **10-second inner timeout** independent of the outer 30s.
+- **Runspace, not `Start-Job`:** a job is a second powershell.exe whose multi-second cold startup would eat the inner budget, and a killed job's streamed output is the only (racy) way to learn how far it got. The runspace shares a `[hashtable]::Synchronized` state object with the main thread, so `DisplayAttempted` is readable in real time even while the COM call is hung — the guard works identically on the timeout path (hung at/after `Display()` → fail closed, exit 1; hung before → safe to fall through to mailto).
+- **On timeout the runspace is deliberately abandoned** — no `Stop()`/`Dispose()` (both can block on a thread stuck in a native COM call). **No `Stop-Process` on OUTLOOK.EXE** — can't distinguish a half-initialized automation-spawned instance from the user's real session with unsaved drafts; COM server lifetime handling reaps an abandoned activation once the client process exits.
+- **Second pitfall found by harness, not theory:** the abandoned runspace pipeline thread is a **foreground** thread, so PowerShell's plain `exit` never returns — the process lingered for minutes (verified live on this machine), which would have made spawnSync report ETIMEDOUT *even after mailto successfully opened*. Fix: every exit path after the runspace starts goes through `Exit-Hard` (flush stdout/stderr, then `[Environment]::Exit`), which terminates the process regardless of hung foreground threads. Harness proof: hang + `Exit-Hard` → child exited in 4.8s total with exit code 0 and `mailto` intact on stdout.
+- `supportService.ts`: comments updated only (`SUPPORT_SPAWN_TIMEOUT_MS` stays 30s — worst case is now ~10s COM + ~2s mailto + powershell startup, comfortably inside 30s). No code changes server-side.
+- `docs/code-guide.md` `Open-SupportMail.ps1` row updated.
+
+**Verified (build/tests, harnesses, AND a real live run on the actual hanging machine):**
+- `npm run build` clean, `npm test --prefix server` 63/63, `npx tsc --noEmit` clean in server/, ps1 parse-validated under Windows PowerShell 5.1 (0 errors).
+- Fable's standalone 5.1 harnesses proved the mechanism in isolation: a runspace hung in an infinite native sleep was abandoned at the test timeout with the main thread continuing to the fallback and the process hard-exiting cleanly (stdout intact); the fast-fail path (COM-not-registered analogue) completed with the error message readable from the shared state.
+- **Direct live smoke test on this same real kiosk-like machine** (bypassing the server entirely — invoked `Open-SupportMail.ps1` directly with a fake `-To smoke-test@example.com`): real run against this machine's actual hanging Outlook COM completed in **13.3s**, exit code 0, stdout `mailto`, stderr `"Outlook COM compose timed out after 10s (hung COM activation; likely a new-Outlook-only machine)"` (not `ETIMEDOUT` — the outer Node timeout was never hit). A genuine new-Outlook "New mail" window opened (process `olk.exe`, title "New mail") with a **clean recipient-only To field, no garbling** — confirmed by screenshot. Temp files cleaned up after.
+
+**Still to verify live (this exercised the repo's build directly, not the tray-managed installed copy):**
+1. Update this machine's installed copy (`C:\Program Files\VRSI WallBoard\`) from v1.1.8 → v1.1.9 via Settings → About & Updates; confirm the running version shows 1.1.9.
+2. Re-run Ctrl+M → Support → Send through the actual app UI (not the direct script invocation used above) and confirm the same clean result.
+3. Classic-Outlook machine (if one is available to test): Send → exactly one compose window, correct To/Subject/Body, zip attached, well under 10s.
+4. After the timeout path: check Task Manager — no lingering extra `powershell.exe` from the support script, no zombie half-initialized OUTLOOK.EXE.
+5. Audit log records the method actually used (`mailto` in the hang case).
 
 ---
 
@@ -77,19 +105,19 @@ https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.7 (zip + sha256 uploa
 
 ---
 
-## Release flow (v1.1.8)
+## Release flow (v1.1.9)
 
 1. `npm run build` at root
-2. `scripts\windows\Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.8.zip` + `.sha256`
-3. `gh release create v1.1.8 "releases\VRSI-WallBoard-v1.1.8.zip" "releases\VRSI-WallBoard-v1.1.8.zip.sha256"`
-4. Prune local `releases/` to 2 most recent versions (v1.1.7 + v1.1.8 after this release)
+2. `scripts\windows\Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.9.zip` + `.sha256`
+3. `gh release create v1.1.9 "releases\VRSI-WallBoard-v1.1.9.zip" "releases\VRSI-WallBoard-v1.1.9.zip.sha256"`
+4. Prune local `releases/` to 2 most recent versions (v1.1.8 + v1.1.9 after this release)
 
 ---
 
 ## Context for Next Session
 
-1. Latest release: **v1.1.8** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.8
-2. **Live-verify the Support-mail fix is still outstanding** — see checklist above. This machine's installed copy (`C:\Program Files\VRSI WallBoard\`) needs to be updated from v1.1.7 → v1.1.8 via the in-app Update button before it can be tested for real.
+1. Latest release: **v1.1.9** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.9
+2. Support-mail fix is live-verified via direct script invocation on the real hanging machine (see above) — the one remaining step is updating this machine's installed/tray copy to v1.1.9 and re-confirming through the actual app UI, not required to trust the fix itself.
 3. Support inbox preconfigured to `briank@vrs-inc.com` (code default + installer `.env`)
 4. Staff: Ctrl+M → Support → describe problem → Send support report
-5. Kiosks still need to update from v1.1.6/v1.1.7 → v1.1.8 to pick up the Outlook-hang timeout fix and the mailto-garbling fix
+5. Kiosks still need to update from v1.1.6/v1.1.7/v1.1.8 → v1.1.9 to pick up the Outlook-hang timeout fix, the mailto-garbling fix, and the COM-hang-starves-fallback fix

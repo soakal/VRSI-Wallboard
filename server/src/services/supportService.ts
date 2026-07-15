@@ -28,6 +28,11 @@ const UPDATE_LOG_TAIL_MAX_BYTES = 512 * 1024;
 // Bounds every spawnSync call in this file — without it, a hung Outlook COM
 // dialog (first-run wizard, stuck modal) blocks the whole Node event loop
 // indefinitely, freezing the entire board for every kiosk user.
+// Open-SupportMail.ps1 keeps its own 10s INNER timeout on the Outlook COM
+// attempt so a hung COM activation (seen live on a new-Outlook-only kiosk)
+// can never consume this whole budget — the script's internal mailto fallback
+// still runs, well inside these 30s. Keep this comfortably larger than
+// (inner COM timeout + mailto launch + powershell.exe startup).
 const SUPPORT_SPAWN_TIMEOUT_MS = 30_000;
 
 export interface SupportRequestInput {
@@ -347,7 +352,10 @@ function resolveSupportMailScript(): string | null {
  * first and falls back to a recipient-only mailto: internally — a single
  * invocation so a "failed" first attempt can never fire a second UI-touching
  * launch on top of a compose window that is already on screen (seen live:
- * decoded subject/body dumped into the To field). Subject and Body both travel
+ * decoded subject/body dumped into the To field). The script bounds the COM
+ * attempt with its own 10s inner timeout so a hung COM activation can't eat
+ * this call's whole 30s budget and starve the internal mailto fallback (seen
+ * live: ETIMEDOUT with nothing opened at all). Subject and Body both travel
  * via temp files, never through powershell.exe's legacy argv tokenizer.
  * Returns the method the script reports on stdout, or null if nothing opened.
  */
