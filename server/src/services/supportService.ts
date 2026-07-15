@@ -342,18 +342,37 @@ function resolveSupportMailScript(): string | null {
   return fs.existsSync(script) ? script : null;
 }
 
+/**
+ * Run Open-SupportMail.ps1 exactly once. The script tries classic Outlook COM
+ * first and falls back to a recipient-only mailto: internally — a single
+ * invocation so a "failed" first attempt can never fire a second UI-touching
+ * launch on top of a compose window that is already on screen (seen live:
+ * decoded subject/body dumped into the To field). Subject and Body both travel
+ * via temp files, never through powershell.exe's legacy argv tokenizer.
+ * Returns the method the script reports on stdout, or null if nothing opened.
+ */
 function runSupportMailScript(
-  mode: 'outlook' | 'mailto',
   zipPath: string,
   to: string,
   subject: string,
   body: string
-): boolean {
+): SupportDeliveryMethod | null {
   const script = resolveSupportMailScript();
-  if (!script || process.platform !== 'win32') return false;
+  if (!script || process.platform !== 'win32') return null;
 
-  const bodyPath = path.join(os.tmpdir(), `vrsi-support-body-${Date.now()}.txt`);
+  let stagingDir: string;
   try {
+    stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vrsi-support-mail-'));
+  } catch (e) {
+    logger.warn('Could not create support mail staging dir', {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return null;
+  }
+  try {
+    const subjectPath = path.join(stagingDir, 'subject.txt');
+    const bodyPath = path.join(stagingDir, 'body.txt');
+    fs.writeFileSync(subjectPath, subject, 'utf8');
     fs.writeFileSync(bodyPath, body, 'utf8');
     const ps = spawnSync(
       'powershell.exe',
@@ -368,40 +387,47 @@ function runSupportMailScript(
         zipPath,
         '-To',
         to,
-        '-Subject',
-        subject,
+        '-SubjectPath',
+        subjectPath,
         '-BodyPath',
         bodyPath,
-        '-Mode',
-        mode,
       ],
       { encoding: 'utf8', windowsHide: true, timeout: SUPPORT_SPAWN_TIMEOUT_MS }
     );
     if (ps.error) {
       logger.warn('Support mail script failed to run or timed out', {
-        mode,
         error: ps.error.message,
       });
-      return false;
+      return null;
     }
-    return ps.status === 0;
+    if (ps.status !== 0) {
+      // The script writes the real failure reason (e.g. the Outlook COM
+      // exception) to stderr — surface it instead of failing silently.
+      logger.warn('Support mail script could not open a mail window', {
+        status: ps.status,
+        stderr: (ps.stderr ?? '').trim().slice(0, 2000),
+      });
+      return null;
+    }
+    const method = (ps.stdout ?? '').trim();
+    if (method === 'outlook' || method === 'mailto') return method;
+    logger.warn('Support mail script returned unexpected output', {
+      stdout: method.slice(0, 200),
+    });
+    return null;
   } catch (e) {
     logger.warn('Support mail script failed', {
-      mode,
       error: e instanceof Error ? e.message : String(e),
     });
-    return false;
+    return null;
   } finally {
-    try {
-      fs.unlinkSync(bodyPath);
-    } catch {
-      /* ignore */
-    }
+    rmDirRecursive(stagingDir);
   }
 }
 
 /**
- * Try Outlook with zip attached; on failure open mailto: via the shell (Windows).
+ * Try Outlook with zip attached; the script itself falls back to a
+ * recipient-only mailto: when Outlook COM is unavailable (Windows).
  * Email address is never returned to the client.
  */
 export function composeSupportMail(
@@ -417,12 +443,8 @@ export function composeSupportMail(
   const attachPath = savedPath ?? zipPath;
 
   if (process.platform === 'win32') {
-    if (runSupportMailScript('outlook', attachPath, to, subject, body)) {
-      return 'outlook';
-    }
-    if (runSupportMailScript('mailto', attachPath, to, subject, body)) {
-      return 'mailto';
-    }
+    const method = runSupportMailScript(attachPath, to, subject, body);
+    if (method) return method;
     logger.warn('Support mail could not open Outlook or mailto — user must email manually');
   }
 
