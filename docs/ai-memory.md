@@ -8,11 +8,27 @@
 
 ## Current State
 
-**Version:** v1.1.9 (root + server + client + shared — release commit on main).
+**Version:** v1.1.10 (root + server + client + shared — release commit on main).
 
-**Last completed task:** Fixed the v1.1.8 regression where a HUNG Outlook COM activation ate the whole 30s spawn budget so the script's internal mailto fallback never ran (nothing opened at all). Fixed, verified live on the actual affected machine (real hang reproduced, real 13.3s run, real clean mailto window — screenshot-confirmed), and released as v1.1.9.
+**Last completed task:** After Brian updated his installed copy to v1.1.9 and tested live, the fallback mail opened correctly but with no Subject (expected — v1.1.8 had stripped it entirely). Live-verified directly on the same hanging-COM machine that a subject-only mailto query string (no body) does NOT reproduce the original garbling bug — restored `?subject=` to the fallback in `Open-SupportMail.ps1`, keeping `&body=` out. Released as v1.1.10.
 
-**Next task:** Update this machine's installed copy (`C:\Program Files\VRSI WallBoard\`, tray-managed, Scheduled Task "VRSI WallBoard Tray") from v1.1.8 → v1.1.9 via the in-app Update button so the tray-managed instance itself runs the fix (the direct smoke test that verified this ran the repo's build standalone, not through the installed/tray copy).
+**Next task:** Update this machine's installed copy (`C:\Program Files\VRSI WallBoard\`, tray-managed, Scheduled Task "VRSI WallBoard Tray") from v1.1.9 → v1.1.10 via the in-app Update button, then re-test Ctrl+M → Support → Send through the real app UI and confirm both To and Subject look correct.
+
+---
+
+## Support-mail fallback missing Subject, round 3 (shipped in v1.1.10)
+
+**Report:** Brian updated to v1.1.9 and tested live — the fallback mail opened correctly (no garbling, no hang) but with an **empty Subject**. Expected: the v1.1.8 fix had deliberately stripped `?subject=&body=` from the fallback mailto URI entirely, since a well-formed subject+body query string was the proven garbling vector on this new-Outlook machine.
+
+**Question:** does *subject alone* (no body) trigger the same garbling, or was body specifically the problem?
+
+**Answer, verified live (not guessed) on the exact same hanging-COM machine:** subject-only does NOT garble. Two separate live tests:
+1. Raw `Start-Process "mailto:$to?subject=$encoded"` — window opened with correct To and correct Subject (em-dash and parens rendered correctly), screenshot-confirmed.
+2. Through the actual `Open-SupportMail.ps1` script path (fresh subject/body temp files, real invocation) — same clean result, window title showed the exact subject text.
+
+**Fix:** `Open-SupportMail.ps1`'s Attempt 2 now sends `mailto:${To}?subject=$encodedSubject` (Subject restored, `&body=` stays out — untested, and the full message is already in the zip's `message.txt` for the manual-attach flow regardless). Comments updated in `supportService.ts` and `docs/code-guide.md` to describe "To + Subject, no Body" instead of "recipient only".
+
+**Verified:** `npm run build` clean, `npm test --prefix server` 63/63, ps1 parses under PS 5.1 (0 errors), live smoke test through the real script path: 13.3s, exit 0, stdout `mailto`, window title showed the correct subject.
 
 ---
 
@@ -105,19 +121,19 @@ https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.7 (zip + sha256 uploa
 
 ---
 
-## Release flow (v1.1.9)
+## Release flow (v1.1.10)
 
 1. `npm run build` at root
-2. `scripts\windows\Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.9.zip` + `.sha256`
-3. `gh release create v1.1.9 "releases\VRSI-WallBoard-v1.1.9.zip" "releases\VRSI-WallBoard-v1.1.9.zip.sha256"`
-4. Prune local `releases/` to 2 most recent versions (v1.1.8 + v1.1.9 after this release)
+2. `scripts\windows\Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.10.zip` + `.sha256`
+3. `gh release create v1.1.10 "releases\VRSI-WallBoard-v1.1.10.zip" "releases\VRSI-WallBoard-v1.1.10.zip.sha256"`
+4. Prune local `releases/` to 2 most recent versions (v1.1.9 + v1.1.10 after this release)
 
 ---
 
 ## Context for Next Session
 
-1. Latest release: **v1.1.9** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.9
-2. Support-mail fix is live-verified via direct script invocation on the real hanging machine (see above) — the one remaining step is updating this machine's installed/tray copy to v1.1.9 and re-confirming through the actual app UI, not required to trust the fix itself.
+1. Latest release: **v1.1.10** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.10
+2. Support-mail fallback (To + Subject, no Body) is live-verified via direct script invocation on the real hanging machine (see above, round 3) — the one remaining step is updating this machine's installed/tray copy to v1.1.10 and re-confirming through the actual app UI.
 3. Support inbox preconfigured to `briank@vrs-inc.com` (code default + installer `.env`)
 4. Staff: Ctrl+M → Support → describe problem → Send support report
-5. Kiosks still need to update from v1.1.6/v1.1.7/v1.1.8 → v1.1.9 to pick up the Outlook-hang timeout fix, the mailto-garbling fix, and the COM-hang-starves-fallback fix
+5. Kiosks still need to update from v1.1.6 through v1.1.9 → v1.1.10 to pick up the Outlook-hang timeout fix, the mailto-garbling fix, the COM-hang-starves-fallback fix, and the restored fallback Subject

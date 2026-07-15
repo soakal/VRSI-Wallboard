@@ -349,7 +349,8 @@ function resolveSupportMailScript(): string | null {
 
 /**
  * Run Open-SupportMail.ps1 exactly once. The script tries classic Outlook COM
- * first and falls back to a recipient-only mailto: internally — a single
+ * first and falls back to a mailto: (To + Subject, no Body — verified live
+ * that Subject alone doesn't trigger the garbling below) internally — a single
  * invocation so a "failed" first attempt can never fire a second UI-touching
  * launch on top of a compose window that is already on screen (seen live:
  * decoded subject/body dumped into the To field). The script bounds the COM
@@ -435,7 +436,7 @@ function runSupportMailScript(
 
 /**
  * Try Outlook with zip attached; the script itself falls back to a
- * recipient-only mailto: when Outlook COM is unavailable (Windows).
+ * mailto: (To + Subject, no Body) when Outlook COM is unavailable (Windows).
  * Email address is never returned to the client.
  */
 export function composeSupportMail(

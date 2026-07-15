@@ -16,7 +16,7 @@
 #
 # Contract with the server (supportService.ts):
 #   exit 0 + "outlook" on stdout  → classic Outlook compose shown, zip attached
-#   exit 0 + "mailto"  on stdout  → default mail app launched (recipient only)
+#   exit 0 + "mailto"  on stdout  → default mail app launched (To + Subject; no Body)
 #   exit non-zero                 → nothing usable opened; reason on stderr
 #
 # Subject and Body both arrive via temp files (never as raw argv) so no value
@@ -157,14 +157,17 @@ if ($finished) {
     # Hung before Display() — safe to fall through to mailto below.
 }
 
-# --- Attempt 2: bare mailto (recipient only). ?subject=&body= parameters are
-# deliberately omitted: the "new Outlook" (olk.exe) mailto handler was observed
-# live decoding a well-formed query string into the To field (Subject empty,
+# --- Attempt 2: mailto with subject only. ?body= is deliberately omitted:
+# the "new Outlook" (olk.exe) mailto handler was observed live decoding a
+# well-formed subject+body query string into the To field (Subject empty,
 # recipient replaced by "=<subject>&body=<body>"), producing an unsendable
-# message. Everything the recipient needs is already inside the zip
-# (message.txt), which the user attaches by hand on this path anyway.
+# message. A subject-only query string was verified live on the same machine
+# to populate cleanly with no garbling (To and Subject both correct) — body
+# stays untested and out, but it's fully preserved in the zip's message.txt,
+# which the user attaches by hand on this path anyway.
 try {
-    Start-Process "mailto:$To"
+    $encodedSubject = [uri]::EscapeDataString($Subject)
+    Start-Process "mailto:${To}?subject=$encodedSubject"
     Write-Output 'mailto'
     Exit-Hard 0
 } catch {
