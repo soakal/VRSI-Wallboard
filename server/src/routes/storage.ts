@@ -9,6 +9,13 @@ import { getPersistence, reloadPersistence } from '../storage/factory.js';
 import { runBackup, type BackupTrigger } from '../services/backupService.js';
 import { withBoardWriteLock } from '../services/boardService.js';
 import { requireAdminToken } from '../middleware/adminAuth.js';
+import { logAudit } from '../services/auditService.js';
+import {
+  deliverSupportReport,
+  resolveArchivedSupportZip,
+  SUPPORT_MESSAGE_MAX,
+  SUPPORT_CONTACT_MAX,
+} from '../services/supportService.js';
 
 export const storageRouter = Router();
 storageRouter.use(requireAdminToken);
@@ -120,6 +127,89 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
       message: 'Database restored. Reload the page to see updated data.',
     },
   });
+});
+
+/** Support form limits (support inbox is server-side only — not exposed to the client). */
+storageRouter.get('/support-info', (_req: Request, res: Response) => {
+  res.json({
+    data: {
+      maxMessageLength: SUPPORT_MESSAGE_MAX,
+      maxContactLength: SUPPORT_CONTACT_MAX,
+    },
+  });
+});
+
+/**
+ * Build a support zip and open the user's mail app (Outlook with attachment when
+ * available, otherwise mailto:). Returns JSON only — SUPPORT_EMAIL never sent to client.
+ */
+storageRouter.post('/support', (req: Request, res: Response) => {
+  const body = req.body as {
+    message?: unknown;
+    contactName?: unknown;
+    replyTo?: unknown;
+    attachLogs?: unknown;
+  };
+
+  const message = typeof body.message === 'string' ? body.message : '';
+  const contactName = typeof body.contactName === 'string' ? body.contactName : undefined;
+  const replyTo = typeof body.replyTo === 'string' ? body.replyTo : undefined;
+  const attachLogs = body.attachLogs !== false && body.attachLogs !== 'false';
+
+  let result: ReturnType<typeof deliverSupportReport>;
+  try {
+    result = deliverSupportReport({ message, contactName, replyTo, attachLogs });
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    if (err.code === 'validation_error') {
+      res.status(400).json({
+        error: { code: 'validation_error', message: err.message ?? 'Invalid support request' },
+      });
+      return;
+    }
+    logger.warn('Support report failed', { error: e });
+    res.status(500).json({
+      error: { code: 'support_bundle_failed', message: 'Could not build the support package' },
+    });
+    return;
+  }
+
+  logAudit(
+    'system',
+    `Support report packaged (${result.method})`,
+    result.savedPath ?? result.filename,
+    true,
+    result.sizeBytes
+  );
+
+  res.json({
+    data: {
+      method: result.method,
+      filename: result.filename,
+      savedPath: result.savedPath,
+    },
+  });
+});
+
+/** Download a packaged support zip (mailto fallback — attach manually). */
+storageRouter.get('/support-download/:filename', (req: Request, res: Response) => {
+  const file = resolveArchivedSupportZip(String(req.params.filename ?? ''));
+  if (!file) {
+    res.status(404).json({ error: { code: 'not_found', message: 'Support package not found' } });
+    return;
+  }
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${path.basename(file)}"`);
+  const stream = fs.createReadStream(file);
+  stream.on('error', (e) => {
+    logger.warn('Support zip download failed', { error: e });
+    if (!res.headersSent) {
+      res.status(500).json({ error: { code: 'download_failed', message: 'Could not read support package' } });
+    } else {
+      res.end();
+    }
+  });
+  stream.pipe(res);
 });
 
 /** Download the combined server log (tail-capped) so IT can diagnose remotely. */

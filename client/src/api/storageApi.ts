@@ -102,3 +102,65 @@ export async function restoreBackup(file: string): Promise<{ preRestoreFile: str
   const json = (await res.json()) as { data: { preRestoreFile: string | null; conflicts: RestoreConflict[] } };
   return json.data;
 }
+
+export interface SupportInfo {
+  maxMessageLength: number;
+  maxContactLength: number;
+}
+
+export interface SupportSubmitInput {
+  message: string;
+  contactName?: string;
+  replyTo?: string;
+  attachLogs?: boolean;
+}
+
+export type SupportDeliveryMethod = 'outlook' | 'mailto';
+
+export interface SupportSubmitResult {
+  method: SupportDeliveryMethod;
+  filename: string;
+  savedPath: string | null;
+}
+
+export async function fetchSupportInfo(): Promise<SupportInfo> {
+  const res = await fetch('/api/storage/support-info');
+  if (!res.ok) throw new Error('Failed to load support info');
+  const json = (await res.json()) as { data: SupportInfo };
+  return json.data;
+}
+
+export async function submitSupportReport(input: SupportSubmitInput): Promise<SupportSubmitResult> {
+  const res = await fetch('/api/storage/support', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: { message?: string } | string;
+    };
+    const e = body.error;
+    const msg =
+      typeof e === 'object' && e?.message
+        ? e.message
+        : typeof e === 'string'
+          ? e
+          : 'Could not build the support package';
+    throw new Error(msg);
+  }
+  const json = (await res.json()) as { data: SupportSubmitResult };
+  return json.data;
+}
+
+export async function downloadSupportPackage(filename: string): Promise<void> {
+  const res = await fetch(`/api/storage/support-download/${encodeURIComponent(filename)}`);
+  if (!res.ok) throw new Error('Could not download the support package');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

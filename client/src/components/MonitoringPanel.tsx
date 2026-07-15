@@ -3,13 +3,17 @@ import {
   fetchAuditLog,
   fetchBackups,
   fetchSecurityReport,
+  fetchSupportInfo,
+  downloadSupportPackage,
   restoreBackup,
   RestoreConflictError,
   runBackupNow,
+  submitSupportReport,
   type AuditEntry,
   type BackupFile,
   type BackupsResponse,
   type SecurityReport,
+  type SupportInfo,
 } from '../api/storageApi';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
 
@@ -18,7 +22,7 @@ interface MonitoringPanelProps {
   onClose: () => void;
 }
 
-type Tab = 'it' | 'backup' | 'activity';
+type Tab = 'it' | 'backup' | 'activity' | 'support';
 
 function isFetchFailure(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
@@ -38,16 +42,26 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
   const [filter, setFilter] = useState<string>('all');
   const { currentVersion } = useUpdateCheck();
 
+  const [supportInfo, setSupportInfo] = useState<SupportInfo | null>(null);
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportContact, setSupportContact] = useState('');
+  const [supportReplyTo, setSupportReplyTo] = useState('');
+  const [supportAttachLogs, setSupportAttachLogs] = useState(true);
+  const [supportBusy, setSupportBusy] = useState(false);
+  const [supportError, setSupportError] = useState<string | null>(null);
+  const [supportOk, setSupportOk] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setReportError(null);
     setAuditError(null);
     setBackupError(null);
 
-    const [reportRes, auditRes, backupRes] = await Promise.allSettled([
+    const [reportRes, auditRes, backupRes, supportRes] = await Promise.allSettled([
       fetchSecurityReport(),
       fetchAuditLog(300),
       fetchBackups(),
+      fetchSupportInfo(),
     ]);
 
     if (reportRes.status === 'fulfilled') {
@@ -88,6 +102,10 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
       );
     }
 
+    if (supportRes.status === 'fulfilled') {
+      setSupportInfo(supportRes.value);
+    }
+
     setLoading(false);
   }, []);
 
@@ -102,6 +120,49 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
       setBackupError(err instanceof Error ? err.message : 'Backup failed');
     } finally {
       setBackupBusy(false);
+    }
+  };
+
+  const handleSendSupport = async () => {
+    setSupportBusy(true);
+    setSupportError(null);
+    setSupportOk(null);
+    try {
+      const result = await submitSupportReport({
+        message: supportMessage,
+        contactName: supportContact.trim() || undefined,
+        replyTo: supportReplyTo.trim() || undefined,
+        attachLogs: supportAttachLogs,
+      });
+
+      if (result.method === 'mailto') {
+        try {
+          await downloadSupportPackage(result.filename);
+        } catch {
+          /* Desktop copy may still exist */
+        }
+      }
+
+      if (result.method === 'outlook') {
+        setSupportOk(
+          result.savedPath
+            ? `Outlook opened with your report attached.\n\nReview the message and click Send.\n\nA copy is also on your Desktop:\n${result.savedPath}`
+            : 'Outlook opened with your report attached. Review the message and click Send.'
+        );
+      } else if (result.savedPath) {
+        setSupportOk(
+          `Your mail app should open.\n\nAttach the zip from your Desktop:\n${result.savedPath}\n\nA copy was also downloaded to your browser Downloads folder.`
+        );
+      } else {
+        setSupportOk(
+          'Your mail app should open. Attach the downloaded zip before sending.'
+        );
+      }
+      setSupportMessage('');
+    } catch (err) {
+      setSupportError(err instanceof Error ? err.message : 'Could not build the support package');
+    } finally {
+      setSupportBusy(false);
     }
   };
 
@@ -202,7 +263,7 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
           <div>
             <h2 className="text-sm font-semibold text-slate-100">System &amp; IT Report</h2>
             <p className="text-[11px] text-slate-500">
-              Backups, audit log, safety summary
+              Backups, audit log, support, safety summary
               {currentVersion ? ` · WallBoard v${currentVersion}` : ''}
             </p>
           </div>
@@ -237,6 +298,13 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
             className={`px-3 py-1.5 text-xs rounded-t font-medium ${tab === 'activity' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}
           >
             Activity log
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('support')}
+            className={`px-3 py-1.5 text-xs rounded-t font-medium ${tab === 'support' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            Support
           </button>
         </div>
 
@@ -429,6 +497,75 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {tab === 'support' && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400">
+                Describe the problem, then send a support package to VRSI. The app saves a zip on
+                your Desktop when possible and opens your mail app — attach the zip if it is not
+                already attached, then click Send.
+              </p>
+              <label className="block space-y-1">
+                <span className="text-xs text-slate-400">What went wrong? (required)</span>
+                <textarea
+                  value={supportMessage}
+                  onChange={(e) => setSupportMessage(e.target.value)}
+                  rows={5}
+                  maxLength={supportInfo?.maxMessageLength ?? 4000}
+                  placeholder="What were you doing, what did you expect, and what happened instead?"
+                  className="w-full text-sm bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-100 placeholder:text-slate-600 resize-y min-h-[100px]"
+                />
+                <span className="text-[10px] text-slate-600">
+                  {supportMessage.length}/{supportInfo?.maxMessageLength ?? 4000}
+                </span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-400">Your name (optional)</span>
+                  <input
+                    type="text"
+                    value={supportContact}
+                    onChange={(e) => setSupportContact(e.target.value)}
+                    maxLength={supportInfo?.maxContactLength ?? 200}
+                    className="w-full text-sm bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-slate-100"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-400">Reply email (optional)</span>
+                  <input
+                    type="email"
+                    value={supportReplyTo}
+                    onChange={(e) => setSupportReplyTo(e.target.value)}
+                    maxLength={supportInfo?.maxContactLength ?? 200}
+                    className="w-full text-sm bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-slate-100"
+                  />
+                </label>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={supportAttachLogs}
+                  onChange={(e) => setSupportAttachLogs(e.target.checked)}
+                  className="rounded border-slate-600"
+                />
+                Attach recent server logs + system info (recommended)
+              </label>
+              {supportError && <p className="text-xs text-red-400 whitespace-pre-wrap">{supportError}</p>}
+              {supportOk && <p className="text-xs text-emerald-400 whitespace-pre-wrap">{supportOk}</p>}
+              <button
+                type="button"
+                onClick={() => void handleSendSupport()}
+                disabled={supportBusy || !supportMessage.trim()}
+                className="w-full text-sm px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {supportBusy ? 'Packaging…' : 'Send support report'}
+              </button>
+              <p className="text-[10px] text-slate-600">
+                Or use <span className="text-slate-500">Download logs</span> below for a plain log
+                file only.
+              </p>
             </div>
           )}
         </div>

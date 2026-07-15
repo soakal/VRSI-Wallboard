@@ -246,18 +246,29 @@ Get-ChildItem "C:\ProgramData\VRSIWallBoard\backups\" | Sort-Object LastWriteTim
 
 ## 4. Sending Logs for Support
 
+### 4.0 In-app Support button (preferred)
+
+1. Open **System & IT Report** (Monitoring) — Ctrl+M, or the Monitoring button in the footer.
+2. Open the **Support** tab (next to Activity log / Download logs).
+3. Describe the problem, optionally add your name and a reply email.
+4. Leave **Attach recent server logs** checked.
+5. Click **Send support report**.
+
+The app saves a zip on the Desktop when possible and opens your mail app. If Outlook is installed, the zip is attached automatically; otherwise attach the zip manually, then click Send. The developer inbox is configured server-side (`SUPPORT_EMAIL` in `.env`) and is not shown in the app.
+
 ### 4.1 Where logs are stored
 
 | Log | Location | Contents |
 |-----|----------|----------|
 | Application log | `C:\ProgramData\VRSIWallBoard\logs\` | Server events, errors, startup |
 | Audit log | `wallboard.db` (table `audit_log`) | File operations, network calls, backups |
+| Support zips | `C:\ProgramData\VRSIWallBoard\logs\support-reports\` | Copies of in-app support packages |
 
 Log files are named by date: `wallboard-2026-06-04.log`.
 
-### 4.2 Collect logs for a support request
+### 4.2 Collect logs for a support request (manual)
 
-Run this script to bundle the last 7 days of logs plus system info into a zip file on your Desktop:
+If the in-app Support tab is unavailable, run this script to bundle the last 7 days of logs plus system info into a zip file on your Desktop:
 
 ```powershell
 $zipPath = "$env:USERPROFILE\Desktop\vrsi-wallboard-logs-$(Get-Date -f yyyy-MM-dd).zip"
