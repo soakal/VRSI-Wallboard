@@ -8,11 +8,11 @@
 
 ## Current State
 
-**Version:** v1.1.11 (root + server + client + shared — release commit on main).
+**Version:** v1.1.11 (root + server + client + shared — release commit on main). **Live-confirmed working end-to-end** — Brian updated this machine's installed/tray copy to v1.1.11 and confirmed Ctrl+M → Support → Send works as intended (mail app opens with correct To + Subject, zip already on the Desktop, no redundant save prompt).
 
-**Last completed task:** Brian noted the app was auto-saving the support zip to the Desktop AND separately prompting a browser "Save As" dialog for the same file on the mailto fallback path — redundant. Fixed `MonitoringPanel.tsx` to only trigger the browser download when there's no Desktop copy already saved (`!result.savedPath`). Released as v1.1.11.
+**Last completed task:** The full Support-mail bug arc is closed: v1.1.7 (spawnSync timeout) → v1.1.8 (single-invocation, killed the garbling) → v1.1.9 (inner COM timeout, killed the COM-hang-starves-fallback regression) → v1.1.10 (restored Subject on the fallback) → v1.1.11 (removed the redundant Desktop+download double-save). Considered a Microsoft Graph `Mail.Send`-based auto-attach path (would eliminate the manual-attach step entirely) but decided against it — new permission scope + possible Entra ID admin consent for a fallback that already works well enough. Staying at v1.1.11.
 
-**Next task:** Update this machine's installed copy (`C:\Program Files\VRSI WallBoard\`, tray-managed, Scheduled Task "VRSI WallBoard Tray") from v1.1.10 → v1.1.11 via the in-app Update button, then re-test Ctrl+M → Support → Send through the real app UI — confirm To + Subject are correct AND no redundant save-file prompt appears.
+**Next task:** None outstanding on Support. Normal kiosk fleet still needs to update from whatever version they're on to v1.1.11 to pick up all five fixes above.
 
 ---
 
@@ -24,7 +24,7 @@
 
 **Fix:** the download now only fires when `!result.savedPath` — i.e. only when the Desktop copy genuinely failed and the browser download is the only way to get the file. The success message no longer claims "a copy was also downloaded to your browser Downloads folder" when a Desktop copy already exists.
 
-**Verified:** `npm run build` clean, `npm test --prefix server` 63/63. This is a client-only UI change — no PowerShell/COM behavior involved, so no live-Outlook verification needed for this one, just confirm no download prompt appears when a Desktop copy exists.
+**Verified:** `npm run build` clean, `npm test --prefix server` 63/63, and **live-confirmed by Brian** on the real installed/tray copy — Send opens the mail app with correct To + Subject, zip already on the Desktop, no redundant save prompt. This closes the Support-mail bug arc (v1.1.7 → v1.1.11); see "Current State" above for the full chain.
 
 ---
 
