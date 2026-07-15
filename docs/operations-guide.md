@@ -254,7 +254,7 @@ Get-ChildItem "C:\ProgramData\VRSIWallBoard\backups\" | Sort-Object LastWriteTim
 4. Leave **Attach recent server logs** checked.
 5. Click **Send support report**.
 
-The app downloads a zip (and saves a copy to the Desktop when possible), then opens your mail app addressed to the support inbox (`SUPPORT_EMAIL` in `.env`, default `briank@vrs-inc.com`). **Attach the zip before sending.**
+The app saves a zip on the Desktop when possible and opens your mail app. If Outlook is installed, the zip is attached automatically; otherwise attach the zip manually, then click Send. The developer inbox is configured server-side (`SUPPORT_EMAIL` in `.env`) and is not shown in the app.
 
 ### 4.1 Where logs are stored
 

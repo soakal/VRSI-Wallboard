@@ -6,7 +6,9 @@ import path from 'path';
 import { resetPersistenceForTests } from '../storage/factory.js';
 import {
   buildSupportBundle,
+  buildSupportMailContent,
   cleanupSupportTemp,
+  resolveArchivedSupportZip,
   resolveSupportEmail,
   DEFAULT_SUPPORT_EMAIL,
   SUPPORT_MESSAGE_MAX,
@@ -71,12 +73,26 @@ describe('supportService', () => {
       assert.ok(bundle.filename.startsWith('vrsi-wallboard-support-'));
       assert.ok(bundle.filename.endsWith('.zip'));
       assert.ok(bundle.sizeBytes > 40);
-      assert.equal(bundle.supportEmail, DEFAULT_SUPPORT_EMAIL);
       // Archive copy under logs/support-reports
       assert.ok(bundle.savedPath);
       assert.ok(fs.existsSync(bundle.savedPath!));
+      assert.equal(resolveArchivedSupportZip(bundle.filename), bundle.savedPath);
     } finally {
       cleanupSupportTemp(bundle.zipPath);
     }
+  });
+
+  it('buildSupportMailContent does not embed a support inbox address', () => {
+    const { subject, body } = buildSupportMailContent(
+      'Save failed',
+      'Jane',
+      'jane@customer.com',
+      'vrsi-wallboard-support-test.zip',
+      'C:\\Users\\jane\\Desktop\\vrsi-wallboard-support-test.zip'
+    );
+    assert.match(subject, /VRSI WallBoard support/);
+    assert.match(body, /Save failed/);
+    assert.match(body, /jane@customer.com/);
+    assert.doesNotMatch(body, /@vrs-inc\.com/i);
   });
 });

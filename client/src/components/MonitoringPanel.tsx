@@ -4,6 +4,7 @@ import {
   fetchBackups,
   fetchSecurityReport,
   fetchSupportInfo,
+  downloadSupportPackage,
   restoreBackup,
   RestoreConflictError,
   runBackupNow,
@@ -26,34 +27,6 @@ type Tab = 'it' | 'backup' | 'activity' | 'support';
 function isFetchFailure(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed');
-}
-
-function openSupportMailto(
-  supportEmail: string,
-  message: string,
-  filename: string,
-  savedPath: string | null,
-  contactName: string,
-  replyTo: string
-): void {
-  const subject = `VRSI WallBoard support — ${new Date().toISOString().slice(0, 10)}`;
-  const attachHint = savedPath
-    ? `Please attach this file from the Desktop (or Downloads):\n${savedPath}`
-    : `Please attach the downloaded zip file:\n${filename}`;
-  const body = [
-    contactName ? `From: ${contactName}` : null,
-    replyTo ? `Reply-to: ${replyTo}` : null,
-    contactName || replyTo ? '' : null,
-    message.trim(),
-    '',
-    '---',
-    attachHint,
-  ]
-    .filter((line): line is string => line !== null)
-    .join('\n');
-
-  const mailto = `mailto:${encodeURIComponent(supportEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  window.location.href = mailto;
 }
 
 const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) => {
@@ -162,33 +135,29 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
         attachLogs: supportAttachLogs,
       });
 
-      const url = URL.createObjectURL(result.blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = result.filename;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      const email = result.supportEmail || supportInfo?.supportEmail || '';
-      if (email) {
-        openSupportMailto(
-          email,
-          supportMessage,
-          result.filename,
-          result.savedPath,
-          supportContact.trim(),
-          supportReplyTo.trim()
-        );
+      if (result.method === 'mailto') {
+        try {
+          await downloadSupportPackage(result.filename);
+        } catch {
+          /* Desktop copy may still exist */
+        }
       }
 
-      const where = result.savedPath
-        ? `Zip saved to:\n${result.savedPath}`
-        : `Zip downloaded as ${result.filename}`;
-      setSupportOk(
-        email
-          ? `${where}\n\nYour mail app should open — attach the zip and send to ${email}.`
-          : `${where}\n\nAttach the zip and email it to your VRSI support contact.`
-      );
+      if (result.method === 'outlook') {
+        setSupportOk(
+          result.savedPath
+            ? `Outlook opened with your report attached.\n\nReview the message and click Send.\n\nA copy is also on your Desktop:\n${result.savedPath}`
+            : 'Outlook opened with your report attached. Review the message and click Send.'
+        );
+      } else if (result.savedPath) {
+        setSupportOk(
+          `Your mail app should open.\n\nAttach the zip from your Desktop:\n${result.savedPath}\n\nA copy was also downloaded to your browser Downloads folder.`
+        );
+      } else {
+        setSupportOk(
+          'Your mail app should open. Attach the downloaded zip before sending.'
+        );
+      }
       setSupportMessage('');
     } catch (err) {
       setSupportError(err instanceof Error ? err.message : 'Could not build the support package');
@@ -534,16 +503,9 @@ const MonitoringPanel: React.FC<MonitoringPanelProps> = ({ isOpen, onClose }) =>
           {tab === 'support' && (
             <div className="space-y-3">
               <p className="text-xs text-slate-400">
-                Describe the problem, then send a support package. This downloads a zip (and saves a
-                copy to the Desktop when possible) and opens your mail app
-                {supportInfo?.supportEmail ? (
-                  <>
-                    {' '}
-                    to{' '}
-                    <span className="text-slate-200 font-mono">{supportInfo.supportEmail}</span>
-                  </>
-                ) : null}
-                . Attach the zip before sending.
+                Describe the problem, then send a support package to VRSI. The app saves a zip on
+                your Desktop when possible and opens your mail app — attach the zip if it is not
+                already attached, then click Send.
               </p>
               <label className="block space-y-1">
                 <span className="text-xs text-slate-400">What went wrong? (required)</span>

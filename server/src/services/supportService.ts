@@ -2,6 +2,7 @@ import { spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { resolveLogsDir } from '../lib/paths.js';
 import { getPersistence } from '../storage/factory.js';
@@ -36,7 +37,15 @@ export interface SupportBundleResult {
   zipPath: string;
   filename: string;
   savedPath: string | null;
-  supportEmail: string;
+  sizeBytes: number;
+}
+
+export type SupportDeliveryMethod = 'outlook' | 'mailto';
+
+export interface SupportDeliveryResult {
+  method: SupportDeliveryMethod;
+  filename: string;
+  savedPath: string | null;
   sizeBytes: number;
 }
 
@@ -196,7 +205,6 @@ export function buildSupportBundle(input: SupportRequestInput): SupportBundleRes
   const contactName = (input.contactName ?? '').trim().slice(0, SUPPORT_CONTACT_MAX);
   const replyTo = (input.replyTo ?? '').trim().slice(0, SUPPORT_CONTACT_MAX);
   const attachLogs = input.attachLogs !== false;
-  const supportEmail = resolveSupportEmail();
   const stamp = stampForFilename();
   const filename = `vrsi-wallboard-support-${stamp}.zip`;
 
@@ -263,7 +271,7 @@ export function buildSupportBundle(input: SupportRequestInput): SupportBundleRes
       });
     }
 
-    return { zipPath, filename, savedPath, supportEmail, sizeBytes };
+    return { zipPath, filename, savedPath, sizeBytes };
   } catch (e) {
     rmDirRecursive(tmpRoot);
     throw e;
@@ -276,4 +284,154 @@ export function cleanupSupportTemp(zipPath: string): void {
   if (tmpRoot.includes('vrsi-support-')) {
     rmDirRecursive(tmpRoot);
   }
+}
+
+export function supportReportsArchiveDir(): string {
+  return path.join(resolveLogsDir(), 'support-reports');
+}
+
+/** Path to a packaged support zip in the archive dir (for optional browser download). */
+export function resolveArchivedSupportZip(filename: string): string | null {
+  const base = path.basename(filename);
+  if (base !== filename || !base.endsWith('.zip') || !base.startsWith('vrsi-wallboard-support-')) {
+    return null;
+  }
+  const full = path.join(supportReportsArchiveDir(), base);
+  return fs.existsSync(full) ? full : null;
+}
+
+export function buildSupportMailContent(
+  message: string,
+  contactName: string,
+  replyTo: string,
+  filename: string,
+  savedPath: string | null
+): { subject: string; body: string } {
+  const subject = `VRSI WallBoard support — ${new Date().toISOString().slice(0, 10)}`;
+  const attachHint = savedPath
+    ? `Please attach this support package (if not already attached):\n${savedPath}`
+    : `Please attach the support package zip:\n${filename}`;
+  const body = [
+    contactName ? `From: ${contactName}` : null,
+    replyTo ? `Reply-to: ${replyTo}` : null,
+    contactName || replyTo ? '' : null,
+    message.trim(),
+    '',
+    '---',
+    attachHint,
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n');
+  return { subject, body };
+}
+
+function resolveSupportMailScript(): string | null {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+  const script = path.join(repoRoot, 'scripts', 'windows', 'Open-SupportMail.ps1');
+  return fs.existsSync(script) ? script : null;
+}
+
+function runSupportMailScript(
+  mode: 'outlook' | 'mailto',
+  zipPath: string,
+  to: string,
+  subject: string,
+  body: string
+): boolean {
+  const script = resolveSupportMailScript();
+  if (!script || process.platform !== 'win32') return false;
+
+  const bodyPath = path.join(os.tmpdir(), `vrsi-support-body-${Date.now()}.txt`);
+  try {
+    fs.writeFileSync(bodyPath, body, 'utf8');
+    const ps = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        script,
+        '-ZipPath',
+        zipPath,
+        '-To',
+        to,
+        '-Subject',
+        subject,
+        '-BodyPath',
+        bodyPath,
+        '-Mode',
+        mode,
+      ],
+      { encoding: 'utf8', windowsHide: true }
+    );
+    return ps.status === 0;
+  } catch (e) {
+    logger.warn('Support mail script failed', {
+      mode,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return false;
+  } finally {
+    try {
+      fs.unlinkSync(bodyPath);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
+ * Try Outlook with zip attached; on failure open mailto: via the shell (Windows).
+ * Email address is never returned to the client.
+ */
+export function composeSupportMail(
+  zipPath: string,
+  message: string,
+  contactName: string,
+  replyTo: string,
+  filename: string,
+  savedPath: string | null
+): SupportDeliveryMethod {
+  const to = resolveSupportEmail();
+  const { subject, body } = buildSupportMailContent(message, contactName, replyTo, filename, savedPath);
+  const attachPath = savedPath ?? zipPath;
+
+  if (process.platform === 'win32') {
+    if (runSupportMailScript('outlook', attachPath, to, subject, body)) {
+      return 'outlook';
+    }
+    if (runSupportMailScript('mailto', attachPath, to, subject, body)) {
+      return 'mailto';
+    }
+    logger.warn('Support mail could not open Outlook or mailto — user must email manually');
+  }
+
+  return 'mailto';
+}
+
+/** Build the zip, open mail (Outlook or mailto), and return delivery metadata only. */
+export function deliverSupportReport(input: SupportRequestInput): SupportDeliveryResult {
+  const message = input.message.trim();
+  const contactName = (input.contactName ?? '').trim().slice(0, SUPPORT_CONTACT_MAX);
+  const replyTo = (input.replyTo ?? '').trim().slice(0, SUPPORT_CONTACT_MAX);
+
+  const bundle = buildSupportBundle(input);
+  const method = composeSupportMail(
+    bundle.zipPath,
+    message,
+    contactName,
+    replyTo,
+    bundle.filename,
+    bundle.savedPath
+  );
+  cleanupSupportTemp(bundle.zipPath);
+
+  return {
+    method,
+    filename: bundle.filename,
+    savedPath: bundle.savedPath,
+    sizeBytes: bundle.sizeBytes,
+  };
 }

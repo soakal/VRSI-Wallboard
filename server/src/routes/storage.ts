@@ -11,9 +11,8 @@ import { withBoardWriteLock } from '../services/boardService.js';
 import { requireAdminToken } from '../middleware/adminAuth.js';
 import { logAudit } from '../services/auditService.js';
 import {
-  buildSupportBundle,
-  cleanupSupportTemp,
-  resolveSupportEmail,
+  deliverSupportReport,
+  resolveArchivedSupportZip,
   SUPPORT_MESSAGE_MAX,
   SUPPORT_CONTACT_MAX,
 } from '../services/supportService.js';
@@ -130,11 +129,10 @@ storageRouter.post('/restore', async (req: Request, res: Response) => {
   });
 });
 
-/** Support contact + limits for the in-app support form. */
+/** Support form limits (support inbox is server-side only — not exposed to the client). */
 storageRouter.get('/support-info', (_req: Request, res: Response) => {
   res.json({
     data: {
-      supportEmail: resolveSupportEmail(),
       maxMessageLength: SUPPORT_MESSAGE_MAX,
       maxContactLength: SUPPORT_CONTACT_MAX,
     },
@@ -142,9 +140,8 @@ storageRouter.get('/support-info', (_req: Request, res: Response) => {
 });
 
 /**
- * Build a support zip (message + system info + optional logs), save a Desktop
- * copy when possible, and stream the zip for browser download. Client opens
- * mailto: — no Graph mail.
+ * Build a support zip and open the user's mail app (Outlook with attachment when
+ * available, otherwise mailto:). Returns JSON only — SUPPORT_EMAIL never sent to client.
  */
 storageRouter.post('/support', (req: Request, res: Response) => {
   const body = req.body as {
@@ -159,9 +156,9 @@ storageRouter.post('/support', (req: Request, res: Response) => {
   const replyTo = typeof body.replyTo === 'string' ? body.replyTo : undefined;
   const attachLogs = body.attachLogs !== false && body.attachLogs !== 'false';
 
-  let bundle: ReturnType<typeof buildSupportBundle>;
+  let result: ReturnType<typeof deliverSupportReport>;
   try {
-    bundle = buildSupportBundle({ message, contactName, replyTo, attachLogs });
+    result = deliverSupportReport({ message, contactName, replyTo, attachLogs });
   } catch (e) {
     const err = e as { code?: string; message?: string };
     if (err.code === 'validation_error') {
@@ -170,32 +167,44 @@ storageRouter.post('/support', (req: Request, res: Response) => {
       });
       return;
     }
-    logger.warn('Support bundle failed', { error: e });
+    logger.warn('Support report failed', { error: e });
     res.status(500).json({
       error: { code: 'support_bundle_failed', message: 'Could not build the support package' },
     });
     return;
   }
 
-  logAudit('system', 'Support report packaged', bundle.savedPath ?? bundle.filename, true, bundle.sizeBytes);
+  logAudit(
+    'system',
+    `Support report packaged (${result.method})`,
+    result.savedPath ?? result.filename,
+    true,
+    result.sizeBytes
+  );
 
-  res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', `attachment; filename="${bundle.filename}"`);
-  res.setHeader('X-VRSI-Support-Email', bundle.supportEmail);
-  res.setHeader('X-VRSI-Filename', bundle.filename);
-  if (bundle.savedPath) {
-    res.setHeader('X-VRSI-Saved-Path', bundle.savedPath);
+  res.json({
+    data: {
+      method: result.method,
+      filename: result.filename,
+      savedPath: result.savedPath,
+    },
+  });
+});
+
+/** Download a packaged support zip (mailto fallback — attach manually). */
+storageRouter.get('/support-download/:filename', (req: Request, res: Response) => {
+  const file = resolveArchivedSupportZip(String(req.params.filename ?? ''));
+  if (!file) {
+    res.status(404).json({ error: { code: 'not_found', message: 'Support package not found' } });
+    return;
   }
-
-  const stream = fs.createReadStream(bundle.zipPath);
-  stream.on('close', () => cleanupSupportTemp(bundle.zipPath));
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${path.basename(file)}"`);
+  const stream = fs.createReadStream(file);
   stream.on('error', (e) => {
-    logger.warn('Support zip stream failed', { error: e });
-    cleanupSupportTemp(bundle.zipPath);
+    logger.warn('Support zip download failed', { error: e });
     if (!res.headersSent) {
-      res.status(500).json({
-        error: { code: 'support_bundle_failed', message: 'Could not send the support package' },
-      });
+      res.status(500).json({ error: { code: 'download_failed', message: 'Could not read support package' } });
     } else {
       res.end();
     }

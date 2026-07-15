@@ -104,7 +104,6 @@ export async function restoreBackup(file: string): Promise<{ preRestoreFile: str
 }
 
 export interface SupportInfo {
-  supportEmail: string;
   maxMessageLength: number;
   maxContactLength: number;
 }
@@ -116,10 +115,11 @@ export interface SupportSubmitInput {
   attachLogs?: boolean;
 }
 
+export type SupportDeliveryMethod = 'outlook' | 'mailto';
+
 export interface SupportSubmitResult {
-  blob: Blob;
+  method: SupportDeliveryMethod;
   filename: string;
-  supportEmail: string;
   savedPath: string | null;
 }
 
@@ -149,11 +149,18 @@ export async function submitSupportReport(input: SupportSubmitInput): Promise<Su
           : 'Could not build the support package';
     throw new Error(msg);
   }
+  const json = (await res.json()) as { data: SupportSubmitResult };
+  return json.data;
+}
+
+export async function downloadSupportPackage(filename: string): Promise<void> {
+  const res = await fetch(`/api/storage/support-download/${encodeURIComponent(filename)}`);
+  if (!res.ok) throw new Error('Could not download the support package');
   const blob = await res.blob();
-  const filename =
-    res.headers.get('X-VRSI-Filename') ??
-    `vrsi-wallboard-support-${new Date().toISOString().slice(0, 10)}.zip`;
-  const supportEmail = res.headers.get('X-VRSI-Support-Email') ?? '';
-  const savedPath = res.headers.get('X-VRSI-Saved-Path');
-  return { blob, filename, supportEmail, savedPath };
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
