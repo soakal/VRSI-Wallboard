@@ -14,6 +14,8 @@
 
 **Next task:** None outstanding on Support. Normal kiosk fleet still needs to update from whatever version they're on to v1.1.11 to pick up all five fixes above.
 
+**Fleet visibility gap (confirmed, not yet acted on):** there is no way to remotely check what version any OTHER kiosk is running — `server/src/routes/update.ts` (`GET /check`, `GET /status`) and `/health` are all per-machine only, nothing phones home or aggregates centrally. This machine (`VRSI-LAPT-189`) is confirmed on v1.1.11 via `release-info.json`; every other kiosk needs a physical/local check (Settings → About & Updates) until "fleet alerting" (already listed as deferred in the Known Issues backlog) gets built.
+
 ---
 
 ## Support-mail redundant download prompt, round 4 (shipped in v1.1.11)
