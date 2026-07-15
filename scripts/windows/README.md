@@ -51,7 +51,7 @@ cd "C:\path\to\VRSI Wallboard"
 .\scripts\windows\Install-WallBoard.ps1
 ```
 
-This creates data folders, generates a random `ADMIN_TOKEN` in `server\.env`, builds the project, and optionally registers startup and backup tasks.
+This creates data folders, generates a random `ADMIN_TOKEN` in `server\.env`, sets **`SUPPORT_EMAIL=briank@vrs-inc.com`** (product support inbox — override in `.env` if needed), builds the project, and optionally registers startup and backup tasks.
 
 ## Run manually
 
@@ -103,7 +103,7 @@ This registers the **VRSI WallBoard Tray** scheduled task, which launches `Start
 
 | Script | Purpose |
 |--------|---------|
-| `_common.ps1` | Shared helpers and variables (sourced by all scripts) |
+| `_common.ps1` | Shared helpers and variables (sourced by all scripts); `Ensure-SupportEmailInEnv` adds `SUPPORT_EMAIL` to `server\.env` when missing |
 | `Install-WallBoard.ps1` | Full install: dirs + env + build + optional tasks |
 | `Install-DataDirs.ps1` | Create `ProgramData\VRSIWallBoard\` folders |
 | `Build-Production.ps1` | `npm install` + build shared, client, server |

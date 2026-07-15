@@ -354,6 +354,7 @@ When reporting a problem, include:
 | Data directory | `C:\ProgramData\VRSIWallBoard\data\` |
 | Backups directory | `C:\ProgramData\VRSIWallBoard\backups\` |
 | Logs directory | `C:\ProgramData\VRSIWallBoard\logs\` |
+| Send support report | **Ctrl+M** → **Support** tab → describe problem → **Send support report** |
 | App config file | `server\.env` |
 | Re-authenticate Microsoft | Open `http://localhost:3001` → Auth Setup |
 | Rebuild after code changes | `npm run build` in app folder |

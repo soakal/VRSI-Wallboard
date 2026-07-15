@@ -10,9 +10,9 @@
 
 **Version:** v1.1.6 (root + server + client + shared — release commit on main)
 
-**Last completed task:** v1.1.6 version bump + release prep for Support tab (PR #2 merged).
+**Last completed task:** Docs synced for v1.1.6 Support (code-guide, README, scripts README, ops quick reference).
 
-**Next task:** Kiosks update to v1.1.6; Support inbox is preconfigured (`briank@vrs-inc.com`).
+**Next task:** Kiosks update to v1.1.6.
 
 ---
 

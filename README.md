@@ -10,7 +10,7 @@ Windows-native job board + calendar kiosk for the shop floor. **Local standalone
 - **Calendar page** — month/week/day grid with board ship dates as events (red **NEW** badge on newly imported jobs) and **‹ › month navigation** (with a Today button to jump back), an **Agenda rail that follows the displayed month** — on the current month, past-due ship dates from earlier in the month then day-by-day through month end; on any other month, that whole month's events — filtered to the selected user's jobs (as PM *or* Materials Manager; super users see all), plus clock, weather, and optional Outlook calendars via Azure.
 - **ICS export** — download ship dates as `.ics` for Outlook or any calendar app.
 - **Settings** — Board (Users + Import jobs), calendar selection, display options, widgets, weather location by ZIP, **Files browser on/off**, and **About & Updates** with the current version and a one-click **Update** button.
-- **System panel** (Ctrl+M) — IT summary, backup & restore, activity log.
+- **System panel** (Ctrl+M) — IT summary, backup & restore, activity log, and **Support** tab (describe a problem, package logs, open Outlook with zip attached or mailto fallback — inbox preconfigured server-side).
 - **Tray app** — the server runs behind a blue "W" system-tray icon with crash auto-restart. No console window ever appears (launched via `conhost.exe --headless`).
 
 ## Quick start (development)
@@ -46,7 +46,7 @@ Open http://localhost:5173 (or the next free port Vite prints). Vite proxies `/a
 
 All persistence goes through `LocalStorageProvider` (SQLite). Board business logic remains in `boardService.ts` and calls `getPersistence()` — no direct JSON file writes.
 
-API: `GET /api/storage/status`, `GET /api/storage/backups`, `POST /api/storage/backup`, `POST /api/storage/restore`, `GET /api/storage/audit-log`, `GET /api/storage/security-report`
+API: `GET /api/storage/status`, `GET /api/storage/backups`, `POST /api/storage/backup`, `POST /api/storage/restore`, `GET /api/storage/audit-log`, `GET /api/storage/security-report`, `GET /api/storage/support-info`, `POST /api/storage/support`, `GET /api/storage/support-download/:filename`
 
 **When backups run:** closing the browser/kiosk window; stopping the Node server (Ctrl+C or service stop); **Backup now** in the System panel; optional Windows Task Scheduler every 6 hours (keeps 28 files). Logs: ProgramData `logs` in production; audit data in `wallboard.db`.
 
