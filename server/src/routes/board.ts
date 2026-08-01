@@ -221,6 +221,14 @@ boardRouter.post('/import', upload.single('file'), async (req: Request, res: Res
       rowErrors = result.rowErrors
       skipped = result.skipped
       sourceFile = req.file.originalname
+      if (jobs.length === 0) {
+        res.status(400).json({
+          error: { code: 'no_valid_jobs', message: 'No valid jobs found in the uploaded file' },
+          warnings,
+          rowErrors,
+        })
+        return
+      }
       applyResult = await applyBoardImport(
         jobs,
         sourceFile,

@@ -207,16 +207,13 @@ The SQLite `.backup` API used internally makes this safe to run while the app is
 
 ### 3.2 Scheduled automatic backup
 
-The server creates a backup on every graceful shutdown. For scheduled backups every 6 hours, add a Windows Task Scheduler entry:
+The server creates a backup on every graceful shutdown. For scheduled backups every 6 hours, run the provided script (as Administrator, one time, to register the task):
 
 ```powershell
-$action = New-ScheduledTaskAction `
-  -Execute "powershell.exe" `
-  -Argument '-NonInteractive -Command "$t = Get-Date -f yyyy-MM-dd_HH-mm; Copy-Item -Recurse C:\ProgramData\VRSIWallBoard\data C:\ProgramData\VRSIWallBoard\backups\auto-$t"'
-
-$trigger = New-ScheduledTaskTrigger -RepetitionInterval (New-TimeSpan -Hours 6) -Once -At (Get-Date)
-Register-ScheduledTask -TaskName "VRSI WallBoard Backup" -Action $action -Trigger $trigger -RunLevel Highest
+.\scripts\windows\Register-BackupTask.ps1
 ```
+
+This registers the task to run as the interactive kiosk user (not elevated) using the SQLite `.backup` API, matching the data directory permissions the app itself already runs under. Don't hand-register the task with `-RunLevel Highest` — the install tree is writable by the kiosk user (so the in-app updater can self-update), and an elevated scheduled task pointed at a kiosk-writable script is a local privilege-escalation path.
 
 Backups are kept indefinitely by this task; prune old ones manually or add a cleanup step.
 

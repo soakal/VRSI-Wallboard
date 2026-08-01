@@ -1,6 +1,6 @@
 # VRSI WallBoard — AI Memory
 
-**Last saved:** 2026-07-15
+**Last saved:** 2026-08-01
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\`
 
@@ -8,11 +8,19 @@
 
 ## Current State
 
-**Version:** v1.1.11 (root + server + client + shared — release commit on main). **Live-confirmed working end-to-end** — Brian updated this machine's installed/tray copy to v1.1.11 and confirmed Ctrl+M → Support → Send works as intended (mail app opens with correct To + Subject, zip already on the Desktop, no redundant save prompt).
+**Version:** v1.1.12 (root + server + client + shared, committed on `claude/pr-branches-completion-tv5w6r` — not yet released/tagged). Build clean, `npm test --prefix server` 63/63. **Not yet live-tested on a real kiosk** — this session's changes are TypeScript/PowerShell edits verified by build+test+hand-review only (no Windows machine available in this environment).
 
-**Last completed task:** The full Support-mail bug arc is closed: v1.1.7 (spawnSync timeout) → v1.1.8 (single-invocation, killed the garbling) → v1.1.9 (inner COM timeout, killed the COM-hang-starves-fallback regression) → v1.1.10 (restored Subject on the fallback) → v1.1.11 (removed the redundant Desktop+download double-save). Considered a Microsoft Graph `Mail.Send`-based auto-attach path (would eliminate the manual-attach step entirely) but decided against it — new permission scope + possible Entra ID admin consent for a fallback that already works well enough. Staying at v1.1.11.
+**Last completed task:** Closed the loop on stale audit PR #1 (`docs(audit): full application audit`, opened 2026-07-03 against v1.1.3, never merged). Its base was a month behind `main` (v1.1.3 vs v1.1.11) — merging it as-is would have reverted everything from v1.1.4 onward. Re-verified its 4 HIGH findings against current `main` before touching anything: **all four were still live**, despite the PR's own "Remediation status" section claiming they were fixed in the same July 3 session — those fixes existed only on the unmerged PR branch and never reached `main`. Fixed and ported forward on this branch:
+- **H1** (board-wipe on empty import) — `server/src/routes/board.ts` file-upload branch now 400s (`no_valid_jobs`) before calling `applyBoardImport` when `parseXlsm` returns zero jobs. The JSON-paste branch already had this guard; the file-upload branch didn't.
+- **H2** (writable scripts + elevated backup task = local EoP) — `scripts/windows/Register-BackupTask.ps1` now runs the task as the interactive kiosk user (`-LogonType Interactive -RunLevel Limited`) instead of `-RunLevel Highest`. Didn't touch the `icacls` grant in `Install-WallBoard.ps1` (still needed for self-update) — closed the EoP by removing the elevated-execution half of the combination instead. `docs/operations-guide.md` §3.2 updated to point at the real script instead of a hand-rolled `-RunLevel Highest` snippet.
+- **H3** (auth screen self-destructs) — `client/src/App.tsx`'s `handleAuthenticated` is now a stable `React.useCallback` passed to `AuthSetup`, instead of a new inline arrow (`onAuthenticated={() => setIsAuthenticated(true)}`) on every render.
+- **H4** (one bad poll bounces into a new device-code flow) — added `routeAuthenticated` state, only flipped by the same debounce the imperative `navigate()` already used (`unauthCountRef >= 4 || needsReauth`); the `/` and `/setup` `<Route>` elements now render off that instead of the raw per-3s-poll `isAuthenticated`.
 
-**Next task:** None outstanding on Support. Normal kiosk fleet still needs to update from whatever version they're on to v1.1.11 to pick up all five fixes above.
+Also landed `docs/audit-2026-07-03.md` on `main` for the first time (it was only ever on the unmerged PR branch) with a dated correction note. MEDIUM/LOW findings from that report were **not** re-verified this session — flagged unconfirmed in the doc itself. Confirmed **M5 (multer 1.x, unpatched DoS advisories) is still present** — `server/package.json` still pins `^1.4.5-lts.1`, deprecation warning fires on every `npm install`.
+
+**Verification gap:** the two edited `.ps1` files (`Register-BackupTask.ps1`) could not be parse-validated locally — no `pwsh` in this Linux session. Reviewed by hand against the working `_Register-Startup.ps1` pattern it mirrors (same `Win32_ComputerSystem.UserName` + `New-ScheduledTaskPrincipal -LogonType Interactive` approach already proven in production for the tray task). CI's `ps-lint` job (`.github/workflows/test.yml`, `windows-latest`) will parse-validate on push — **check that it's green before trusting this script further**, and ideally verify live on a real kiosk (register the task, confirm it fires under the kiosk user's token, not elevated).
+
+**Next task:** None outstanding from this pass. Candidates from the audit doc's MEDIUM list, if picked up later: M5 (multer 2.x upgrade — flagged fixed in the PR's own report but not independently verified this session, and the deprecation warning suggests it wasn't actually applied), M1/M2/M4 (the "widen BIND_HOST" LAN-exposure cluster — relevant before any LAN rollout), M11–M14/M17 (client reliability quick wins). Normal kiosk fleet still needs to update through v1.1.11 for the Support-mail fixes, then to v1.1.12 (once released) for this session's security fixes.
 
 **Fleet visibility gap (confirmed, not yet acted on):** there is no way to remotely check what version any OTHER kiosk is running — `server/src/routes/update.ts` (`GET /check`, `GET /status`) and `/health` are all per-machine only, nothing phones home or aggregates centrally. This machine (`VRSI-LAPT-189`) is confirmed on v1.1.11 via `release-info.json`; every other kiosk needs a physical/local check (Settings → About & Updates) until "fleet alerting" (already listed as deferred in the Known Issues backlog) gets built.
 
@@ -146,8 +154,9 @@ https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.7 (zip + sha256 uploa
 
 ## Context for Next Session
 
-1. Latest release: **v1.1.11** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.11
-2. This machine's installed/tray copy still needs updating to v1.1.11 and a final Ctrl+M → Support → Send re-test through the real app UI (To + Subject correct, no redundant save prompt).
+1. Latest **released** version: **v1.1.11** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.11. **v1.1.12 is committed but not yet packaged/tagged/released** — it's the audit-remediation work described above under "Current State," sitting on `claude/pr-branches-completion-tv5w6r` pending its PR. Someone with a Windows machine should confirm CI's `ps-lint` job is green on that PR before treating `Register-BackupTask.ps1` as verified, then run `Package-Release.ps1` / `gh release create` per the Release flow below (bump the "v1.1.11" in that section's steps to "v1.1.12" when actually running it).
+2. This machine's installed/tray copy still needs updating to v1.1.11 (Support fixes) and, once v1.1.12 ships, to v1.1.12 for the audit-remediation fixes (H1–H4 above).
 3. Support inbox preconfigured to `briank@vrs-inc.com` (code default + installer `.env`)
 4. Staff: Ctrl+M → Support → describe problem → Send support report
 5. Kiosks still need to update from v1.1.6 through v1.1.10 → v1.1.11 to pick up the Outlook-hang timeout fix, the mailto-garbling fix, the COM-hang-starves-fallback fix, the restored fallback Subject, and the redundant-download-prompt fix
+6. PR #1 (the stale audit) was closed with an explanatory comment rather than merged — its base was a month behind `main` and merging would have reverted v1.1.4–v1.1.11. Its actual content (the audit doc + fixes for H1–H4) was ported forward by hand into this session's work instead. If a fresh PR was opened for `claude/pr-branches-completion-tv5w6r`, that's the one that supersedes PR #1 — check its number/link before assuming PR #1's number is still the active one.
