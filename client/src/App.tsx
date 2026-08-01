@@ -79,6 +79,11 @@ function AppInner() {
   // Tracks consecutive unauthenticated polls so a brief server restart (which
   // returns 401/unauthenticated for a few seconds) does not bounce us to /setup.
   const unauthCountRef = React.useRef(0);
+  // Debounced auth flag that actually drives route rendering below. The raw
+  // `isAuthenticated` poll result flips false for a few seconds on every server
+  // restart; routing directly on it (instead of this) sent a signed-in kiosk to
+  // /setup and started a brand-new device-code flow on a single transient blip.
+  const [routeAuthenticated, setRouteAuthenticated] = useState(isAuthenticated);
 
   // Server config
   const { config } = useConfig();
@@ -99,6 +104,16 @@ function AppInner() {
     setConfig,
     setActiveUser,
   } = useAppStore();
+
+  // Stable identity for AuthSetup's onAuthenticated prop. An inline arrow here
+  // is a new function on every render; AuthSetup's mount effect depends on it
+  // (via startAuth), so every App re-render (e.g. the 3s auth poll) tore down
+  // and restarted the device-code flow, hitting the server's "already in
+  // progress" 409 and stranding the kiosk on the sign-in screen.
+  const handleAuthenticated = React.useCallback(() => {
+    setIsAuthenticated(true);
+    setRouteAuthenticated(true);
+  }, [setIsAuthenticated]);
 
   // Re-sync the persisted active user against the live users list — roles and
   // names change as jobs import/ship, and a stale localStorage role breaks
@@ -146,21 +161,23 @@ function AppInner() {
   // after 4+ consecutive unauthenticated polls (~12s at the 3s poll interval).
   useEffect(() => {
     if (authLoading) return;
-    setIsAuthenticated(isAuthenticated);
 
     if (isAuthenticated) {
       unauthCountRef.current = 0;
+      setIsAuthenticated(true);
+      setRouteAuthenticated(true);
       if (!location.pathname.startsWith('/board')) navigate('/');
       return;
     }
 
     unauthCountRef.current += 1;
-    if (
-      (needsReauth || unauthCountRef.current >= 4) &&
-      !location.pathname.startsWith('/board')
-    ) {
-      navigate('/setup');
+    if (needsReauth || unauthCountRef.current >= 4) {
+      setIsAuthenticated(false);
+      setRouteAuthenticated(false);
+      if (!location.pathname.startsWith('/board')) navigate('/setup');
     }
+    // else: a transient blip - leave routeAuthenticated/store untouched so the
+    // / and /setup routes below don't bounce a signed-in kiosk mid-poll.
   }, [isAuthenticated, needsReauth, authLoading, navigate, setIsAuthenticated, location.pathname]);
 
   // Sync config to store whenever it changes
@@ -309,7 +326,7 @@ function AppInner() {
         <Route
           path="/"
           element={
-            isAuthenticated ? (
+            routeAuthenticated ? (
               <Dashboard
                 events={events}
                 recentFiles={recentFiles ?? []}
@@ -333,10 +350,10 @@ function AppInner() {
         <Route
           path="/setup"
           element={
-            isAuthenticated ? (
+            routeAuthenticated ? (
               <Navigate to="/" replace />
             ) : (
-              <AuthSetup onAuthenticated={() => setIsAuthenticated(true)} />
+              <AuthSetup onAuthenticated={handleAuthenticated} />
             )
           }
         />
