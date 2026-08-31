@@ -6,6 +6,16 @@
 
 ---
 
+## Live update-cycle verification, v1.1.12 → v1.1.13 (2026-08-31) — CLOSED the long-standing "full update cycle never live-tested" gap
+
+First-ever live exercise of the in-app self-update on a real kiosk install (`C:\Program Files\VRSI WallBoard\`, installed via INSTALL.bat, tray-supervised). Triggered through the real UI: browser → Settings → About & Updates → "Update to v1.1.13" (the `window.confirm` was auto-accepted via automation; the genuine handler + admin-gated `POST /api/update/run` ran). **The update path WORKS end-to-end:** routed to `Update-FromRelease.ps1` (`method: "release"` in combined.log — no `.git`, correct), real GitHub zip downloaded, `.sha256` **"Checksum verified."**, server stopped (old node PID killed), files copied, `npm install` ran (595ms, lockfile unchanged), tray relaunched, server healthy, `release-info.json` → 1.1.13, `update-status.json` `ok:true "Update to v1.1.13 complete."`, board + Projects UI clean (note timestamps now show "Aug 31, 2026 (N ago)" — the v1.1.13 fix, confirmed live), zero console errors, no zombie processes, temp dir cleaned. Whole update took ~17s.
+
+**Two real bugs found in `scripts/windows/Update-FromRelease.ps1`, fixed this session (NOT yet live-verified — needs the next release's update run to prove them, same rule as always):**
+1. `update-status.json` always had `fromVersion:"" toVersion:""` — no caller ever passed them to `Write-UpdateStatus`. Now captures the pre-update version from `release-info.json` BEFORE the copy step, and the target from the release tag; both passed on success AND failure paths.
+2. `finally` block logged **`WARNING: Could not re-enable 'VRSI WallBoard Tray' task: Access is denied`** on this (and will on every) unelevated kiosk update — the task is registered by the elevated installer, so the unelevated updater's `Disable-ScheduledTask` in step 3 ALSO fails (silently, `-ErrorAction SilentlyContinue`) yet `$taskDisabled` was set `$true` unverified. Net effect live: task stayed Enabled throughout (benign — logon-only trigger, and the tray *process* kill still works), but the warning falsely tells operators the kiosk won't auto-start. Fix: `$taskDisabled` now verified against actual post-disable state (+ a DarkGray note when elevation is missing), and the finally block only re-enables (and only warns) when the task is genuinely Disabled. Parse-validated 0 errors under PS 5.1 and the new expressions harness-tested on the real machine, including the real access-denied path. NOTE: the mid-update "Task Scheduler can't relaunch the tray" protection therefore does not exist on standard kiosks — acceptable because the trigger is logon-only; `Update-WallBoard.ps1` (git path) has the same unverified `$taskDisabled` pattern but silences its enable, so no fix applied there.
+
+---
+
 ## v1.1.13 — note timestamps always show the posted date
 
 Brian: "make sure the notes just show the timestamp to always show the date that it was posted" — `NotesSection.tsx` previously rendered only `formatDistanceToNow` ("3 weeks ago") with no absolute date. Fable fixed it: the note-header timestamp now shows `format(noteDate, 'MMM d, yyyy')` (matches `JobCard.tsx`'s ship-date format convention) with the relative time kept as a dimmer `(3 weeks ago)` parenthetical; "(edited)" suffix unchanged. Client-only change, `client/src/components/board/NotesSection.tsx`. Verified: `npm run build` clean, `npm test --prefix server` 63/63.
@@ -171,7 +181,7 @@ https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.7 (zip + sha256 uploa
 ## Context for Next Session
 
 1. Latest **released** version: **v1.1.12** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.12 (PR #4 merged to `main`, packaged and published 2026-08-31). CI's `ps-lint` job should still be spot-checked green for `Register-BackupTask.ps1` on `main`.
-2. This machine's installed/tray copy (the running kiosk app under `C:\Program Files\VRSI WallBoard\`, distinct from this dev repo) still needs updating to v1.1.12 via Settings → About & Updates → Update, to pick up the H1–H4 audit fixes.
+2. This machine's installed/tray copy (the running kiosk app under `C:\Program Files\VRSI WallBoard\`, distinct from this dev repo) is now on **v1.1.13**, updated live through the real Settings → About & Updates button on 2026-08-31 (see the live-verification section at the top). The two `Update-FromRelease.ps1` fixes from that session ship in the NEXT release and get proven by its update run.
 3. Support inbox preconfigured to `briank@vrs-inc.com` (code default + installer `.env`)
 4. Staff: Ctrl+M → Support → describe problem → Send support report
 5. Any kiosk still below v1.1.11 needs to update through v1.1.7–v1.1.11 for the Support-mail fixes, then to v1.1.12 for the audit-remediation fixes.
