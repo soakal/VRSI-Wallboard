@@ -220,13 +220,25 @@ if ($existingConn) {
 }
 
 # ---- Build NotifyIcon ----
+$script:AppVersion = ''
+try {
+    $pkg = Get-Content (Join-Path $ServerDir 'package.json') -Raw | ConvertFrom-Json
+    if ($pkg.version) { $script:AppVersion = [string]$pkg.version }
+} catch { }
+$script:TrayLabel = if ($script:AppVersion) { "VRSI WallBoard v$script:AppVersion" } else { 'VRSI WallBoard' }
+
 $script:Notify          = New-Object System.Windows.Forms.NotifyIcon
 $script:Notify.Icon     = $script:TrayIcon
-$script:Notify.Text     = 'VRSI WallBoard'
+$script:Notify.Text     = $script:TrayLabel
 $script:Notify.Visible  = $true
 
 # ---- Context menu ----
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
+
+$itemVersion = New-Object System.Windows.Forms.ToolStripMenuItem($script:TrayLabel)
+$itemVersion.Enabled = $false
+$menu.Items.Add($itemVersion) | Out-Null
+$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
 
 $itemOpen = New-Object System.Windows.Forms.ToolStripMenuItem('Open in Browser')
 $itemOpen.add_Click({
