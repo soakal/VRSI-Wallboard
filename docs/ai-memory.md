@@ -6,6 +6,87 @@
 
 ---
 
+## v1.1.13 → v1.1.14 fix-verification attempt (2026-08-31, second Fable run) — BLOCKED before triggering; two important findings
+
+Goal was to live-run the v1.1.13→v1.1.14 update through Settings → About & Updates and prove the two
+`Update-FromRelease.ps1` fixes from commit `5cf43c1`. The update was NOT triggered (see "blocked" below).
+The kiosk is still on v1.1.13, untouched and healthy. Findings that change the verification plan:
+
+1. **Chicken-and-egg: the v1.1.13→v1.1.14 run would NOT have exercised the fixes anyway.** The updater
+   that executes is the INSTALLED copy (`C:\Program Files\VRSI WallBoard\scripts\windows\Update-FromRelease.ps1`),
+   which is v1.1.13's — hash-compared against the dev repo: it lacks the `$fromVersion`/`$toVersion` capture
+   and the verified-`$taskDisabled` finally-block guard. There is no handoff to the newly extracted script
+   mid-update (PowerShell parses the whole `-File` script up front). So the v1.1.13→v1.1.14 update would have
+   reproduced the empty versions + false access-denied warning **by design**, while merely landing the fixed
+   script on disk. The fixes are only truly exercised by the update AFTER v1.1.14 is installed. Since the script
+   re-applies the latest release unconditionally (no version comparison), a second Update run on a v1.1.14
+   install (v1.1.14→v1.1.14) is a legitimate way to exercise them without waiting for v1.1.15 — expect
+   `fromVersion:"1.1.14" toVersion:"1.1.14"` (non-empty, correct sources) and no false tray-task warning.
+   `_common.ps1` needs nothing: dev and installed copies are hash-identical; `Write-UpdateStatus` has always
+   accepted `-FromVersion`/`-ToVersion` — the bug was purely that no caller passed them.
+
+2. **v1.1.14 release asset independently verified:** downloaded from GitHub (`releases/latest` = tag v1.1.14),
+   zip SHA256 matches the published `.sha256` (`68fc25d0…cfb8`), the zip's `Update-FromRelease.ps1` is
+   byte-identical to the dev repo's fixed copy (hash `556F7D8F…21F2`), zip `release-info.json` says 1.1.14.
+
+3. **6-hour update-check cache blocks same-day verify cycles:** `GET /api/update/check` caches the GitHub
+   result in server memory for 6h (`CACHE_TTL_MS`, `server/src/routes/update.ts`). This server started
+   16:46 (post-v1.1.13-update) and cached "latest = v1.1.13" before v1.1.14 was published, so Settings says
+   "You are on the latest version" and renders NO Update button until ~22:47 or the next server restart.
+   There is no force-refresh in the UI or the API. Not a bug per se, but it means "publish then immediately
+   verify from the kiosk UI" doesn't work; a restart of the server (tray menu / reboot) clears it. Worth
+   considering a `?force=1` or shorter TTL if same-day update rollouts matter.
+
+4. **Blocked:** this automated run's permission classifier denied every path to proceed: copying the (verified
+   byte-identical) fixed script into `Program Files`, stopping the node process so the tray watchdog restarts
+   it (to clear the check cache), and POSTing `/api/update/run` from the app page (the exact request the UI's
+   own `startUpdate` handler makes — localhost is trusted, no token involved). Per the denial guidance the run
+   stopped instead of working around it. **Nothing on the kiosk was modified.** Pre-update state recorded:
+   tray task Ready/Enabled, node PID 27716 (started 16:46:36), `update-status.json` still shows the known-bad
+   `fromVersion:"" toVersion:""` record from the v1.1.13 run.
+
+**RESOLVED same day — see the next section: the kiosk was updated to v1.1.14 through the real UI after the
+coordinator restarted the server (clearing the cache) and Brian clicked OK on the confirm dialog.**
+
+---
+
+## v1.1.13 → v1.1.14 UPDATE COMPLETED live (2026-08-31 17:23, ~18s) — "Click 1" of the two-click fix verification
+
+Triggered through the REAL UI: coordinator ran `Restart-WallBoard.ps1` to clear the 6h check cache → the
+orange "Update available: v1.1.14" banner + Settings button appeared → Fable clicked the real "Update to
+v1.1.14" button (screenshot-verified) → the native `window.confirm` froze the tab (renderer blocked; the
+automation classifier denied every programmatic way to accept it) → **Brian clicked OK himself**, completing
+the genuine flow. Second-ever live run of the release-update path; it works end-to-end again:
+- combined.log: `"Update launched" method:"release" script:...Update-FromRelease.ps1` (17:23:33) + "Update process created".
+- update.log transcript (17:23:34-17:23:52): latest release v1.1.14 found, zip downloaded, **"Checksum
+  verified."**, extracted, old node (PID 19772) stopped, files copied, `npm install` "up to date in 555ms",
+  tray relaunched, "Server healthy", "Update to v1.1.14 complete.", temp dir cleaned.
+- Post-state: `release-info.json` = 1.1.14 (commit 278e419), Settings UI shows "Version v1.1.14 / You are on
+  the latest version", `/health` ok + ready, `/api/update/check` currentVersion 1.1.14, tray task
+  **Ready/Enabled**, exactly one fresh node (21328) + one tray powershell (17604), zero zombie processes,
+  zero console errors, board + agenda render clean.
+- **Both OLD bugs reproduced EXACTLY as predicted — expected, NOT a regression** (this run executed the
+  v1.1.13 = unfixed script; the fix only landed on disk during this run): `update-status.json` =
+  `{"ok":true,"message":"Update to v1.1.14 complete.","fromVersion":"","toVersion":""}` and the transcript
+  ends with the false `WARNING: Could not re-enable 'VRSI WallBoard Tray' task: Access is denied` (task was
+  in fact Enabled the whole time). Correction to the earlier note: that warning lands in **update.log**
+  (the PS transcript), not combined.log.
+- The INSTALLED `Update-FromRelease.ps1` is now hash-identical to the fixed dev copy (`556F7D8F…21F2`) —
+  the fixed script is what will run on the NEXT update.
+
+**"Click 2" — how to actually prove the two 5cf43c1 fixes (still unproven live):**
+1. Publish a trivial v1.1.15 bump release (version bump only; Claude's job, not Fable's).
+2. **Restart the kiosk server** (`Restart-WallBoard.ps1`) — the freshly-restarted server re-cached
+   "latest = v1.1.14" at ~17:24, so without a restart the Update button will not appear until ~23:24.
+3. Brian: Settings → About & Updates → Update → OK (or let an automation run click the button; a human
+   still has to accept the confirm — the classifier blocks all programmatic acceptance).
+4. PASS criteria for that run: `update-status.json` shows `fromVersion:"1.1.14" toVersion:"1.1.15"`
+   (non-empty), update.log transcript has NO "Could not re-enable ... Access is denied" warning and instead
+   (unelevated) the DarkGray note "tray task could not be disabled (needs elevation)", task still
+   Ready/Enabled, plus the usual health/process/UI checks.
+
+---
+
 ## Live update-cycle verification, v1.1.12 → v1.1.13 (2026-08-31) — CLOSED the long-standing "full update cycle never live-tested" gap
 
 First-ever live exercise of the in-app self-update on a real kiosk install (`C:\Program Files\VRSI WallBoard\`, installed via INSTALL.bat, tray-supervised). Triggered through the real UI: browser → Settings → About & Updates → "Update to v1.1.13" (the `window.confirm` was auto-accepted via automation; the genuine handler + admin-gated `POST /api/update/run` ran). **The update path WORKS end-to-end:** routed to `Update-FromRelease.ps1` (`method: "release"` in combined.log — no `.git`, correct), real GitHub zip downloaded, `.sha256` **"Checksum verified."**, server stopped (old node PID killed), files copied, `npm install` ran (595ms, lockfile unchanged), tray relaunched, server healthy, `release-info.json` → 1.1.13, `update-status.json` `ok:true "Update to v1.1.13 complete."`, board + Projects UI clean (note timestamps now show "Aug 31, 2026 (N ago)" — the v1.1.13 fix, confirmed live), zero console errors, no zombie processes, temp dir cleaned. Whole update took ~17s.
@@ -181,7 +262,7 @@ https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.7 (zip + sha256 uploa
 ## Context for Next Session
 
 1. Latest **released** version: **v1.1.12** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.12 (PR #4 merged to `main`, packaged and published 2026-08-31). CI's `ps-lint` job should still be spot-checked green for `Register-BackupTask.ps1` on `main`.
-2. This machine's installed/tray copy (the running kiosk app under `C:\Program Files\VRSI WallBoard\`, distinct from this dev repo) is now on **v1.1.13**, updated live through the real Settings → About & Updates button on 2026-08-31 (see the live-verification section at the top). The two `Update-FromRelease.ps1` fixes from that session ship in the NEXT release and get proven by its update run.
+2. This machine's installed/tray copy (the running kiosk app under `C:\Program Files\VRSI WallBoard\`, distinct from this dev repo) is now on **v1.1.14**, updated live through the real Settings → About & Updates button on 2026-08-31 17:23 (see "Click 1" section at the top). The two `Update-FromRelease.ps1` fixes from `5cf43c1` are now ON DISK in the install but still unproven live — proving them needs a v1.1.15 release + server restart + one more real update run ("Click 2" plan at the top).
 3. Support inbox preconfigured to `briank@vrs-inc.com` (code default + installer `.env`)
 4. Staff: Ctrl+M → Support → describe problem → Send support report
 5. Any kiosk still below v1.1.11 needs to update through v1.1.7–v1.1.11 for the Support-mail fixes, then to v1.1.12 for the audit-remediation fixes.
