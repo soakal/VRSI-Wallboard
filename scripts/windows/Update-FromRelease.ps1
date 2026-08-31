@@ -116,6 +116,8 @@ $taskDisabled = $false
 $rollbackDir = $null
 $rollbackItems = @('server\dist', 'client\dist', 'shared\dist', 'server\package.json', 'server\package-lock.json')
 $snapshotTaken = $false
+$fromVersion = ''
+$toVersion = ''
 
 try {
     Write-Host ''
@@ -145,6 +147,16 @@ try {
     Assert-NodeCompatible
     Assert-Writable $RepoRoot
 
+    # Record the pre-update version now — release-info.json is overwritten by the
+    # copy step, and update-status.json should say what we updated FROM.
+    try {
+        $riPath = Join-Path $RepoRoot 'release-info.json'
+        if (Test-Path $riPath) {
+            $ri = Get-Content $riPath -Raw | ConvertFrom-Json
+            if ($ri.version) { $fromVersion = [string]$ri.version }
+        }
+    } catch { }
+
     # 1. Find the latest release and its zip asset
     Write-Step 'Checking GitHub for the latest release'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -152,6 +164,7 @@ try {
         -Headers @{ 'User-Agent' = 'VRSI-WallBoard-Updater' } -TimeoutSec 30
     $asset = $rel.assets | Where-Object { $_.name -like 'VRSI-WallBoard-*.zip' } | Select-Object -First 1
     if (-not $asset) { throw "Latest release $($rel.tag_name) has no VRSI-WallBoard zip asset." }
+    $toVersion = "$($rel.tag_name)" -replace '^v', ''
     Write-Host "  Latest release: $($rel.tag_name)  ($($asset.name))"
 
     # 2. Download and extract to a temp folder
@@ -199,7 +212,14 @@ try {
         # run owns re-enabling it.
         if ((Get-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue).State -ne 'Disabled') {
             Disable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue | Out-Null
-            $taskDisabled = $true
+            # An unelevated update (the normal Settings-button path) cannot modify a
+            # task registered by the elevated installer, and the disable then fails
+            # silently — verify it actually took so the finally block only restores
+            # (and warns about) a state THIS run really changed.
+            $taskDisabled = ((Get-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue).State -eq 'Disabled')
+            if (-not $taskDisabled) {
+                Write-Host '  Note: tray task could not be disabled (needs elevation) - relying on stopping the tray process directly.' -ForegroundColor DarkGray
+            }
         }
         Get-CimInstance Win32_Process |
             Where-Object { $_.Name -in @('powershell.exe', 'pwsh.exe') -and $_.CommandLine -like '*Start-TrayApp.ps1*' } |
@@ -307,12 +327,12 @@ try {
     } else {
         Write-Warning $finalMsg
     }
-    Write-UpdateStatus -Ok $finalOk -Message $finalMsg
+    Write-UpdateStatus -Ok $finalOk -Message $finalMsg -FromVersion $fromVersion -ToVersion $toVersion
     Write-Host ''
     if (-not $Unattended) { Start-Sleep -Seconds 3 }
 } catch {
     Write-Warning "Update failed: $($_.Exception.Message)"
-    Write-UpdateStatus -Ok $false -Message "Update failed: $($_.Exception.Message)"
+    Write-UpdateStatus -Ok $false -Message "Update failed: $($_.Exception.Message)" -FromVersion $fromVersion -ToVersion $toVersion
     # The tray task is the sole logon launcher; if THIS run disabled it, re-enable
     # it even when the failure happened before the server was stopped, so the tray
     # still auto-starts at next logon.
@@ -336,8 +356,12 @@ try {
 } finally {
     # Enabled is the correct steady state for the logon task; restore it on EVERY
     # exit path (success, caught failure, rethrow) so an update can never leave the
-    # tray unable to start at logon. Idempotent; only attempted if the task exists.
-    if (Get-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue) {
+    # tray unable to start at logon. Only attempted when the task is actually
+    # Disabled — an unelevated run never managed to disable it (see step 3), and
+    # warning "could not re-enable" about a task that is still Enabled would send
+    # operators chasing a problem that does not exist.
+    $trayTask = Get-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction SilentlyContinue
+    if ($trayTask -and $trayTask.State -eq 'Disabled') {
         try { Enable-ScheduledTask -TaskName 'VRSI WallBoard Tray' -ErrorAction Stop | Out-Null }
         catch { Write-Warning "Could not re-enable 'VRSI WallBoard Tray' task: $($_.Exception.Message)" }
     }
