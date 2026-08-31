@@ -134,9 +134,17 @@ Node.js was not installed on this Windows machine at session start (this machine
 
 ---
 
+## v1.1.16 — tray icon/menu shows its version (live-verified)
+
+Brian noticed the Windows tray icon never showed a version number, even though the app's own Settings → About & Updates page does. `scripts/windows/Start-TrayApp.ps1`'s `NotifyIcon` tooltip was hardcoded `'VRSI WallBoard'` and the right-click menu only had Open/Restart/Exit — no version anywhere. Fix: reads `server\package.json`'s `version` at tray startup and shows `VRSI WallBoard v1.1.16` as both the hover tooltip and a disabled label at the top of the right-click menu. Parse-validated 0 errors under PS 5.1.
+
+**Live-verified the same way as the update-mechanism fixes** — this required an actual update cycle (not just a server restart) because the tray process itself only picks up new code when the updater stops and relaunches it: committed, pushed, packaged v1.1.16, published, restarted the kiosk server to clear the 6h `/api/update/check` cache, triggered Update through the real Settings UI (Claude drove the click via Chrome automation this time, not Fable), Brian accepted the native confirm dialog. Result: kiosk landed on v1.1.16 (`release-info.json`, `/health` ok+ready), `update-status.json` correctly shows `fromVersion:"1.1.15" toVersion:"1.1.16"` (the v1.1.14 fix holding up on its third real run), fresh node process, and **Brian confirmed visually that the tray icon now shows the version number.** Fourth consecutive successful live update-cycle test this session (v1.1.13→14→15→16), all clean.
+
+---
+
 ## Current State
 
-**Version:** v1.1.15 — **released and installed**. v1.1.12 (audit remediation), v1.1.13 (note timestamps), v1.1.14 (update-mechanism fixes), and v1.1.15 (version-only bump to prove v1.1.14's fix) all shipped this session, in order, each build-clean and 63/63 server tests passing. This machine's kiosk install was updated live through the real UI twice this session (v1.1.13→v1.1.14, then v1.1.14→v1.1.15) and is confirmed healthy on v1.1.15 — see the update-verification sections above for full evidence.
+**Version:** v1.1.16 — **released and installed, confirmed live on this kiosk**. Five releases shipped this session, in order, each build-clean and 63/63 server tests passing: v1.1.12 (audit remediation), v1.1.13 (note timestamps), v1.1.14 (update-mechanism fixes), v1.1.15 (version-only bump to prove v1.1.14's fix), v1.1.16 (tray version display). This machine's kiosk install was updated live through the real UI four times this session (v1.1.13→14→15→16) with a 100% success rate — see the update-verification sections above for full evidence on each run.
 
 **Last completed task:** Closed the loop on stale audit PR #1 (`docs(audit): full application audit`, opened 2026-07-03 against v1.1.3, never merged). Its base was a month behind `main` (v1.1.3 vs v1.1.11) — merging it as-is would have reverted everything from v1.1.4 onward. Re-verified its 4 HIGH findings against current `main` before touching anything: **all four were still live**, despite the PR's own "Remediation status" section claiming they were fixed in the same July 3 session — those fixes existed only on the unmerged PR branch and never reached `main`. Fixed and ported forward on this branch:
 - **H1** (board-wipe on empty import) — `server/src/routes/board.ts` file-upload branch now 400s (`no_valid_jobs`) before calling `applyBoardImport` when `parseXlsm` returns zero jobs. The JSON-paste branch already had this guard; the file-upload branch didn't.
@@ -282,8 +290,8 @@ https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.7 (zip + sha256 uploa
 
 ## Context for Next Session
 
-1. Latest **released** version: **v1.1.15** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.15. Full chain this session: v1.1.12 (audit remediation, PR #4) → v1.1.13 (note timestamps) → v1.1.14 (update-mechanism fixes) → v1.1.15 (proves v1.1.14's fix live). CI's `ps-lint` job should still be spot-checked green for `Register-BackupTask.ps1` on `main`.
-2. This machine's installed/tray copy (the running kiosk app under `C:\Program Files\VRSI WallBoard\`, distinct from this dev repo) is now on **v1.1.15**, after two live UI-driven updates on 2026-08-31 (v1.1.13→v1.1.14 at 17:23, v1.1.14→v1.1.15 at 17:30). The two `Update-FromRelease.ps1` fixes from `5cf43c1` are **verified live** — see the "Click 2" section at the top. The update-mechanism workstream is closed.
+1. Latest **released** version: **v1.1.16** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.16. Full chain this session: v1.1.12 (audit remediation, PR #4) → v1.1.13 (note timestamps) → v1.1.14 (update-mechanism fixes) → v1.1.15 (proves v1.1.14's fix live) → v1.1.16 (tray version display, also live-verified). CI's `ps-lint` job should still be spot-checked green for `Register-BackupTask.ps1` on `main`.
+2. This machine's installed/tray copy (the running kiosk app under `C:\Program Files\VRSI WallBoard\`, distinct from this dev repo) is now on **v1.1.16**, after four live UI-driven updates on 2026-08-31 (v1.1.13→14 at 17:23, 14→15 at 17:30, 15→16 at 17:43), all clean. The two `Update-FromRelease.ps1` fixes from `5cf43c1` are **verified live** across all three subsequent runs — see the sections above. The update-mechanism workstream is closed. Local `releases/` currently holds v1.1.15 + v1.1.16 (2 most recent, per the pruning rule).
 3. Support inbox preconfigured to `briank@vrs-inc.com` (code default + installer `.env`)
 4. Staff: Ctrl+M → Support → describe problem → Send support report
 5. Any kiosk still below v1.1.11 needs to update through v1.1.7–v1.1.11 for the Support-mail fixes, then to v1.1.12 for the audit-remediation fixes.
