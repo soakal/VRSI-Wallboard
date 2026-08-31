@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { formatDistanceToNow } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import { JobNote, BoardUser, OPS_SCHEDULE_NOTE_AUTHOR_ID } from '@vrsi/wallboard-shared'
 
 interface Props {
@@ -90,6 +90,7 @@ export default function NotesSection({
             const canManage = !fromOpsSchedule && isAuthor
             const isEditing = editingId === note.id
             const opsNoteIsNew = fromOpsSchedule && !!highlightNewNote
+            const noteDate = new Date(note.updatedAt ?? note.createdAt)
 
             return (
               <div
@@ -118,11 +119,10 @@ export default function NotesSection({
                       </span>
                     )}
                     <span className="text-slate-500 text-xs shrink-0">
-                      &middot;{' '}
-                      {formatDistanceToNow(
-                        new Date(note.updatedAt ?? note.createdAt),
-                        { addSuffix: true },
-                      )}
+                      &middot; {format(noteDate, 'MMM d, yyyy')}{' '}
+                      <span className="text-slate-600">
+                        ({formatDistanceToNow(noteDate, { addSuffix: true })})
+                      </span>
                       {note.updatedAt && !fromOpsSchedule && (
                         <span className="text-slate-600"> (edited)</span>
                       )}

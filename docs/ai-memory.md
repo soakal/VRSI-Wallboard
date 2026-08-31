@@ -1,14 +1,30 @@
 # VRSI WallBoard — AI Memory
 
-**Last saved:** 2026-08-01
+**Last saved:** 2026-08-31
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\`
 
 ---
 
+## v1.1.13 — note timestamps always show the posted date
+
+Brian: "make sure the notes just show the timestamp to always show the date that it was posted" — `NotesSection.tsx` previously rendered only `formatDistanceToNow` ("3 weeks ago") with no absolute date. Fable fixed it: the note-header timestamp now shows `format(noteDate, 'MMM d, yyyy')` (matches `JobCard.tsx`'s ship-date format convention) with the relative time kept as a dimmer `(3 weeks ago)` parenthetical; "(edited)" suffix unchanged. Client-only change, `client/src/components/board/NotesSection.tsx`. Verified: `npm run build` clean, `npm test --prefix server` 63/63.
+
+---
+
+## v1.1.12 packaged and released (2026-08-31)
+
+Node.js was not installed on this Windows machine at session start (this machine had never actually run `npm install`/`npm run build` locally before — prior v1.1.12 verification was done from a Linux session per the note below). Installed Node.js LTS (v24.19.0) via `winget install --id OpenJS.NodeJS.LTS`. Stale `node_modules` already existed under `client/`, `server/`, `shared/` (dated 2026-07-15, from an unknown prior install attempt) with an empty `client/node_modules/@vrsi` symlink dir — `npm install` in each of the three dirs fixed the missing `@vrsi/wallboard-shared` link. npm 11's built-in install-script gate blocked `better-sqlite3`'s native build and `esbuild`'s postinstall on first install (`npm warn allow-scripts`) — ran `npm approve-scripts --all` in `server/` and `client/`, then `npm install` again to actually execute them. Verified clean: `npm run build` (shared+client+server), `npm test --prefix server` 63/63 (confirms `better-sqlite3`'s native binary is ABI-compatible with the new Node 24 install). Ran `Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.12.zip` (0.7 MB) + `.sha256`. Published via `gh release create v1.1.12` (also auto-created the `v1.1.12` git tag on GitHub) — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.12. Pruned local `releases/` to the 2 newest (v1.1.11, v1.1.12); v1.1.9/v1.1.10 zips deleted (still on GitHub Releases).
+
+**This machine now has a working local Node toolchain (v24.19.0/npm 11.17.0) for the first time** — future sessions on this machine can build/test/package directly instead of relying on a separate Linux verification session.
+
+**Still outstanding:** this machine's installed/tray copy (the actual running kiosk app, not the dev repo) has not been updated to v1.1.12 yet — still needs Settings → About & Updates → Update (or manual `Update-FromRelease.ps1`) to pick up the H1–H4 audit fixes. CI's `ps-lint` job should also be checked for green on the `Register-BackupTask.ps1` change now that it's on `main`.
+
+---
+
 ## Current State
 
-**Version:** v1.1.12 (root + server + client + shared, committed on `claude/pr-branches-completion-tv5w6r` — not yet released/tagged). Build clean, `npm test --prefix server` 63/63. **Not yet live-tested on a real kiosk** — this session's changes are TypeScript/PowerShell edits verified by build+test+hand-review only (no Windows machine available in this environment).
+**Version:** v1.1.12 — **released** (see above), tagged, published to GitHub. Build clean, `npm test --prefix server` 63/63, verified via a real local Windows build+test+package this session (not just Linux CI).
 
 **Last completed task:** Closed the loop on stale audit PR #1 (`docs(audit): full application audit`, opened 2026-07-03 against v1.1.3, never merged). Its base was a month behind `main` (v1.1.3 vs v1.1.11) — merging it as-is would have reverted everything from v1.1.4 onward. Re-verified its 4 HIGH findings against current `main` before touching anything: **all four were still live**, despite the PR's own "Remediation status" section claiming they were fixed in the same July 3 session — those fixes existed only on the unmerged PR branch and never reached `main`. Fixed and ported forward on this branch:
 - **H1** (board-wipe on empty import) — `server/src/routes/board.ts` file-upload branch now 400s (`no_valid_jobs`) before calling `applyBoardImport` when `parseXlsm` returns zero jobs. The JSON-paste branch already had this guard; the file-upload branch didn't.
@@ -143,20 +159,21 @@ https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.7 (zip + sha256 uploa
 
 ---
 
-## Release flow (v1.1.11)
+## Release flow (v1.1.12)
 
 1. `npm run build` at root
-2. `scripts\windows\Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.11.zip` + `.sha256`
-3. `gh release create v1.1.11 "releases\VRSI-WallBoard-v1.1.11.zip" "releases\VRSI-WallBoard-v1.1.11.zip.sha256"`
-4. Prune local `releases/` to 2 most recent versions (v1.1.10 + v1.1.11 after this release)
+2. `scripts\windows\Package-Release.ps1` → `releases\VRSI-WallBoard-v1.1.12.zip` + `.sha256`
+3. `gh release create v1.1.12 "releases\VRSI-WallBoard-v1.1.12.zip" "releases\VRSI-WallBoard-v1.1.12.zip.sha256"`
+4. Prune local `releases/` to 2 most recent versions (v1.1.11 + v1.1.12 after this release)
 
 ---
 
 ## Context for Next Session
 
-1. Latest **released** version: **v1.1.11** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.11. **v1.1.12 is committed but not yet packaged/tagged/released** — it's the audit-remediation work described above under "Current State," sitting on `claude/pr-branches-completion-tv5w6r` pending its PR. Someone with a Windows machine should confirm CI's `ps-lint` job is green on that PR before treating `Register-BackupTask.ps1` as verified, then run `Package-Release.ps1` / `gh release create` per the Release flow below (bump the "v1.1.11" in that section's steps to "v1.1.12" when actually running it).
-2. This machine's installed/tray copy still needs updating to v1.1.11 (Support fixes) and, once v1.1.12 ships, to v1.1.12 for the audit-remediation fixes (H1–H4 above).
+1. Latest **released** version: **v1.1.12** — https://github.com/soakal/VRSI-Wallboard/releases/tag/v1.1.12 (PR #4 merged to `main`, packaged and published 2026-08-31). CI's `ps-lint` job should still be spot-checked green for `Register-BackupTask.ps1` on `main`.
+2. This machine's installed/tray copy (the running kiosk app under `C:\Program Files\VRSI WallBoard\`, distinct from this dev repo) still needs updating to v1.1.12 via Settings → About & Updates → Update, to pick up the H1–H4 audit fixes.
 3. Support inbox preconfigured to `briank@vrs-inc.com` (code default + installer `.env`)
 4. Staff: Ctrl+M → Support → describe problem → Send support report
-5. Kiosks still need to update from v1.1.6 through v1.1.10 → v1.1.11 to pick up the Outlook-hang timeout fix, the mailto-garbling fix, the COM-hang-starves-fallback fix, the restored fallback Subject, and the redundant-download-prompt fix
-6. PR #1 (the stale audit) was closed with an explanatory comment rather than merged — its base was a month behind `main` and merging would have reverted v1.1.4–v1.1.11. Its actual content (the audit doc + fixes for H1–H4) was ported forward by hand into this session's work instead. If a fresh PR was opened for `claude/pr-branches-completion-tv5w6r`, that's the one that supersedes PR #1 — check its number/link before assuming PR #1's number is still the active one.
+5. Any kiosk still below v1.1.11 needs to update through v1.1.7–v1.1.11 for the Support-mail fixes, then to v1.1.12 for the audit-remediation fixes.
+6. PR #1 (the stale audit) was closed with an explanatory comment rather than merged — its base was a month behind `main` and merging would have reverted v1.1.4–v1.1.11. Its content was ported forward via PR #4 (`claude/pr-branches-completion-tv5w6r`), which merged cleanly to `main` on 2026-08-01.
+7. This machine's dev toolchain was uninitialized until this session — Node.js was installed for the first time (v24.19.0 LTS via winget) to do the v1.1.12 build/test/package. See "v1.1.12 packaged and released" above for the stale-`node_modules`/`allow-scripts` gotchas hit along the way, in case they recur on a future clean checkout.
