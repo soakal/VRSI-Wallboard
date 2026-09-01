@@ -1,8 +1,43 @@
 # VRSI WallBoard — AI Memory
 
-**Last saved:** 2026-08-31
+**Last saved:** 2026-09-01
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\`
+
+---
+
+## Branch `claude/vrsi-wallboard-local-llm-g6ytqy` — client crash fixed, feature verified live (2026-09-01)
+
+Claude test-ran this feature branch on a clean checkout (fresh Windows machine, Node.js installed
+for the first time via winget). Goal: prove the natural-language job-query feature (local Ollama
+LLM, `AskPanel.tsx` / `llmService.ts` / `POST /api/llm/query`) actually works end-to-end.
+
+**Bug found and fixed:** `server/src/lib/personIdentity.ts` is aliased directly into the client
+bundle (`client/vite.config.ts`, `@vrsi/person-identity`) so both sides share the same name
+canonicalization. Its module-level `const ALIAS_GROUPS = loadEnvAliases()` read
+`process.env.PERSON_ALIASES` unconditionally — `process` doesn't exist in the browser, so
+`ReferenceError: process is not defined` threw the moment the module loaded, before React ever
+called `createRoot().render()`. Net effect: **the entire client was a blank white screen**, with
+no error shown to the user — confirmed via a Playwright `pageerror` listener (a plain headless
+Edge screenshot alone did not surface the cause, only the blank result). Fix: guarded the read with
+`typeof process !== 'undefined'` — one-line change, commit `533ecdc`, pushed to this branch.
+`docs/code-guide.md`'s `personIdentity.ts` row now documents this constraint so it isn't
+reintroduced.
+
+**End-to-end verification after the fix** (Playwright + curl against the running dev server, not
+just unit tests): built a 5-job dummy "Active Projects" test XLSX matching the real ops-schedule
+column format, imported it via `POST /api/board/import` (clean import, 0 warnings), then confirmed
+the local Ollama server (`qwen3:14b`, on this session's homelab LAN address) answers real questions
+about that data correctly through the actual **Ask about jobs** UI panel (Ctrl+J) — not just the
+raw API. One run's answer only surfaced 2 of a PM's 3 non-shipped jobs where a separate curl call
+found all 3; read `llmService.ts`'s `buildContext()` directly to confirm there is **no date-range
+or calendar-view filtering** (only a shipped/blocked status filter + 150-job cap) — so that
+discrepancy is model sampling variance between runs, not a scoping bug. Also proved the
+**production build path** works, not just `npm run dev`: `npm run build` (shared→client→server)
+clean, compiled server (`node dist/index.js`, `NODE_ENV=production`) served correctly.
+
+**Not yet done:** merging this branch to `main`, packaging a release, or installing on any real
+kiosk. This was a feature-branch dev-machine verification only.
 
 ---
 

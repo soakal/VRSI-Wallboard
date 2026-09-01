@@ -52,6 +52,48 @@ API: `GET /api/storage/status`, `GET /api/storage/backups`, `POST /api/storage/b
 
 **Restores merge, never overwrite** — restoring a backup merges board state and blocks on conflicts instead of clobbering newer data.
 
+## Natural-language job query (local LLM)
+
+Ask plain-English questions about the board — "What's blocking us this week?", "Which jobs is
+Sarah the Materials Manager on?" — from the **Ask about jobs** panel (**Ctrl+J** in the app).
+Answered entirely by a **local Ollama server on the internal network**; no cloud endpoint is
+ever called, and every request is logged in the Monitoring panel's activity log and the
+security report's `externalHostsContacted` (it never appears there, since a private-LAN
+address isn't external).
+
+**Config** (`server/.env`):
+
+```
+OLLAMA_BASE_URL=http://<ollama-host>:11434
+OLLAMA_MODEL=qwen3:14b
+```
+
+**API:** `POST /api/llm/query` (admin-token gated, same as the rest of the board API — the
+kiosk browser on localhost is trusted automatically)
+
+```json
+// Request
+{ "question": "Which jobs is John Smith the PM on, and are any overdue?" }
+
+// Response (200)
+{ "data": { "answer": "John Smith is the PM on Jobs 10001, 10002, and 10005. None are overdue..." } }
+
+// Error (400 — bad input, 502 — LLM unreachable/error)
+{ "error": { "code": "empty_question", "message": "Question cannot be empty" } }
+```
+
+| Error code | Status | Meaning |
+|---|---|---|
+| `empty_question` | 400 | Question was blank |
+| `question_too_long` | 400 | Over 2000 characters |
+| `llm_unreachable` | 502 | Could not reach `OLLAMA_BASE_URL` |
+| `llm_error` | 502 | Ollama responded with a non-2xx status |
+| `llm_bad_response` | 502 | Ollama's response didn't include the expected `response` field |
+
+Answers can vary between identical questions (model sampling) — this is expected, not a bug.
+The context sent to the model is every non-shipped job (plus any blocked shipped ones), capped
+at 150 jobs; there is no date-range or calendar-view filtering.
+
 ## Windows kiosk (production) — single PC
 
 Deployments use the packaged **`VRSI WallBoard\`** release folder (built by `scripts\windows\Package-Release.ps1`, attached as a zip to every [GitHub release](https://github.com/soakal/VRSI-Wallboard/releases)).
