@@ -12,6 +12,7 @@ import AuthSetup from './components/AuthSetup';
 import SettingsPanel from './components/SettingsPanel';
 import FileBrowserPanel from './components/FileBrowserPanel';
 import MonitoringPanel from './components/MonitoringPanel';
+import AskPanel from './components/AskPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useBackupOnClose } from './hooks/useBackupOnClose';
 import { useUpdateCheck, fetchUpdateStatus } from './hooks/useUpdateCheck';
@@ -93,6 +94,7 @@ function AppInner() {
     isSettingsOpen,
     isFilesOpen,
     isMonitoringOpen,
+    isAskOpen,
     displayMode,
     viewDate,
     activeUser,
@@ -100,6 +102,7 @@ function AppInner() {
     setIsSettingsOpen,
     setIsFilesOpen,
     setIsMonitoringOpen,
+    setIsAskOpen,
     setDisplayMode,
     setConfig,
     setActiveUser,
@@ -221,10 +224,16 @@ function AppInner() {
         setIsMonitoringOpen(!isMonitoringOpen);
         return;
       }
+      if (e.ctrlKey && e.key === 'j') {
+        e.preventDefault();
+        setIsAskOpen(!isAskOpen);
+        return;
+      }
       if (e.key === 'Escape') {
         setIsSettingsOpen(false);
         setIsFilesOpen(false);
         setIsMonitoringOpen(false);
+        setIsAskOpen(false);
         return;
       }
       if (e.key === 'd') {
@@ -247,7 +256,7 @@ function AppInner() {
 
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [isSettingsOpen, isFilesOpen, isMonitoringOpen, setIsSettingsOpen, setIsFilesOpen, setIsMonitoringOpen, setDisplayMode, config.showFiles]);
+  }, [isSettingsOpen, isFilesOpen, isMonitoringOpen, isAskOpen, setIsSettingsOpen, setIsFilesOpen, setIsMonitoringOpen, setIsAskOpen, setDisplayMode, config.showFiles]);
 
   // Close the file browser if Files gets disabled in Settings while it is open
   useEffect(() => {
@@ -433,6 +442,10 @@ function AppInner() {
       <MonitoringPanel
         isOpen={isMonitoringOpen}
         onClose={() => setIsMonitoringOpen(false)}
+      />
+      <AskPanel
+        isOpen={isAskOpen}
+        onClose={() => setIsAskOpen(false)}
       />
     </>
   );
