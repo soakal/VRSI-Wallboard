@@ -7,7 +7,9 @@
  *   PERSON_ALIASES=[["phil g","philg@vrsinc","philg@vrs-inc.com"],["ted h","tedh","tedh@vrs-inc.com"]]
  */
 function loadEnvAliases(): readonly (readonly string[])[] {
-  const raw = process.env.PERSON_ALIASES;
+  // This module is also aliased into the client bundle (see client/vite.config.ts)
+  // so the same canonicalization runs in the browser. `process` doesn't exist there.
+  const raw = typeof process !== 'undefined' ? process.env.PERSON_ALIASES : undefined;
   if (!raw) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
