@@ -94,6 +94,41 @@ server AND client (shared type change touches both), `npm test --prefix server` 
 **Still owed:** live LLM verification of these fixes (Ollama down), and the 2 extra test
 questions from earlier.
 
+**Security review + API docs, same day.** Brian asked for a security check on the LLM feature.
+Reviewed against `docs/security-audit.md`'s existing threat model rather than starting fresh:
+auth (`requireAdminToken` on `/api/llm/query`, same as every other admin route — no new gap),
+XSS (checked `AskPanel.tsx` directly — the answer renders as JSX text, not
+`dangerouslySetInnerHTML`, so a hostile model output can't execute as HTML), SSRF
+(`OLLAMA_BASE_URL` is server config, never user-influenced), and prompt injection (low severity
+here specifically because the model has no agentic capability — it only returns display text).
+One real gap found, same category as the audit's existing M3: no rate limit on
+`POST /api/llm/query`, so a local process could tie up the shared Ollama box's compute
+repeatedly. Not fixed yet — flagged for the same future rate-limiting pass as M3.
+
+Brian then asked to document the API with a real `ADMIN_TOKEN` value committed to the repo. The
+**GitHub repo was public** at that point — flagged clearly that committing a real secret to a
+public repo means instant global exposure, Brian chose to make the repo **private first**
+(`gh repo edit --visibility private`, confirmed via `gh repo view` before and after — 0 forks/
+stars, nothing lost), then a real token was generated
+(`node -e "require('crypto').randomBytes(32)..."`) and documented in the new
+**`docs/api-reference.md`** (every endpoint, auth requirement, the token, rotation
+instructions), linked from the README's Docs section.
+
+Brian then asked to remove the token / "make the API open" — turned out to be a
+misunderstanding, not an actual request to weaken anything: on the **standard single-kiosk
+deployment** (default `BIND_HOST`/`TRUST_LOCALHOST`, nothing overridden), the API is already
+effectively open for any local process, since `TRUST_LOCALHOST=true` (the default) bypasses the
+token check entirely for `127.0.0.1` callers — confirmed directly in
+`server/src/index.ts:246` (`BIND_HOST` defaults to `127.0.0.1`) and
+`server/src/middleware/adminAuth.ts:14` (`TRUST_LOCALHOST` defaults to `true`), not just
+inferred from docs. No config or code change was needed or made. The documented `ADMIN_TOKEN`
+only becomes relevant if the server is ever exposed beyond localhost — `docs/api-reference.md`
+now says this explicitly up top so it isn't misread as "a token is required for normal use."
+
+**Ollama status:** confirmed still down (`192.168.200.60:11434` unreachable) as of this entry.
+Brian says it will likely stay down 1–2 days — don't keep re-polling it; check only when picking
+this work back up.
+
 ---
 
 ## v1.1.13 → v1.1.14 fix-verification attempt (2026-08-31, second Fable run) — BLOCKED before triggering; two important findings

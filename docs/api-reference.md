@@ -2,8 +2,14 @@
 
 Consolidated reference for every HTTP endpoint the server exposes. See `docs/security-audit.md`
 for the full threat model — the short version: the server binds to `127.0.0.1` by default, and
-`TRUST_LOCALHOST=true` means any process on the same machine is treated as trusted admin. Wire the
-token below in before ever setting `BIND_HOST` to anything other than `127.0.0.1`.
+`TRUST_LOCALHOST=true` means any process on the same machine is treated as trusted admin. **On
+the standard single-kiosk deployment (default `BIND_HOST`/`TRUST_LOCALHOST`, nothing overridden
+in `.env`) the API is already open for anything running on that PC — the kiosk browser, or any
+local script — with no token needed.** Confirmed directly in code, not just this doc:
+`server/src/index.ts` defaults `BIND_HOST` to `127.0.0.1`; `server/src/middleware/adminAuth.ts`
+defaults `TRUST_LOCALHOST` to `true` unless it's explicitly set to `'false'`. The token below
+only starts to matter if the server is ever made reachable from *other* machines — wire it in
+before that happens, never after.
 
 ## Authentication
 
