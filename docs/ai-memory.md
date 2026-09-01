@@ -39,6 +39,22 @@ clean, compiled server (`node dist/index.js`, `NODE_ENV=production`) served corr
 **Not yet done:** merging this branch to `main`, packaging a release, or installing on any real
 kiosk. This was a feature-branch dev-machine verification only.
 
+**Follow-up same day — two functional gaps fixed after the user asked "can I ask about this
+week / next month / a particular individual":** read `llmService.ts` directly rather than
+guessing, and found two real gaps:
+1. The prompt never told the model today's actual date — only job data + the question. Any
+   "this week" / "overdue" / "next month" question depended on the model's own (wrong) idea of
+   the current date. Fixed: the prompt now states the real server date explicitly.
+2. `formatJobForContext()` included PM but never `materialsManager` — so an MM-specific
+   question (the app's own example questions imply this should work) had no data to answer
+   from. Fixed: added `MM: ${job.materialsManager}` to the per-job context line.
+
+Both are one-line changes in `server/src/services/llmService.ts`. Verified `npx tsc --noEmit`
+clean and `npm test --prefix server` 63/63 after the change, production build rebuilt and
+restarted locally. Not yet live-tested against the real Ollama server — it was shut down
+(`192.168.200.60:11434` unreachable) partway through this session; the 2 extra test questions
+the user asked for are still owed once it's back up.
+
 ---
 
 ## v1.1.13 → v1.1.14 fix-verification attempt (2026-08-31, second Fable run) — BLOCKED before triggering; two important findings

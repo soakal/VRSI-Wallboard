@@ -94,6 +94,12 @@ Answers can vary between identical questions (model sampling) — this is expect
 The context sent to the model is every non-shipped job (plus any blocked shipped ones), capped
 at 150 jobs; there is no date-range or calendar-view filtering.
 
+**Context sent to the model, per job:** job number, description, customer, PM, Materials
+Manager, status, blocked flag/reason, ship date, and its 5 most recent notes. The prompt also
+tells the model **today's actual date** (server clock, not the model's own assumption) so
+date-relative questions ("this week", "overdue", "next month") have real ground truth instead
+of a guess.
+
 ## Windows kiosk (production) — single PC
 
 Deployments use the packaged **`VRSI WallBoard\`** release folder (built by `scripts\windows\Package-Release.ps1`, attached as a zip to every [GitHub release](https://github.com/soakal/VRSI-Wallboard/releases)).

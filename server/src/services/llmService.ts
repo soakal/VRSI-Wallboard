@@ -32,6 +32,7 @@ function formatJobForContext(job: BoardJob): string {
     job.description ? `"${job.description}"` : null,
     `customer: ${job.customer}`,
     `PM: ${job.pm}`,
+    job.materialsManager ? `MM: ${job.materialsManager}` : null,
     `status: ${job.status}`,
     job.blocked ? `BLOCKED${job.blockedReason ? ` (${job.blockedReason})` : ''}` : null,
     job.effectiveShipDate ? `ship date: ${job.effectiveShipDate}` : null,
@@ -75,8 +76,19 @@ export async function queryJobs(question: string): Promise<string> {
   const jobs = getMergedJobs()
   const context = buildContext(jobs)
 
+  // Ship dates are absolute (YYYY-MM-DD); without today's real date the model
+  // has no ground truth for "this week" / "overdue" / "next month" and falls
+  // back on whatever date it internalized from training, which is wrong.
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+
   const prompt = [
     'You are a helpful assistant answering questions about active manufacturing jobs on an internal operations wallboard.',
+    `Today's date is ${today}. Use this, not any other assumption, for "this week" / "overdue" / "next month" style questions.`,
     'Use only the job data below. If the data does not answer the question, say so plainly.',
     'Be concise.',
     '',
