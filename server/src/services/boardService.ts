@@ -1015,6 +1015,8 @@ export function getMergedJobs(): BoardJob[] {
       hasNewNote: changedNoteSet.has(job.jobNumber),
       blocked: jobState.blocked ?? false,
       blockedReason: jobState.blockedReason ?? null,
+      blockedAt: jobState.blockedAt ?? null,
+      isSpare: spare,
     }
   })
 }

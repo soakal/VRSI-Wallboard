@@ -91,14 +91,34 @@ kiosk browser on localhost is trusted automatically)
 | `llm_bad_response` | 502 | Ollama's response didn't include the expected `response` field |
 
 Answers can vary between identical questions (model sampling) — this is expected, not a bug.
-The context sent to the model is every non-shipped job (plus any blocked shipped ones), capped
-at 150 jobs; there is no date-range or calendar-view filtering.
 
-**Context sent to the model, per job:** job number, description, customer, PM, Materials
-Manager, status, blocked flag/reason, ship date, and its 5 most recent notes. The prompt also
-tells the model **today's actual date** (server clock, not the model's own assumption) so
-date-relative questions ("this week", "overdue", "next month") have real ground truth instead
-of a guess.
+**What it can answer well:** job status, blocking/risk, PM and Materials Manager lookups,
+customer summaries, ship-date questions ("this week", "overdue", "next month" — dates are
+pre-annotated with `(in N days)` / `(N days OVERDUE)` computed by the server, not the model),
+"how many" / counting questions (a computed SUMMARY block gives the model authoritative counts
+so it doesn't have to count a long list itself), spare-parts-vs-project questions, binder-printed
+status, PABS/ship-to-PM milestone dates, ship-date change history (was it pushed, from what date,
+why), and newly-imported ("NEW") jobs.
+
+**Known limits, by design:**
+- **Shipped/archived jobs are excluded entirely** to bound the prompt size — a question about a
+  job that already shipped will come back "not found," not a real answer. The model is told this
+  explicitly so it doesn't guess.
+- **Only the 5 most recent notes per job** are included — deep history beyond that isn't visible.
+- **150-job cap**, applied after sorting by soonest ship date — on a board that large, the
+  least-urgent jobs are the ones left out of the per-job list (the SUMMARY counts still cover
+  everything, truncated or not).
+- There's no persistent "was previously NEW" history — the NEW flag only reflects the most
+  recent import.
+
+**Context sent to the model, per job:** job number, description, customer, spare-part-vs-project
+type, PM, Materials Manager, human-readable status, NEW / new-note flags, blocked flag + reason +
+since-date, ship date (with the computed day-count annotation and, if overridden, what it changed
+from and why), ship-to-PM date, PABS-complete date, binder-printed (projects only — meaningless
+for spares), and its 5 most recent notes with dates. A SUMMARY block precedes the job list with
+server-computed totals, per-status counts, blocked count, and overdue count. The prompt also
+states **today's actual date** (server clock, not the model's own assumption) so date-relative
+questions have real ground truth instead of a guess.
 
 ## Windows kiosk (production) — single PC
 

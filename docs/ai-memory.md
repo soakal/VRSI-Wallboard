@@ -55,6 +55,45 @@ restarted locally. Not yet live-tested against the real Ollama server — it was
 (`192.168.200.60:11434` unreachable) partway through this session; the 2 extra test questions
 the user asked for are still owed once it's back up.
 
+**Second follow-up same day — Brian asked for a broader pass ("plan for all questions that
+might be asked").** A fresh research pass (model: fable) brainstormed every realistic question
+category (status, person lookup, customer, ship-date/deadline, ship-date-change history,
+ship-to-PM/PABS, counting/aggregation, blocking/risk, spare-vs-project, notes/history, binder,
+"what's new," comparisons, shipped/archive) and audited each against the actual
+`llmService.ts`/`BoardJob` shape. Findings implemented, all in this session:
+
+- **Deterministic SUMMARY block** in `buildContext()` — computed job/status/blocked/overdue
+  counts over the FULL filtered list (before the 150-job slice), so "how many" questions use
+  real arithmetic instead of an LLM counting a long list (a known failure mode).
+- **Sort by soonest ship date** before the 150-cap, so a board that exceeds the cap drops the
+  least-urgent jobs, not an arbitrary spreadsheet-order tail. Added a `(+N more omitted)` note
+  when truncated.
+- **Precomputed date annotations** (`daysUntil` / `formatShipDate`) — `ship date: 2026-09-05
+  (in 4 days)` / `(7 days OVERDUE)` — takes date arithmetic away from the model entirely.
+- **New `BoardJob` fields** (`shared/src/types/board.ts` + populated in `boardService.ts`'s
+  `getMergedJobs()`): `isSpare` (denormalized `isSpareJob()`) and `blockedAt`. Neither existed
+  on `BoardJob` before — `blockedAt` was stuck in `JobState` only, `isSpare` was computed
+  locally in `getMergedJobs()` but discarded. Only one construction site for `BoardJob` exists
+  (`getMergedJobs()` itself), so adding two new required fields was safe — verified no other
+  file builds a `BoardJob` literal.
+- **Context now also includes:** spare-vs-project `type`, humanized PM/MM (via the existing
+  `formatJobPmLabel()`), human-readable status labels, NEW / new-note flags, blocked-since date,
+  ship-date-override history (old date + reason when changed), `shipToPm`, `pabsComplete`,
+  `binderPrinted` (omitted for spares — meaningless there), and note timestamps.
+- **Prompt additions:** explicit "shipped jobs are excluded, don't guess" and "ship date ≠ ship
+  to PM" disclaimers, plus "trust the precomputed day-count annotations over your own math."
+
+**Verified without a live LLM** (Ollama still down) by intercepting `global.fetch` in a
+throwaway script and printing the actual generated prompt against the same 5-job dummy dataset
+from the first fix. Confirmed correct: job #10002 (status "Ready to Ship", ship date
+2026-08-25) is now correctly flagged **"7 days OVERDUE"** — the FIRST live test earlier this
+session had asked essentially this and the LLM wrongly said "none are overdue," which this fix
+directly closes by not depending on the model's own date math. `npx tsc --noEmit` clean in
+server AND client (shared type change touches both), `npm test --prefix server` 63/63.
+
+**Still owed:** live LLM verification of these fixes (Ollama down), and the 2 extra test
+questions from earlier.
+
 ---
 
 ## v1.1.13 → v1.1.14 fix-verification attempt (2026-08-31, second Fable run) — BLOCKED before triggering; two important findings

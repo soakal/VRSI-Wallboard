@@ -61,6 +61,10 @@ export interface BoardJob extends Job {
   blocked: boolean;
   /** Short reason the job is blocked (null when not blocked). */
   blockedReason: string | null;
+  /** ISO timestamp when the job was blocked (null when not blocked). */
+  blockedAt: string | null;
+  /** True when the job routes to the Spare Parts tab (see isSpareJob()). */
+  isSpare: boolean;
 }
 
 export interface BoardUser {
