@@ -7,7 +7,9 @@
  *   PERSON_ALIASES=[["phil g","philg@vrsinc","philg@vrs-inc.com"],["ted h","tedh","tedh@vrs-inc.com"]]
  */
 function loadEnvAliases(): readonly (readonly string[])[] {
-  const raw = process.env.PERSON_ALIASES;
+  // Guarded: this module is aliased into the client bundle too (@vrsi/person-identity),
+  // and Vite's dev server does not stub `process` there the way its build step does.
+  const raw = typeof process !== 'undefined' ? process.env.PERSON_ALIASES : undefined;
   if (!raw) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
