@@ -54,6 +54,22 @@ export function isSpareJob(job: BoardJob, config: BoardConfig): boolean {
 
 export type BoardTab = 'project' | 'spare-parts' | 'archive' | 'blocked'
 
+export const TAB_LABELS: Record<BoardTab, string> = {
+  project: 'Project',
+  'spare-parts': 'Spare Parts',
+  archive: 'Archive',
+  blocked: 'Blocked',
+}
+
+/** Which tab a job normally lives in — inverse of filterJobsForTab, used to
+ *  label a job when a cross-tab search surfaces it outside its home tab. */
+export function jobTabOf(job: BoardJob, config: BoardConfig): BoardTab {
+  if (job.blocked) return 'blocked'
+  if (job.status === 'shipped') return 'archive'
+  if (isSpareJob(job, config)) return 'spare-parts'
+  return 'project'
+}
+
 /** Distinct colour for the Blocked tab (manual triage lane). */
 export const BLOCKED_TAB_COLOR = '#ef4444'
 

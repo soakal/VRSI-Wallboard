@@ -5,7 +5,7 @@ import { useBoardJobs, useBoardConfig, useBoardUsers, useUpdateBoardConfig } fro
 import { useAppStore } from '../../store/appStore'
 import { JobCard } from './JobCard'
 import { BoardShipAgenda } from './BoardShipAgenda'
-import { filterJobsForTab, sortBoardJobsByShipDate } from './boardColors'
+import { filterJobsForTab, sortBoardJobsByShipDate, jobTabOf, TAB_LABELS } from './boardColors'
 import { BoardJob } from '@vrsi/wallboard-shared'
 import { canonicalPersonName, samePerson } from '@vrsi/person-identity'
 
@@ -417,22 +417,22 @@ export function JobListView({ tab }: Props) {
     filtered = quickFiltered
   }
 
-  // Step 3: committed search filter (job#, customer, pm)
+  // Step 3: committed search filter (job#, customer, pm). A committed search
+  // looks across every tab (not just this one) so a match is never hidden
+  // just because the job lives on a different tab.
   const q = search.trim().toLowerCase()
-  const searched = q
-    ? filtered.filter((j) =>
-        // Searching "new" surfaces jobs flagged NEW or with a new/changed import note
-        (q === 'new' && (j.isNew || j.hasNewNote)) ||
-        j.jobNumber.toLowerCase().includes(q) ||
-        (j.description?.toLowerCase().includes(q) ?? false) ||
-        j.customer.toLowerCase().includes(q) ||
-        j.pm.toLowerCase().includes(q) ||
-        j.materialsManager.toLowerCase().includes(q)
-      )
-    : filtered
+  const matchesQuery = (j: BoardJob) =>
+    // Searching "new" surfaces jobs flagged NEW or with a new/changed import note
+    (q === 'new' && (j.isNew || j.hasNewNote)) ||
+    j.jobNumber.toLowerCase().includes(q) ||
+    (j.description?.toLowerCase().includes(q) ?? false) ||
+    j.customer.toLowerCase().includes(q) ||
+    j.pm.toLowerCase().includes(q) ||
+    j.materialsManager.toLowerCase().includes(q)
+  const searched = q ? jobs.filter(matchesQuery) : filtered
 
   const newMatched = newOnly ? searched.filter((j) => j.isNew || j.hasNewNote) : searched
-  const sorted = sortBoardJobsByShipDate(newMatched, tab)
+  const sorted = sortBoardJobsByShipDate(newMatched, q ? 'project' : tab)
   const newCount = tabFiltered.filter((j) => j.isNew || j.hasNewNote).length
 
   const activeFilterCount = filterPms.length + filterMms.length
@@ -598,7 +598,7 @@ export function JobListView({ tab }: Props) {
           <p className="text-slate-500 text-sm">
             {sorted.length} job{sorted.length !== 1 ? 's' : ''}
             {q
-              ? ` matching "${search.trim()}"`
+              ? ` matching "${search.trim()}" — across all tabs`
               : filterSummary
               || (tab === 'archive'
               ? ' · newest ship date first'
@@ -652,16 +652,25 @@ export function JobListView({ tab }: Props) {
         </p>
       ) : (
         <div key={search}>
-          {sorted.map((job) => (
-            <JobCard
-              key={job.jobNumber}
-              job={job}
-              activeUser={activeUser}
-              config={config}
-              onSelectProjectManager={(name) => toggleProjectManager(name, job.jobNumber)}
-              onSelectMaterialsManager={(name) => toggleMaterialsManager(name, job.jobNumber)}
-            />
-          ))}
+          {sorted.map((job) => {
+            const homeTab = q ? jobTabOf(job, config) : tab
+            return (
+              <div key={job.jobNumber}>
+                {q && homeTab !== tab && (
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
+                    In {TAB_LABELS[homeTab]}
+                  </div>
+                )}
+                <JobCard
+                  job={job}
+                  activeUser={activeUser}
+                  config={config}
+                  onSelectProjectManager={(name) => toggleProjectManager(name, job.jobNumber)}
+                  onSelectMaterialsManager={(name) => toggleMaterialsManager(name, job.jobNumber)}
+                />
+              </div>
+            )
+          })}
         </div>
       )}
 
