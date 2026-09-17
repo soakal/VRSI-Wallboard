@@ -1,8 +1,45 @@
 # VRSI WallBoard — AI Memory
 
-**Last saved:** 2026-08-31
+**Last saved:** 2026-09-17
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\`
+
+---
+
+## SharePoint storage/SPFx exploration (2026-09-17) — KILLED, do not re-propose without new info
+
+Brian asked how to move the app onto SharePoint. Two directions were explored and ruled out
+in the same session — both branches were deleted, nothing landed on `main`:
+
+1. **Full SPFx conversion** (branch `explore/spfx-spike`, deleted) — scaffolded a real SPFx
+   1.23.2 web part and confirmed the toolchain builds a real `.sppkg` on this machine (despite
+   Node 24 being outside every `@microsoft/sp-*` package's declared engine range — undeclared
+   compat, not supported). Ruled out anyway: SPFx web parts are client-side only, hosted inside
+   a SharePoint page — no persistent Node server, no SQLite, no Windows tray/self-updater/Task
+   Scheduler backup, no MSAL device-code flow. Converting would abandon nearly everything in
+   §1/§6, not extend it.
+2. **`SharePointProvider` behind the existing `StorageProvider` abstraction** (§14's plan;
+   branch `feature/sharepoint-provider`, deleted before any code was written) — this is the
+   *correct* direction architecturally (keeps the kiosk/tray/SQLite path fully intact,
+   SharePoint opt-in via a `STORAGE_MODE` switch). Research before writing code found §2's "app
+   never talks to storage directly" promise is not actually true today — the real per-job
+   read/write path is a separate synchronous `BoardPersistence` interface
+   (`server/src/storage/boardPersistence.ts`), not the async `StorageProvider`
+   (`server/src/storage/storageTypes.ts`), whose job/note CRUD methods are unimplemented stubs.
+   A real `SharePointProvider` would need `boardService.ts`'s ~15 call sites made properly
+   async first (mechanical but wide — touches `routes/board.ts`, `routes/events.ts`, both
+   board-service test files) as a zero-behavior-change prerequisite phase.
+
+**Why killed:** writing SharePoint list items needs `Sites.ReadWrite.All` (or the narrower
+`Sites.Selected`) — both require **tenant Entra ID admin consent**. Brian confirmed he does not
+have Entra admin access. Without that, no amount of correct code makes Phase 2 shippable.
+Brian's call: kill the whole effort, not just pause it — both branches deleted outright rather
+than parked.
+
+**If this comes up again:** the blocker is the admin-consent requirement, not the architecture
+or the code — don't re-litigate the design, just check whether an actual tenant admin is now
+available before resuming. The `.claude/plans/logical-hopping-mist.md` plan file (local to this
+machine, not in the repo) has the full phased design if it's ever revisited.
 
 ---
 
