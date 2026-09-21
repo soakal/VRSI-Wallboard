@@ -64,3 +64,17 @@ test('a 4xx error keeps its message and status', () => {
   const body = sent.body as { error: { message: string } }
   assert.equal(body.error.message, 'Ship date must be YYYY-MM-DD')
 })
+
+for (const code of ['SQLITE_READONLY', 'SQLITE_READONLY_DBMOVED', 'SQLITE_CANTOPEN', 'SQLITE_PERM', 'SQLITE_FULL', 'SQLITE_IOERR_WRITE']) {
+  test(`${code} maps to an actionable db_unwritable message`, () => {
+    const { req, res, sent } = fakeReqRes()
+    const err = new Error('attempt to write a readonly database') as AppError & { code: string }
+    err.code = code
+    errorHandler(err, req, res, noopNext)
+    assert.equal(sent.status, 500)
+    const body = sent.body as { error: { code: string; message: string } }
+    assert.equal(body.error.code, 'db_unwritable')
+    assert.match(body.error.message, /NOT saved/i)
+    assert.match(body.error.message, /permissions or disk space/i)
+  })
+}

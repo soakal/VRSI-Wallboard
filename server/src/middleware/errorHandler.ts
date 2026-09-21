@@ -36,6 +36,26 @@ export function errorHandler(
     return;
   }
 
+  // Read-only / permission / disk-full / I/O failures are environment problems
+  // (folder permissions changed, disk full) that a restart won't fix.  Say so
+  // instead of a bare 500 — and log the real code, which was invisible before.
+  if (typeof sqliteCode === 'string' && /^SQLITE_(READONLY|CANTOPEN|PERM|FULL|IOERR)/.test(sqliteCode)) {
+    logger.error('SQLite database is not writable', {
+      code: sqliteCode,
+      path: req.path,
+      method: req.method,
+      message: err.message,
+    });
+    res.status(500).json({
+      error: {
+        code: 'db_unwritable',
+        message:
+          "The server can't write to its data folder (permissions or disk space). Your change was NOT saved — ask IT to check the WallBoard data folder permissions and free disk space.",
+      },
+    });
+    return;
+  }
+
   const status = err.status ?? err.statusCode ?? 500;
   const rawMessage = err.message ?? 'Internal Server Error';
 
