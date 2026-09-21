@@ -1,8 +1,18 @@
 # VRSI WallBoard — AI Memory
 
-**Last saved:** 2026-09-17
+**Last saved:** 2026-09-21
 **Storage mode:** Local (SQLite)
 **Windows data path:** `C:\ProgramData\VRSIWallBoard\data\`
+
+---
+
+## Kiosk saves failing "Internal Server Error" (2026-09-21) — fixed on-site; hardening on branch `fix/write-failure-visibility`
+
+A user's kiosk (server running as a domain user, `<DOMAIN\kiosk-user>`) could not save any card edit. Diagnosis: `combined.log` and the `audit_log` table both had NO entries after 2026-09-09 ~14:55 even though the board was in use — the server could not write the DB or its logs, and everything failed silently (`logAudit` swallowed errors; the SQLITE_READONLY error mapped to a bare 500; the startup `accessSync(W_OK)` probe can't see Windows ACLs). Disk was fine (536 GB free); `C:\ProgramData\VRSIWallBoard\data` gave `BUILTIN\Users` read-only on existing files and the kiosk user had no explicit grant. **Fix on the machine:** `icacls "C:\ProgramData\VRSIWallBoard" /grant "<DOMAIN\kiosk-user>:(OI)(CI)M" /T` + `taskkill /F /IM node.exe` (tray relaunches the server) — confirmed working by Brian. An earlier identical report (support zip 2026-09-03, v1.1.16) had the same log gap and was cleared by the 09-03 update restart.
+
+**Root cause of the permission change is UNKNOWN** — suspect an elevated/SYSTEM process re-creating the DB files ~2026-09-09 15:00–16:23. May recur.
+
+**Code (branch `fix/write-failure-visibility`, 3 commits, NOT merged/released):** `errorHandler.ts` maps SQLITE_READONLY/CANTOPEN/PERM/FULL/IOERR → `db_unwritable` with an actionable message (+6 tests); `auditService.ts` warns (rate-limited 5 min) on failed audit writes; `index.ts` startup probe now `openSync(file,'r+')` for `wallboard.db` + `combined.log`; `docs/operations-guide.md` §4.6. Only `errorHandler.test.ts` was run (10/10 pass) — the rest of the server suite and `tsc` can't resolve `@vrsi/wallboard-shared` on this dev machine (14 pre-existing TS2307 errors, identical before/after). **Not done, awaiting Brian:** release as v1.1.18; optional `/health` `dbWritable` + UI banner; optional `Update-FromRelease.ps1` re-applying the icacls grant.
 
 ---
 
