@@ -333,6 +333,29 @@ When reporting a problem, include:
 
 > **Privacy note:** Logs never contain passwords, tokens, or email body content — only display names, file paths, API response codes, and timestamps. Review the zip before sending if you have any concerns.
 
+### 4.6 Saves fail with "Internal Server Error" / "can't write to its data folder"
+
+**Symptom:** clicking a status, binder, ship date or note and pressing Apply shows a red **SAVE FAILED** banner; the board still loads. `combined.log` / `error.log` stop growing (check the last-write time).
+
+**Cause:** the server user lost write access to `C:\ProgramData\VRSIWallBoard\` (folder permissions changed, a file was re-created by another account) or the disk is full. A restart alone does not fix it.
+
+**Diagnose** (elevated Command Prompt on the kiosk — one line; `fsutil` needs Administrator):
+
+```
+(tasklist /v /fi "imagename eq node.exe" & fsutil volume diskfree C: & dir /a C:\ProgramData\VRSIWallBoard\data & icacls C:\ProgramData\VRSIWallBoard\data & icacls C:\ProgramData\VRSIWallBoard\logs)
+```
+
+`tasklist` shows the account the server runs as (User Name column). That account (or a group it belongs to) must have Modify `(M)` in both `icacls` listings.
+
+**Fix** (elevated Command Prompt; replace `<DOMAIN\user>` with the User Name from `tasklist`), then restart the server:
+
+```
+icacls "C:\ProgramData\VRSIWallBoard" /grant "<DOMAIN\user>:(OI)(CI)M" /T
+taskkill /F /IM node.exe
+```
+
+The tray app relaunches the server within a few seconds (or right-click the tray icon → **Restart Server**). From v1.1.18 the board shows "can't write to its data folder" instead of "Internal Server Error", and the server log warns `Not writable: <file>` at startup (only if the log folder itself is still writable — if not, use the diagnostic above).
+
 ---
 
 ## Quick Reference
@@ -351,6 +374,7 @@ When reporting a problem, include:
 | Data directory | `C:\ProgramData\VRSIWallBoard\data\` |
 | Backups directory | `C:\ProgramData\VRSIWallBoard\backups\` |
 | Logs directory | `C:\ProgramData\VRSIWallBoard\logs\` |
+| Saves fail ("Internal Server Error") | See §4.6 — grant the server user Modify on `C:\ProgramData\VRSIWallBoard\`, then restart |
 | Send support report | **Ctrl+M** → **Support** tab → describe problem → **Send support report** |
 | App config file | `server\.env` |
 | Re-authenticate Microsoft | Open `http://localhost:3001` → Auth Setup |
