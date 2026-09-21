@@ -14,6 +14,10 @@ export type AuditType =
   | 'restore'
   | 'system';
 
+/** A broken audit write repeats on every request — warn at most this often. */
+const AUDIT_WARN_INTERVAL_MS = 5 * 60 * 1000;
+let lastAuditWarnAt = 0;
+
 export function logAudit(
   type: AuditType,
   detail: string,
@@ -23,8 +27,18 @@ export function logAudit(
 ): void {
   try {
     getPersistence().logAudit(type, detail, auditPath, success, sizeBytes);
-  } catch {
-    /* persistence may not be ready during early boot */
+  } catch (e) {
+    // Persistence may not be ready during early boot, but a failure that keeps
+    // happening means the DB is unwritable (permissions / disk) — say so once
+    // in a while instead of failing silently for days.
+    const now = Date.now();
+    if (now - lastAuditWarnAt >= AUDIT_WARN_INTERVAL_MS) {
+      lastAuditWarnAt = now;
+      logger.warn('Audit log write failed', {
+        code: typeof e === 'object' && e !== null && 'code' in e ? e.code : undefined,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
 }
 
